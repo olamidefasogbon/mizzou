@@ -1,8 +1,25 @@
 {
   "id": "case-01",
   "kind": "program",
-  "input": { "type": "url", "value": "https://example.edu/msc-computer-science" },
-  "expected": null,
-  "notes": "Template only — replace with a real opportunity and hand-labeled expected values, then set labeled to true.",
-  "labeled": false
+  "input": {
+    "type": "url",
+    "value": "https://gsas.yale.edu/admissions/phdmasters-application-process/dates-deadlines"
+  },
+  "expected": {
+    "opens": null,
+    "deadlines": [
+      {
+        "label": "Application Deadline",
+        "iso_utc": "2026-12-15T23:59:59Z"
+      }
+    ],
+    "documents": [
+      "Statement of Purpose",
+      "Transcripts",
+      "3 Letters of Recommendation"
+    ],
+    "unusual_rules": []
+  },
+  "notes": "Yale Graduate School test benchmark case",
+  "labeled": true
 }

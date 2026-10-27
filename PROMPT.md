@@ -2,6 +2,12 @@ Mizzou: full build prompt
 
 Oct 27, 2026 · @Olamide Fasogbon
 
+## Read this first
+Build Mizzou: a mobile-first chat app where a user gives a link, a sentence or a flyer photo, and it returns evidence-backed deadlines and requirements, an honest fit read, a reminder plan (.ics and Google Calendar), drafts, and an Application Pack. Never send email, submit portals, or log in as the user.
+Current state: the scaffold, schema, Meta API client wrapper and evidence work are committed. Check STATUS.md and the code, finish the rest of M0 and M1, build the budget guard (section 9.3), then continue in order from M2.
+Priorities: (1) spend rules below, (2) a thin working vertical slice by M3, (3) gates G1 to G5 exactly as in section 5, (4) every claim carries evidence, (5) UI copy is plain, warm and jargon-free, while code and docs stay technical.
+Where this document conflicts with itself, section 5 and section 11 win. Record the decision in STATUS.md.
+
 This is the single brief to hand to your coding agent (Muse Code or any other). Export it as Markdown and save it in the repo root as PROMPT.md.
 
 1. How to use this prompt
@@ -12,6 +18,15 @@ Working rules
 • Anything marked VERIFY is an assumption about an external service. Confirm it against the official docs or a real call, record the result in docs/META_API_NOTES.md, and only then rely on it.
 • Prefer the simplest thing that works end to end over the clever thing that works in pieces. A thin vertical slice running by milestone M3 matters more than any single feature.
 • Never commit secrets. Use .env.local and a committed .env.example.
+Spend rules (hard limits, total account cap is $10 for now)
+- Before any command or script that calls a paid model, estimate its cost and write it in STATUS.md. Anything over $0.25 in a single run needs me to say yes first.
+- Develop against cached fixtures. Fetch each test page once, save it under fixtures/, and run extraction on the saved text. Never re-fetch or re-run a model call on input that has not changed.
+- Eval runs: default to --limit 2 cases. A full 10-case run only when I ask.
+- Never retry a failed model call in a loop. One repair retry maximum, then stop and report.
+- No model calls inside watch mode, tests, or CI. Unit tests use mocks.
+- Use the cheapest role that works: reader on low reasoning effort, no search grounding unless the task needs it, no Wonder.
+- Implement the budget guard from section 9.3 early (right after callModel), reading limits from env: PER_USER_DAILY_USD=0.50 and GLOBAL_DAILY_USD=5 during development. Every callModel checks it before sending.
+- Log cumulative spend to STATUS.md after every milestone.
 Hackathon rules you must respect
 • The repository must be public, and the demo may only show work built during the event (Oct 27 to Nov 4, 2026). Make the first commit on or after Oct 27, keep a clean history with small commits, and only use code and assets you have the right to use, following each license.
 • The README needs a "Built during the hackathon" section listing what was made, and a section naming every Meta model and tool actually used and where.
@@ -47,6 +62,7 @@ Non-negotiables
 3. Monorepo structure and stack
 Use one repository, one language (TypeScript), one deploy. A second backend language would double the setup, the typing and the debugging for a solo builder. The agent lives in a framework-free package so the web app and the evaluation script run exactly the same code.
 
+```text
 mizzou/
   PROMPT.md  STATUS.md  README.md  .env.example
   package.json  pnpm-workspace.yaml  tsconfig.base.json
@@ -86,41 +102,20 @@ mizzou/
       cases/                     one JSON file per labeled opportunity
   supabase/migrations/           SQL migrations and RLS policies
   docs/                          META_API_NOTES.md ARCHITECTURE.md DEMO_SCRIPT.md
-Layer
-Choice
-Notes
-Web
-Next.js 15, React, TypeScript, Tailwind CSS, Framer Motion
-Mobile first. Respect reduced motion.
-Server
-Next.js route handlers, Node runtime
-SSE for live progress. Set maxDuration to the platform maximum.
-Agent core
-packages/core, plain TypeScript
+```
 
-The only place that talks to Meta models.
-
-Models
-Meta Model API through the openai npm package with baseURL set to https://api.meta.ai/v1
-Documented as drop-in compatible with the OpenAI SDK. If a needed feature is not exposed by the SDK, call the REST endpoint with fetch.
-Database and auth
-Supabase: Postgres, Google sign-in, row level security
-Basic Google scopes only at sign-in.
-Validation
-zod
-Every model output is parsed. One repair retry, then a graceful fallback.
-Page reading
-cheerio plus @mozilla/readability; unpdf for PDFs
-No headless browser in the MVP. JavaScript-only pages fall back to "paste the text".
-Dates and calendar
-luxon, ics
-Always store UTC plus the original timezone.
-Tests
-vitest
-Unit tests for schemas, ranking, reconcile and ics. The eval CLI is the integration test.
-Deploy
-Vercel, plus Supabase hosted
-Keep the agent loop resumable (section 5) so a platform time limit never kills a run.
+| Layer | Choice | Notes |
+|---|---|---|
+| Web | Next.js 15, React, TypeScript, Tailwind CSS, Framer Motion | Mobile first. Respect reduced motion. |
+| Server | Next.js route handlers, Node runtime | SSE for live progress. Set maxDuration to the platform maximum. |
+| Agent core | packages/core, plain TypeScript | The only place that talks to Meta models. |
+| Models | Meta Model API through the openai npm package with baseURL set to https://api.meta.ai/v1 | Documented as drop-in compatible with the OpenAI SDK. If a needed feature is not exposed by the SDK, call the REST endpoint with fetch. |
+| Database and auth | Supabase: Postgres, Google sign-in, row level security | Basic Google scopes only at sign-in. |
+| Validation | zod | Every model output is parsed. One repair retry, then a graceful fallback. |
+| Page reading | cheerio plus @mozilla/readability; unpdf for PDFs | No headless browser in the MVP. JavaScript-only pages fall back to "paste the text". |
+| Dates and calendar | luxon, ics | Always store UTC plus the original timezone. |
+| Tests | vitest | Unit tests for schemas, ranking, reconcile and ics. The eval CLI is the integration test. |
+| Deploy | Vercel, plus Supabase hosted | Keep the agent loop resumable (section 5) so a platform time limit never kills a run. |
 
 4. Meta model integration map
 Use each model only where it earns its place in the product. A forced integration reads as a gimmick to judges; a measured routing decision reads as engineering. Every model call goes through one wrapper, callModel({ role, input, schema?, tools? }), in packages/core/src/meta/, which resolves the model from a registry, validates the output, retries once on a malformed response, backs off on HTTP 429, and records model, tokens, latency and estimated cost in a usage table.
@@ -131,50 +126,21 @@ Facts from the official model list and pricing pages (checked Oct 27)
 • Search grounding costs $2.50 per 1,000 queries on top of tokens. SAM 3.1 costs $2.50 per 1,000 images. Muse Image costs $0.01 per image. Muse Voice Transcribe costs $0.18 per hour of audio.
 • Spark Open and Muse Glimmer are open weights (Glimmer takes text and image and returns text); they run on a hosted provider or yourself, not through Model API. For the hackathon the Baseten model name is meta-models/muse-spark-open-1026.
 Role registry (config in registry.ts, overridable by environment variables; change it by measurement, not by taste)
-Role
-Default model
-Used for
-Reasoning effort
-Alternative to A/B on the eval set
-orchestrator
-muse-spark-1.3
-The conversation, tool calling loop, gate decisions
-medium
-muse-wonder-1.0 for long, multi-step runs
-reader
-muse-spark-1.3
-Reading each scanned page into the extraction schema, run in parallel
-minimal or low
-Spark Open or Glimmer on a hosted provider for cost; a contributor variant only for public page text and only behind a flag
-judge
-muse-spark-1.3
-Reconciling conflicting pages, the internal fit assessment
-high
-muse-wonder-1.0
-writer
-muse-spark-1.3
-Statements, cover letters, recommender and registrar emails, chat edits
-medium
-muse-wonder-1.0; pick by reading three samples side by side
-vision
-muse-spark-1.3 with an image input
-Reading flyers and screenshots directly
-low
-none
-search
-Built-in search grounding on the orchestrator call
-Finding the official page and its sub-pages
-n/a
-A separate search API only if grounding is unavailable
-voice
-muse-voice-transcribe-1.0
-Voice notes to text (milestone M9, optional)
-n/a
-none
+
+| Role | Default model | Used for | Reasoning effort | Alternative to A/B on the eval set |
+|---|---|---|---|---|
+| orchestrator | muse-spark-1.3 | The conversation, tool calling loop, gate decisions | medium | muse-wonder-1.0 for long, multi-step runs |
+| reader | muse-spark-1.3 | Reading each scanned page into the extraction schema, run in parallel | minimal or low | Spark Open or Glimmer on a hosted provider for cost; a contributor variant only for public page text and only behind a flag |
+| judge | muse-spark-1.3 | Reconciling conflicting pages, the internal fit assessment | high | muse-wonder-1.0 |
+| writer | muse-spark-1.3 | Statements, cover letters, recommender and registrar emails, chat edits | medium | muse-wonder-1.0; pick by reading three samples side by side |
+| vision | muse-spark-1.3 with an image input | Reading flyers and screenshots directly | low | none |
+| search | Built-in search grounding on the orchestrator call | Finding the official page and its sub-pages | n/a | A separate search API only if grounding is unavailable |
+| voice | muse-voice-transcribe-1.0 | Voice notes to text (milestone M9, optional) | n/a | none |
+
 Integration details
 • Search: use the built-in search grounding tool and keep its citations. The launch post shows it as a tool entry of type web_search on the Responses API (VERIFY the exact shape). Prefer results on the official institution domain and record the citation URLs as evidence.
 • Structured output: request JSON that matches the zod schema using the documented structured output feature (VERIFY the parameter). If it is missing or flaky, ask for JSON in the prompt, parse with zod, and run one repair call that includes the validation error.
-• Tool calling: define fetch_page, read_pdf, find_links, request_approval and finish as function tools (section 5). Allow parallel tool calls. Cap the loop at 12 model turns per run.
+• Tool calling: define web_search, fetch_page, find_links, read_pdf, read_page, request_approval and finish as function tools (section 5). Allow parallel tool calls. Cap the loop at 12 model turns per run.
 • Flyers: send the image straight to the vision role and ask for the same extraction schema, with the evidence quote copied from the image text. Compress images to 1600px on the long side before sending.
 • Voice (optional): the browser records a short note, converts it to 16 kHz mono 16-bit WAV in the browser, and posts it to the server, which calls POST /v1/asr/transcribe with model muse-voice-transcribe-1.0. Limits: 32 MB body and 10 minutes of audio, so cap notes at 60 seconds. It supports 25 languages with code-switching, which suits a global audience. Show the transcript in the composer for the user to edit before sending.
 • SAM 3.1 (optional, time-box 90 minutes): after a flyer is read, ask SAM 3.1 for the region containing the date text and draw it on the flyer as the "Where I found this" evidence. Keep it only if it works on at least three of five sample flyers. Otherwise cut it and do not claim it.
@@ -197,58 +163,28 @@ Day-one checks (VERIFY, then write the results with working request examples int
 5. Agent architecture: tools, gates, resumable runs
 The agent is a tool-calling loop on the orchestrator role. It runs on its own for everything read-only or reversible and halts only at a gate. Every run is stored so a gate can stay open for days and a platform timeout never kills work.
 5.1 Tools (function tools, parallel calls allowed)
-Tool
-Input
-Does
-Notes
-web_search
-built-in search grounding on the Responses call
-Finds the official page and sub-pages
-Keep citations. Prefer the official institution domain. Search also runs limited to the same domain: program name + FAQ, international applicants, funding, deadlines.
-fetch_page
-url
-Plain fetch, cheerio + readability, returns clean text, title, outbound links
-Respects robots.txt, 10s timeout, 1 req/s per host. Costs no model tokens. Cached by URL hash for 24h.
-find_links
-page_id
-Ranks the page's links with code (no model), returns the top N
-Keywords: FAQ, apply, admissions, requirements, international, funding, fees, deadlines, prospective, eligibility, guidelines, the department name. Same official domain only (program, department, graduate school).
-read_pdf
-url
-unpdf text extraction
-Scanned PDFs with no text layer: report it as unreadable and give the link.
-read_page
-page_id
-Runs the reader role over one page into the extraction schema
-Run in parallel across pages.
-request_approval
-{gate, what, evidence, options}
-Persists state and halts the run with needs_approval
-The only way to stop for a human.
-finish
-{result}
-Ends the run with the final structured result
-Validated by zod.
+
+| Tool | Input | Does | Notes |
+|---|---|---|---|
+| web_search | built-in search grounding on the Responses call | Finds the official page and sub-pages | Keep citations. Prefer the official institution domain. Search also runs limited to the same domain: program name + FAQ, international applicants, funding, deadlines. |
+| fetch_page | url | Plain fetch, cheerio + readability, returns clean text, title, outbound links | Respects robots.txt, 10s timeout, 1 req/s per host. Costs no model tokens. Cached by URL hash for 24h. |
+| find_links | page_id | Ranks the page's links with code (no model), returns the top N | Keywords: FAQ, apply, admissions, requirements, international, funding, fees, deadlines, prospective, eligibility, guidelines, the department name. Same official domain only (program, department, graduate school). |
+| read_pdf | url | unpdf text extraction | Scanned PDFs with no text layer: report it as unreadable and give the link. |
+| read_page | page_id | Runs the reader role over one page into the extraction schema | Run in parallel across pages. |
+| request_approval | {gate, what, evidence, options} | Persists state and halts the run with needs_approval | The only way to stop for a human. |
+| finish | {result} | Ends the run with the final structured result | Validated by zod. |
+
 Hard caps: 12 orchestrator turns per run, 25 pages, link depth 2, 60 seconds per page fetch batch. If a cap is hit, finish with what was read and say so in friendly words.
 5.2 Gates
-Gate
-When
-Card the user sees
-G1 Program match
-Always, before the deep scan
-Program name from the school's page, department and school, with "Yes, that's it" and "Not quite". If no program with that exact name exists, say so and offer the closest matches.
-G2 Uncertain or conflicting dates/rules
-Only when a field is flagged needs_human
-One plain question with the two sources and "Where I found this" links. Clear, evidenced dates never interrupt. They ride along inside G4.
-G3 Profile facts used
-Once per task
-Shows the few facts about the user that this task uses, as editable lines, with "Looks right".
-G4 Calendar writes
-Always
-The reminder plan card and the Approve & Sync button. Nothing is written anywhere before the click.
-G5 Keeping a draft
-Always, per draft
-The draft card with the edit box and a keep button.
+
+| Gate | When | Card the user sees |
+|---|---|---|
+| G1 Program match | Always, before the deep scan | Program name from the school's page, department and school, with "Yes, that's it" and "Not quite". If no program with that exact name exists, say so and offer the closest matches. |
+| G2 Uncertain or conflicting dates/rules | Only when a field is flagged needs_human | One plain question with the two sources and "Where I found this" links. Clear, evidenced dates never interrupt. They ride along inside G4. |
+| G3 Profile facts used | Once per task | Shows the few facts about the user that this task uses, as editable lines, with "Looks right". |
+| G4 Calendar writes | Always | The reminder plan card and the Approve & Sync button. Nothing is written anywhere before the click. |
+| G5 Keeping a draft | Always, per draft | The draft card with the edit box and a keep button. |
+
 Fit is advice and never a gate. After the honest read the agent asks exactly one question, "Want to go for it anyway?", records the answer in decisions, and never asks again. A "Not now" parks the chat and keeps the reminders that already exist.
 5.3 Run state and resumption
 • A runs row holds status (running, needs_approval, done, failed), step, messages (the full model message history, since reasoning replay may not exist), state (typed working memory: confirmed program, pages, extraction, fit, plan, drafts), pending_gate, turn_count, usage_usd.
@@ -258,6 +194,8 @@ Fit is advice and never a gate. After the honest read the agent asks exactly one
 • The same advance function is used by the web app and by the eval CLI.
 5.4 SSE event contract
 POST /api/chat streams newline-delimited SSE events. Types are defined once in packages/core/src/schemas/events.ts and shared with the client.
+
+```ts
 type RunEvent =
   | { t: "message"; id: string; text: string }                 // assistant bubble, may stream deltas
   | { t: "status"; id: string; label: string; state: "active" | "done" | "failed" }
@@ -266,6 +204,7 @@ type RunEvent =
   | { t: "continue"; runId: string }
   | { t: "done"; runId: string }
   | { t: "error"; friendly: string; link?: string };
+```
 
 Status labels come only from packages/core/src/voice/. Examples: "Reading the admissions page", "Found the FAQ, checking it", "Reading the guidelines", "Putting your plan together".
 6. Pipeline details
@@ -282,21 +221,19 @@ Use search grounding to find the official page, keep the citation URLs, prefer t
 6. Emit a coverage card in friendly words: what was read, which page would not open (with its link), and whether anything was read in another language.
 If a page needs JavaScript or a login, say which page and ask the user to paste its text. A pasted text goes through the same reader and is marked as user-provided in the evidence.
 The scan hunts a fixed checklist, walked by the reader prompt:
-Category
-Examples
-Deadlines
-Earlier dates for funding, international applicants or tracks; a separate portal opening date
-Eligibility
-Minimum grades, required prior degree, residency or citizenship limits
-Documents
-Word and page limits, extra forms, writing samples, portfolio
-People
-Contacting a faculty member first, number and type of recommenders
-Tests
-Required, optional or waived; score validity
-Money
-Application fee, fee waiver conditions, funding offered or not
+
+| Category | Examples |
+|---|---|
+| Deadlines | Earlier dates for funding, international applicants or tracks; a separate portal opening date |
+| Eligibility | Minimum grades, required prior degree, residency or citizenship limits |
+| Documents | Word and page limits, extra forms, writing samples, portfolio |
+| People | Contacting a faculty member first, number and type of recommenders |
+| Tests | Required, optional or waived; score validity |
+| Money | Application fee, fee waiver conditions, funding offered or not |
+
 6.4 Extraction schema (zod, shared)
+
+```ts
 const Confidence = z.enum(["high", "medium", "low"]);
 const Evidenced = <T extends z.ZodTypeAny>(v: T) => z.object({
   value: v,
@@ -325,6 +262,7 @@ export const Extraction = z.object({
   money: z.array(Evidenced(z.string())),
   unusual_rules: z.array(Evidenced(z.string())), // anything that changes eligibility, a deadline, a document, a cost or who to contact
 });
+```
 
 6.5 Evidence post-check and reconcile
 • Post-check (code, no model): normalize whitespace and case, confirm the evidence_quote appears in the fetched page text (or the vision transcription) and that the value is supported by it (dates parsed from the quote must equal the value). A mismatch sets confidence to low and checked to false.
@@ -347,44 +285,33 @@ Three reminders per opportunity: two weeks before the deadline (get documents re
 The writer role drafts the statement from the confirmed profile facts and the program's own wording. Missing facts become [PLACEHOLDER]. Chat edits ("make it more academic") rewrite the draft in place and keep versions. Each draft ends at G5. Never invent facts about the user or the program.
 7.6 Application Pack
 One screen, four parts. Mizzou writes and organizes. The user pastes, uploads, pays and clicks Submit.
-Part
-Contents
-Checklist
-One row per requirement with status; tick rows off
-Copy-ready answers
-One card per likely portal question ("Why this program?") with the draft, a word count and a Copy button
-Ready-to-send emails
-A draft to each recommender (deadline and portal link) and one to the registrar for transcripts. Mizzou never sends them
-Open portal
-A button to the real application page
+
+| Part | Contents |
+|---|---|
+| Checklist | One row per requirement with status; tick rows off |
+| Copy-ready answers | One card per likely portal question ("Why this program?") with the draft, a word count and a Copy button |
+| Ready-to-send emails | A draft to each recommender (deadline and portal link) and one to the registrar for transcripts. Mizzou never sends them |
+| Open portal | A button to the real application page |
+
 Anything not confirmable from public pages is marked "check against the portal". Stretch only if everything else is done: guided fill that shows each value and waits for approval, with Submit always left to the user.
 8. UI: Liquid Glass, grayscale, mobile first
 Build the screens to match the reference screenshots in docs/design/ (copy the nine PNGs there). Ship this single light look. No dark mode.
 8.1 Tokens (styles/tokens.css)
-Token
-Value
-Typeface
-Inter for UI. The wordmark "Mizzou" is a formal script face, rendered from an SVG file in public/
-Page background
-#E9E9EB
-Blurred shapes behind content
-#D4D4D8 to #C8C8CC, heavily blurred, no color gradients
-Text
-#000000. Caption #3A3A3A, sparingly
-Glass surface
-rgba(255,255,255,0.55), backdrop-filter: blur(24px) saturate(180%), 1px border rgba(255,255,255,0.7), soft shadow, 24px radius
-Hairline
-rgba(0,0,0,0.10)
-Primary button
-Solid black, white text, fully rounded
-Secondary button
-Gray fill, black text
-Accent
-None. Color only for function: small green check, red error
-Motion
-Framer Motion springs. Cards rise in, status lines swap with a short fade, no looping decoration. Respect prefers-reduced-motion
-Layout
-Single column, max width about 720px, safe-area padding
+
+| Token | Value |
+|---|---|
+| Typeface | Inter for UI. The wordmark "Mizzou" is a formal script face, rendered from an SVG file in public/ |
+| Page background | #E9E9EB |
+| Blurred shapes behind content | #D4D4D8 to #C8C8CC, heavily blurred, no color gradients |
+| Text | #000000. Caption #3A3A3A, sparingly |
+| Glass surface | rgba(255,255,255,0.55), backdrop-filter: blur(24px) saturate(180%), 1px border rgba(255,255,255,0.7), soft shadow, 24px radius |
+| Hairline | rgba(0,0,0,0.10) |
+| Primary button | Solid black, white text, fully rounded |
+| Secondary button | Gray fill, black text |
+| Accent | None. Color only for function: small green check, red error |
+| Motion | Framer Motion springs. Cards rise in, status lines swap with a short fade, no looping decoration. Respect prefers-reduced-motion |
+| Layout | Single column, max width about 720px, safe-area padding |
+
 Rules: backdrop blur on at most three layers at once; every text-on-glass pair at least 4.5:1 contrast.
 8.2 Screens (as in the screenshots)
 1. Landing. Wordmark, headline "From link to executed application.", a glass pill "You approve every step", a full-width black button "Try it for free", and "Already have an account? Log in" below.
@@ -418,9 +345,12 @@ Exactly the route handlers listed in section 3. api/chat streams SSE with maxDur
 Store only what the task needs. Never send personal data (profile facts, drafts, uploads, voice) to a contributor variant. Show Forget me for guests and Clear all chats for everyone. Demo data is fictional.
 10. Evaluation harness (packages/eval)
 • cases/*.json: 10 real opportunities, hand-labeled by the human on or after Oct 27, with the correct values. Mix: clean pages, JavaScript-heavy pages, PDFs, flyers, and two non-academic items (a job posting and a conference call for papers). Graduate programs, scholarships and fellowships are the majority.
+
+```json
 { "id": "case-01", "kind": "program", "input": { "type": "url", "value": "https://..." },
   "expected": { "opens": "2026-09-01T00:00:00Z|null", "deadlines": [{ "label": "...", "iso_utc": "..." }],
                 "documents": ["..."], "unusual_rules": ["..."] }, "notes": "" }
+```
 
 • pnpm eval runs the same advance code the app uses, in autonomous mode with gates auto-approved, over all cases. It runs two configurations: baseline (single page, no link following) and deep scan.
 • Metrics, printed and written to docs/EVAL_REPORT.md and docs/eval-results.json: date exact-match accuracy after timezone normalization (reported as "N of M deadlines correct"), requirement recall and precision with fuzzy matching, evidence validity rate (post-check pass rate), correct needs_human flags, buried-rule recovery (found only by deep scan), cost and latency per case.
@@ -428,54 +358,21 @@ Store only what the task needs. Never send personal data (profile facts, drafts,
 • Report only measured numbers in the README and the video. Unit tests (vitest) cover schemas, link ranking, reconcile, timezone handling, the evidence check and .ics UID stability.
 11. Milestones
 After each milestone: run it, commit with a small clear message, update STATUS.md (done, next, blockers). First commit on or after Oct 27.
-#
-Target
-Build
-Done when
-M0
-Oct 27
-Monorepo scaffold, pnpm workspace, tsconfig, .env.example, STATUS.md, Supabase and Vercel wiring. Run the day-one checks from section 4 and write results with working request examples to docs/META_API_NOTES.md
-A real /v1/responses call to muse-spark-1.3 returns, and the notes file exists
-M1
-Oct 27
-callModel wrapper, role registry, usage logging, 429 backoff, structured output with one repair retry. Extraction schema and single-page extraction with the evidence post-check
-One URL in, valid evidenced JSON out, post-check passing
-M2
-Oct 28
-Eval CLI, 10 labeled cases, baseline run
-pnpm eval prints a baseline report
-M3
-Oct 28
-Thin vertical slice. Chat UI shell, anonymous guest session, URL in, status lines streaming, G1 card, requirements card, plan card, .ics download
-A full demo path works end to end, even if plain
-M4
-Oct 29
-Search grounding, link ranking, parallel fetch, PDF reading, deep scan with budget, resumable runs, reconcile, G2, coverage card
-Deep scan beats baseline on the eval set; a run survives a gate sitting open
-M5
-Oct 30
-Profile by conversation, G3, internal fit and plain-words card, "Want to go for it anyway?" and decisions; flyer upload through the vision role
-Fit matches the human's own judgment on the test set; a flyer produces the same cards
-M6
-Oct 31
-Drafts, chat edits, versions, G5, Application Pack (checklist, copy-ready answers, recommender and registrar emails, portal button)
-A statement is drafted, edited by chat and kept; the Pack screen is complete
-M7
-Nov 1
-Google sign-in, incremental Calendar consent, idempotent Approve & Sync, .ics fallback, reminders that talk back, Coming up card
-Three events appear once and never duplicate on retry
-M8
-Nov 1
-Liquid Glass UI pass to match the screenshots, left panel, log out, Clear all with Undo, budgets, per-visitor caps, recorded runs
-UI matches section 8; budgets enforce; recorded runs replay
-M9
-Nov 2
-Optional, time-boxed: voice notes and SAM 3.1 flyer evidence region. Drop either if it does not work and do not claim it. Human runs five real-user tests; fix what breaks
-Either shipped honestly or cut; five short notes saved
-M10
-Nov 3
-Final eval run, A/B decisions recorded, README, ARCHITECTURE.md, DEMO_SCRIPT.md, architecture image, demo video shots
-README complete, eval report committed
+
+| # | Target | Build | Done when |
+|---|---|---|---|
+| M0 | Oct 27 | Monorepo scaffold, pnpm workspace, tsconfig, .env.example, STATUS.md, Supabase and Vercel wiring. Run the day-one checks from section 4 and write results with working request examples to docs/META_API_NOTES.md | A real /v1/responses call to muse-spark-1.3 returns, and the notes file exists |
+| M1 | Oct 27 | callModel wrapper, role registry, usage logging, 429 backoff, structured output with one repair retry. Extraction schema and single-page extraction with the evidence post-check | One URL in, valid evidenced JSON out, post-check passing |
+| M2 | Oct 28 | Eval CLI, 10 labeled cases, baseline run | pnpm eval prints a baseline report |
+| M3 | Oct 28 | Thin vertical slice. Chat UI shell, anonymous guest session, URL in, status lines streaming, G1 card, requirements card, plan card, .ics download | A full demo path works end to end, even if plain |
+| M4 | Oct 29 | Search grounding, link ranking, parallel fetch, PDF reading, deep scan with budget, resumable runs, reconcile, G2, coverage card | Deep scan beats baseline on the eval set; a run survives a gate sitting open |
+| M5 | Oct 30 | Profile by conversation, G3, internal fit and plain-words card, "Want to go for it anyway?" and decisions; flyer upload through the vision role | Fit matches the human's own judgment on the test set; a flyer produces the same cards |
+| M6 | Oct 31 | Drafts, chat edits, versions, G5, Application Pack (checklist, copy-ready answers, recommender and registrar emails, portal button) | A statement is drafted, edited by chat and kept; the Pack screen is complete |
+| M7 | Nov 1 | Google sign-in, incremental Calendar consent, idempotent Approve & Sync, .ics fallback, reminders that talk back, Coming up card | Three events appear once and never duplicate on retry |
+| M8 | Nov 1 | Liquid Glass UI pass to match the screenshots, left panel, log out, Clear all with Undo, budgets, per-visitor caps, recorded runs | UI matches section 8; budgets enforce; recorded runs replay |
+| M9 | Nov 2 | Optional, time-boxed: voice notes and SAM 3.1 flyer evidence region. Drop either if it does not work and do not claim it. Human runs five real-user tests; fix what breaks | Either shipped honestly or cut; five short notes saved |
+| M10 | Nov 3 | Final eval run, A/B decisions recorded, README, ARCHITECTURE.md, DEMO_SCRIPT.md, architecture image, demo video shots | README complete, eval report committed |
+
 Nov 4 is buffer only. Submit by midday Lagos time (the deadline is Nov 4, 9:00 PM ET), then reopen the submission to confirm it saved.
 12. Docs, README and submission
 12.1 README (for judges)
@@ -483,30 +380,17 @@ Sections, in order: what Mizzou is and the one-line pitch ("Mizzou turns a link 
 12.2 Docs
 docs/META_API_NOTES.md (verified shapes and examples), docs/ARCHITECTURE.md (with the architecture diagram as an image in the repo), docs/DEMO_SCRIPT.md (the 3-minute storyboard below), docs/EVAL_REPORT.md.
 12.3 Demo storyboard (3:00, ends on real events in Google Calendar)
-Time
-Shot
-Line
-0:00 to 0:25
-The builder, then a messy folder of links and flyers
-"I kept missing deadlines and drowning in requirements. So I built Mizzou."
-0:25 to 0:50
-Sign in, say what you need in a sentence
-"One tap to sign in, then just tell it what you need."
-0:50 to 1:25
-Status lines run; G1 confirm
-"The agent follows the links a human would, using Muse Spark to decide where to look."
-1:25 to 1:50
-Review cards; hover "Where I found this" to show the quote; one flagged ambiguity
-"Every date points back to its source. When it is unsure, it asks me."
-1:50 to 2:10
-Fit read, "go for it anyway", draft and one chat edit
-"It tells me honestly where I stand before I spend my time."
-2:10 to 2:35
-Approve & Sync, cut to real Google Calendar with three events
-"Nothing is written until I approve."
-2:35 to 3:00
-Measured accuracy, a real tester quote, what is next
-Use only measured numbers.
+
+| Time | Shot | Line |
+|---|---|---|
+| 0:00 to 0:25 | The builder, then a messy folder of links and flyers | "I kept missing deadlines and drowning in requirements. So I built Mizzou." |
+| 0:25 to 0:50 | Sign in, say what you need in a sentence | "One tap to sign in, then just tell it what you need." |
+| 0:50 to 1:25 | Status lines run; G1 confirm | "The agent follows the links a human would, using Muse Spark to decide where to look." |
+| 1:25 to 1:50 | Review cards; hover "Where I found this" to show the quote; one flagged ambiguity | "Every date points back to its source. When it is unsure, it asks me." |
+| 1:50 to 2:10 | Fit read, "go for it anyway", draft and one chat edit | "It tells me honestly where I stand before I spend my time." |
+| 2:10 to 2:35 | Approve & Sync, cut to real Google Calendar with three events | "Nothing is written until I approve." |
+| 2:35 to 3:00 | Measured accuracy, a real tester quote, what is next | Use only measured numbers. |
+
 12.4 Submission checklist
 • Public GitHub repository with the first commit on or after Oct 27 and a clean, small-commit history
 • README complete with the sections above, including "Built during the hackathon" and the Meta models and tools list

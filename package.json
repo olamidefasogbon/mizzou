@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "pnpm --filter @mizzou/core test",
+    "typecheck": "pnpm --filter @mizzou/core typecheck",
+    "eval": "pnpm --filter @mizzou/eval eval"
   },
   "keywords": [],
   "author": "",

@@ -76,7 +76,7 @@
 Do these in order; each line lands as its own commit. Items marked YOU run in
 parallel with the agent lines — start them today.
 
-1. YOU (today): Supabase project + Google OAuth + `supabase/migrations/` apply; Vercel project linked. Unblocks 5, 8, 9.
+1. YOU (today): Supabase project + Google OAuth + apply `supabase/migrations/` (SQL written + committed Oct 28, 14 tables + RLS + private bucket; see apply steps in chat); Vercel project linked. Unblocks 5, 8, 9.
 2. YOU (today–Oct 30): 9 more hand-labeled cases (or URLs to fixture). Unblocks 7.
 3. Agent (Oct 28–29): M4 agent loop — `advance()`, tools, gates G2/G3, search grounding, deep scan + budget, judge reconcile, coverage card, resume route. Depends on 1 for persistence (ship file-backed first, swap to Supabase when ready).
 4. Agent (Oct 29–30): `styles/tokens.css` + restyle landing/signup/home/conversation to the nine PNGs via `docs/design/html` values (Pinyon wordmark, glass, 44px targets). Host eyeballs each screen.

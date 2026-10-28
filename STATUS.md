@@ -1,6 +1,6 @@
 # Mizzou Build Status
 
-## Current milestone: item 2 done (case-01 1/1, cause found) — waiting on go-ahead for item 3
+## Current milestone: item 3 done (agent skeleton + 3 screens) — waiting on go-ahead for the next build step
 
 - [x] M0: Monorepo scaffolded (`apps/web`, `packages/core`)
 - [x] M0: TypeScript setup (`tsconfig.base.json`, per-package configs) + workspace deps
@@ -16,6 +16,7 @@
 - [x] M2: Eval CLI executes the production reader path (`callModel` + zod + post-check), `--limit` default 2, skips unlabeled; 1 labeled case runs clean via `pnpm eval --limit 2`
 - [x] M2: Baseline report written (`docs/EVAL_REPORT.md`, `docs/eval-results.json`): 0/1 deadlines, recall 33.3%, precision 100.0%, evidence 13/14, spend $0.0305
 - [x] Item 2 (case-01 fix, Oct 28): program_hint `Computer Science (PhD)` in template + reader prompt, label corrected to the true UTC instant `2026-12-16T04:59:59Z`, luxon Eastern-wall-day matcher (`sourceDay`), 13 tests (incl. template↔fixture lock). Rerun case-01 only: **1/1 deadlines**, evidence 14/15, spend $0.0377. Cause of the old 0/1: (a) label stored wall-time-as-UTC across a UTC-midnight boundary + (b) matcher compared UTC calendar days — the reader was already returning the correct date with a correct UTC conversion. Residual: the Jan-2 CS-MS extraction scores `checked: false` because its evidence quote carries no year (multi-part heading) — evidence-year-check follow-up, not scored.
+- [x] Item 3 (Oct 28): agent loop skeleton in `packages/core/src/agent/` (`types` + `FileRunStore` + `advance` with turn cap, 80% time guard, gate halt, opId-idempotent resume; 7 tests; core 24/24, tsc clean). UI: `styles/tokens.css` + landing←`Main.html`, signup←`SignUp.html`, home←`Chat.html` (+PlusMenu overlay); home composer hands off to a fresh chat via `?q=`. Web tsc clean. Browser-unverified (no dev server in sandbox); host must eyeball. Pending: panel drawer (menu button visual-only), Google OAuth (temporary guest passthrough), upload inputs (shell only, M7).
 - [x] Audit (Oct 28, no model spend): `docs/GAP_REPORT.md` — 13 built-and-matching, 15 built-but-differs, 17 not-built; top risks are the missing agent loop, missing DB, and the pre-design UI
 - [x] M3: `POST /api/chat` streams the real RunEvent contract (message/status/needs_approval G1/done/error); URL in → live single-page extraction → G1 program card, verified end to end
 - [x] M3: Conversation page (`app/app/c/[chatId]`) with streaming status lines, G1 confirm card, and sample .ics download; typechecks clean (browser render not yet eyeballed — no browser tooling here)

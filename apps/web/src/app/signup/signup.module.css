@@ -1,0 +1,107 @@
+/* Sign-up. Values from docs/design/html/SignUp.html. */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 28px;
+}
+
+.blob1 {
+  position: absolute;
+  top: 40px;
+  right: -120px;
+  width: 320px;
+  height: 320px;
+  border-radius: 160px;
+  background: var(--mz-blob-1);
+  filter: blur(70px);
+}
+
+.blob2 {
+  position: absolute;
+  top: 380px;
+  left: -100px;
+  width: 260px;
+  height: 260px;
+  border-radius: 130px;
+  background: var(--mz-blob-2);
+  filter: blur(60px);
+}
+
+.blob3 {
+  position: absolute;
+  bottom: -100px;
+  left: -90px;
+  width: 300px;
+  height: 300px;
+  border-radius: 150px;
+  background: var(--mz-blob-3);
+  filter: blur(60px);
+}
+
+.back {
+  position: absolute;
+  top: 56px;
+  left: 20px;
+  text-decoration: none;
+  color: var(--mz-ink);
+}
+
+.card {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+  padding: 44px 24px 28px;
+  border-radius: 36px;
+}
+
+.wordmark {
+  font-size: 68px;
+}
+
+.heading {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+
+.sub {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--mz-secondary);
+  max-width: 240px;
+}
+
+.googleButton {
+  width: 100%;
+  height: 54px;
+  font-size: 17px;
+  margin-top: 8px;
+}
+
+.guestButton {
+  width: 100%;
+  height: 48px;
+  font-size: 16px;
+}
+
+.footer {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  bottom: 40px;
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--mz-secondary);
+}

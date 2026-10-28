@@ -1,0 +1,128 @@
+/* Mizzou design tokens. Single source of truth; every value copied from
+   docs/design/html/*.html, which wins over PROMPT.md section 8 on any number.
+   No one-off colors: screens and components use only these variables. */
+
+:root {
+  --mz-page: #e9e9eb;
+  --mz-ink: #000;
+  --mz-secondary: #48484a;
+
+  --mz-blob-1: #cfcfd4;
+  --mz-blob-2: #f7f7f9;
+  --mz-blob-3: #c4c4ca;
+
+  --mz-glass: rgba(255, 255, 255, 0.42);
+  --mz-glass-strong: rgba(255, 255, 255, 0.5);
+  --mz-glass-menu: rgba(255, 255, 255, 0.68);
+  --mz-glass-border: rgba(255, 255, 255, 0.7);
+  --mz-line: rgba(60, 60, 67, 0.14);
+  --mz-frame: rgba(60, 60, 67, 0.18);
+  --mz-pill: rgba(120, 120, 128, 0.2);
+  --mz-pill-soft: rgba(120, 120, 128, 0.16);
+  --mz-user-bubble: rgba(120, 120, 128, 0.22);
+  --mz-dot: #6c6c70;
+  --mz-connector: rgba(60, 60, 67, 0.25);
+  --mz-scrim: rgba(0, 0, 0, 0.1);
+
+  --mz-blur: blur(24px) saturate(180%);
+  --mz-shadow-card:
+    0 0 0 0.5px rgba(0, 0, 0, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 10px 30px rgba(0, 0, 0, 0.07);
+  --mz-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+
+  --mz-radius-card: 28px;
+  --mz-radius-pill: 999px;
+  --mz-touch: 44px;
+
+  --mz-font:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+}
+
+/* Page shell: centers the phone-width canvas on larger screens. */
+.mz-shell {
+  width: 100%;
+  max-width: 430px;
+  min-height: 100dvh;
+  margin-inline: auto;
+  position: relative;
+  overflow: clip;
+  background: var(--mz-page);
+  color: var(--mz-ink);
+  font-family: var(--mz-font);
+}
+
+.mz-wordmark {
+  font-family: var(--font-pinyon, "Pinyon Script"), "Pinyon Script", cursive;
+  line-height: 1;
+  color: var(--mz-ink);
+}
+
+/* Shared glass surfaces. */
+.mz-glass {
+  background: var(--mz-glass);
+  backdrop-filter: var(--mz-blur);
+  -webkit-backdrop-filter: var(--mz-blur);
+  border: 1px solid var(--mz-glass-border);
+  box-shadow: var(--mz-shadow-card);
+}
+
+/* Buttons. Black is reserved for the single primary action per screen. */
+.mz-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--mz-radius-pill);
+  font-family: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  min-height: var(--mz-touch);
+}
+.mz-btn:active {
+  opacity: 0.72;
+}
+.mz-btn-primary {
+  background: #000;
+  color: #fff;
+  font-weight: 600;
+}
+.mz-btn-secondary {
+  background: var(--mz-pill);
+  color: var(--mz-ink);
+  font-weight: 500;
+}
+
+/* Small gray count / time pills. */
+.mz-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--mz-radius-pill);
+  background: var(--mz-pill);
+  color: var(--mz-ink);
+  font-weight: 600;
+}
+
+/* 44px round glass icon buttons (menu, new chat, back). */
+.mz-icon-btn {
+  width: var(--mz-touch);
+  height: var(--mz-touch);
+  border-radius: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  text-decoration: none;
+  color: var(--mz-ink);
+}
+
+.mz-divider {
+  height: 1px;
+  background: var(--mz-line);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mz-fade {
+    transition: none !important;
+  }
+}

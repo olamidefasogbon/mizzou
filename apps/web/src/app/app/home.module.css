@@ -144,6 +144,14 @@
   font-size: 13px;
 }
 
+.emptyNote {
+  margin: 0;
+  padding: 12px 4px 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--mz-secondary);
+}
+
 .pickedFile {
   flex: none;
   margin-bottom: 8px;

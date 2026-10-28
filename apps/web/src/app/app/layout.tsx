@@ -1,8 +1,10 @@
 import AppShell from '@/components/shell';
+import { getAppData } from '@/lib/actions';
 
-// Chat screens share one responsive shell: drawer < 768px, pinned panel +
-// centered ~760px column at 768px+, right evidence rail at 1100px+.
+// Chat screens share one responsive AppShell, seeded with real store rows
+// (empty on a fresh browser). No demo data.
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const initial = await getAppData();
+  return <AppShell initial={initial}>{children}</AppShell>;
 }

@@ -6,6 +6,7 @@ import { ArrowUp, Check, Download, Loader2, X } from 'lucide-react';
 import { formatG1Prompt } from '@mizzou/core';
 import { Blobs } from '@/components/chrome';
 import { useEvidence } from '@/components/evidence';
+import { ensureChatAction } from '@/lib/actions';
 
 function g1Title(program: { name: string; unit: string; institution: string }, opportunityType?: string): {
   title: string;
@@ -315,6 +316,7 @@ function ChatContent(): React.JSX.Element {
     if (!initialQ || sentInitial.current) return;
     sentInitial.current = true;
     router.replace(`/app/c/${chatId}`, { scroll: false });
+    void ensureChatAction(chatId, initialQ);
     void sendText(initialQ);
   }, [initialQ, chatId, router, sendText]);
 

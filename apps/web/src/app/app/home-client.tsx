@@ -3,13 +3,13 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Blobs, Composer } from '@/components/chrome';
+import { useStore } from '@/components/store-context';
 import styles from './home.module.css';
 
 // Home. Matched files: docs/design/html/Chat.html (greeting, Coming up,
 // composer) and docs/design/html/PlusMenu.html (upload overlay, in chrome).
-// Greeting name and Coming-up rows are fictional demo data (PROMPT.md 9.4)
-// until the profile + reminders APIs land. The shell provides the top bar,
-// the left panel and the evidence rail.
+// Greeting and Coming up render only real store rows: a fresh browser sees
+// "Howdy" and an empty card. No demo data in app code.
 
 const ROTATING_WORDS = [
   'scholarships',
@@ -24,14 +24,9 @@ const ROTATING_WORDS = [
   'conferences',
 ];
 
-const COMING_UP = [
-  { title: 'Fulbright 2027', sub: 'Statement of purpose, not finished', pill: '6 days' },
-  { title: 'Yale PhD, Food Science', sub: "Portal opens soon, I'm watching it", pill: 'Soon' },
-  { title: 'Summer research internship', sub: '2 documents left', pill: '9 days' },
-];
-
 export default function HomeClient() {
   const router = useRouter();
+  const { name, reminders } = useStore();
   const [wordIndex, setWordIndex] = useState(0);
   const [wordVisible, setWordVisible] = useState(true);
   const [input, setInput] = useState('');
@@ -68,7 +63,7 @@ export default function HomeClient() {
       />
       <div className={styles.body}>
         <div className={styles.greeting}>
-          <p className={styles.hello}>Howdy, John</p>
+          <p className={styles.hello}>{name ? `Howdy, ${name}` : 'Howdy'}</p>
           <p className={styles.rotating}>
             What{' '}
             <span className={`mz-fade ${styles.rotatingWord}`} style={{ opacity: wordVisible ? 1 : 0 }}>
@@ -83,15 +78,19 @@ export default function HomeClient() {
             <span className={styles.comingUpTitle}>Coming up</span>
             <span className={styles.seeAll}>See all</span>
           </div>
-          {COMING_UP.map((row) => (
-            <div key={row.title} className={styles.row}>
-              <div className={styles.rowText}>
-                <span className={styles.rowTitle}>{row.title}</span>
-                <span className={styles.rowSub}>{row.sub}</span>
+          {reminders.length === 0 ? (
+            <p className={styles.emptyNote}>Nothing on your radar yet. Send me an admissions link and I&rsquo;ll watch every date.</p>
+          ) : (
+            reminders.slice(0, 3).map((row) => (
+              <div key={row.id} className={styles.row}>
+                <div className={styles.rowText}>
+                  <span className={styles.rowTitle}>{row.title}</span>
+                  <span className={styles.rowSub}>{row.sub}</span>
+                </div>
+                <span className={`mz-pill ${styles.rowPill}`}>{row.pill}</span>
               </div>
-              <span className={`mz-pill ${styles.rowPill}`}>{row.pill}</span>
-            </div>
-          ))}
+            ))
+          )}
         </div>
         {pickedFile ? <p className={styles.pickedFile}>Attached: {pickedFile} (upload sends in M7)</p> : null}
       </div>

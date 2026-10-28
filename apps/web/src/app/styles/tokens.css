@@ -39,17 +39,28 @@
     -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
 }
 
-/* Page shell: centers the phone-width canvas on larger screens. */
+/* App background layer only: page color plus blobs. It must not have a
+   max-width (docs/design/RESPONSIVE.md section 3). Width comes from the
+   AppShell grid; chat columns cap themselves per breakpoint. */
 .mz-shell {
+  width: 100%;
+  min-height: 100dvh;
+  position: relative;
+  overflow: clip;
+  background: var(--mz-page);
+  color: var(--mz-ink);
+  font-family: var(--mz-font);
+}
+
+/* Temporary narrow canvas for landing + sign-up until their step-2 layouts
+   land (desktop two-column and 440px card). Not for chat screens. */
+.mz-narrow {
   width: 100%;
   max-width: 430px;
   min-height: 100dvh;
   margin-inline: auto;
   position: relative;
   overflow: clip;
-  background: var(--mz-page);
-  color: var(--mz-ink);
-  font-family: var(--mz-font);
 }
 
 .mz-wordmark {

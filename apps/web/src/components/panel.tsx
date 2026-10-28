@@ -2,26 +2,24 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useStore } from './store-context';
 import styles from './panel.module.css';
 
-// Left panel + log-out modal. Matched files: docs/design/html/Panel.html
-// (drawer) and docs/design/html/Logout.html (modal). Reminder/chat rows are
-// fictional demo data (PROMPT.md 9.4) until the reminders + chats APIs land.
-
-const DEMO_REMINDERS = [
-  { title: 'Fulbright 2027', sub: 'Statement not finished', pill: '6 days' },
-  { title: 'Yale PhD', sub: 'Portal opens soon', pill: 'Soon' },
-  { title: 'Summer internship', sub: '2 documents left', pill: '9 days' },
-];
-
-const DEMO_CHATS = ['Yale PhD application', 'Fulbright 2027', 'Summer research internship', 'Chevening scholarship'];
+// Left panel drawer + log-out modal. Matched files: docs/design/html/Panel.html
+// (drawer) and docs/design/html/Logout.html (modal). Lists render only real
+// store rows: empty until reminders/chats exist. No demo data in app code.
 
 export function Panel({ onNavigate }: { onNavigate: () => void }) {
   const router = useRouter();
-  const [chats, setChats] = useState<string[] | null>(DEMO_CHATS);
-  const [undoArmed, setUndoArmed] = useState(false);
+  const { name, reminders, chats, clearChats, undoClearChats, undoArmed, expireUndo } = useStore();
   const [logoutOpen, setLogoutOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(
     () => () => {
@@ -30,18 +28,14 @@ export function Panel({ onNavigate }: { onNavigate: () => void }) {
     [],
   );
 
-  const clearAll = () => {
-    setChats(null);
-    setUndoArmed(true);
+  useEffect(() => {
+    if (!undoArmed) return;
     if (undoTimer.current) clearTimeout(undoTimer.current);
-    undoTimer.current = setTimeout(() => setUndoArmed(false), 5000);
-  };
-
-  const undo = () => {
-    if (undoTimer.current) clearTimeout(undoTimer.current);
-    setChats(DEMO_CHATS);
-    setUndoArmed(false);
-  };
+    undoTimer.current = setTimeout(() => expireUndo(), 5000);
+    return () => {
+      if (undoTimer.current) clearTimeout(undoTimer.current);
+    };
+  }, [undoArmed, expireUndo]);
 
   return (
     <div className={styles.drawer}>
@@ -64,43 +58,50 @@ export function Panel({ onNavigate }: { onNavigate: () => void }) {
 
       <div className={styles.sectionRow}>
         <span className={styles.sectionLabel}>Reminders</span>
-        <span className={styles.countBadge}>{DEMO_REMINDERS.length}</span>
+        <span className={styles.countBadge}>{reminders.filter((r) => !r.done).length}</span>
       </div>
 
       <div className={styles.card}>
-        {DEMO_REMINDERS.map((r) => (
-          <div key={r.title}>
-            <div className={styles.reminderRow}>
-              <div className={styles.reminderText}>
-                <span className={styles.reminderTitle}>{r.title}</span>
-                <span className={styles.reminderSub}>{r.sub}</span>
+        {reminders.length === 0 ? (
+          <p className={styles.emptyNote}>No reminders yet.</p>
+        ) : (
+          reminders.map((r) => (
+            <div key={r.id}>
+              <div className={styles.reminderRow}>
+                <div className={styles.reminderText}>
+                  <span className={styles.reminderTitle}>{r.title}</span>
+                  <span className={styles.reminderSub}>{r.sub}</span>
+                </div>
+                <span className={`mz-pill ${styles.reminderPill}`}>{r.pill}</span>
               </div>
-              <span className={`mz-pill ${styles.reminderPill}`}>{r.pill}</span>
+              <div className="mz-divider" />
             </div>
-            <div className="mz-divider" />
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       <div className={styles.sectionRowTight}>
         <span className={styles.sectionLabel}>Chats</span>
-        <button type="button" className={styles.clearAll} onClick={clearAll}>
+        <button type="button" className={styles.clearAll} onClick={() => void clearChats()}>
           Clear all
         </button>
       </div>
 
       <div className={styles.chatList}>
-        {(chats ?? []).map((c, i) => (
-          <div key={c} className={i === 0 ? styles.chatActive : styles.chatRow}>
-            {c}
-          </div>
-        ))}
-        {chats !== null && chats.length === 0 ? <p className={styles.emptyNote}>No chats yet.</p> : null}
+        {chats.length === 0 && !undoArmed ? (
+          <p className={styles.emptyNote}>No chats yet.</p>
+        ) : (
+          chats.map((c, i) => (
+            <div key={c.id} className={i === 0 ? styles.chatActive : styles.chatRow}>
+              {c.title}
+            </div>
+          ))
+        )}
       </div>
       {undoArmed ? (
         <div className={styles.undoToast} role="status">
           <span>Chats cleared.</span>
-          <button type="button" className={styles.undoButton} onClick={undo}>
+          <button type="button" className={styles.undoButton} onClick={() => void undoClearChats()}>
             Undo
           </button>
         </div>
@@ -121,12 +122,21 @@ export function Panel({ onNavigate }: { onNavigate: () => void }) {
         </button>
         <div className="mz-divider" style={{ margin: "0 6px" }} />
         <button type="button" className={styles.userRow} onClick={() => setLogoutOpen(true)}>
-          <span aria-hidden="true" className={styles.avatar}>
-            J
-          </span>
+          {name ? (
+            <span aria-hidden="true" className={styles.avatar}>
+              {name.slice(0, 1).toUpperCase()}
+            </span>
+          ) : (
+            <span aria-hidden="true" className={styles.avatar}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#48484A" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="8" r="3.5" />
+                <path d="M5 19a7 7 0 0114 0" />
+              </svg>
+            </span>
+          )}
           <span className={styles.userText}>
-            <span className={styles.userName}>John</span>
-            <span className={styles.userSub}>Signed in with Google</span>
+            <span className={styles.userName}>{name ?? 'Guest'}</span>
+            <span className={styles.userSub}>{name ? 'Signed in with Google' : 'Browsing as a guest'}</span>
           </span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#48484A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M7 14l5 5 5-5M7 10l5-5 5-5" />
@@ -134,8 +144,9 @@ export function Panel({ onNavigate }: { onNavigate: () => void }) {
         </button>
       </div>
 
-      {logoutOpen ? (
-        <div className={styles.modalScrim} onClick={() => setLogoutOpen(false)}>
+      {logoutOpen && mounted
+        ? createPortal(
+            <div className={styles.modalScrim} onClick={() => setLogoutOpen(false)}>
           <div className={styles.modal} role="dialog" aria-modal="true" aria-label="Log out of Mizzou?" onClick={(e) => e.stopPropagation()}>
             <p className={styles.modalTitle}>Log out of Mizzou?</p>
             <p className={styles.modalSub}>Your chats and reminders stay saved for when you come back.</p>
@@ -154,8 +165,10 @@ export function Panel({ onNavigate }: { onNavigate: () => void }) {
               Cancel
             </button>
           </div>
-        </div>
-      ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }

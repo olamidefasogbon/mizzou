@@ -7,7 +7,7 @@ import styles from "./signup.module.css";
 
 export default function SignupPage() {
   return (
-    <div className="mz-shell">
+    <div className="mz-shell mz-narrow">
       <div className={styles.screen} style={{ minHeight: "100dvh" }}>
         <div className={styles.blob1} aria-hidden="true" />
         <div className={styles.blob2} aria-hidden="true" />

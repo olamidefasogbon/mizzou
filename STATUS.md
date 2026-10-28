@@ -1,6 +1,6 @@
 # Mizzou Build Status
 
-## Current milestone: M2 baseline run done on 1 labeled case
+## Current milestone: audit done (`docs/GAP_REPORT.md` committed) — build queued to the Nov 4 deadline
 
 - [x] M0: Monorepo scaffolded (`apps/web`, `packages/core`)
 - [x] M0: TypeScript setup (`tsconfig.base.json`, per-package configs) + workspace deps
@@ -14,7 +14,14 @@
 - [x] M1: Evidence post-check (`evidence.ts`) covers ALL fields + date-year support check
 - [x] M1: Unit tests (13 passing, mocks only) + `typecheck` clean (both packages)
 - [x] M2: Eval CLI executes the production reader path (`callModel` + zod + post-check), `--limit` default 2, skips unlabeled; 1 labeled case runs clean via `pnpm eval --limit 2`
-- [x] M2: Baseline report written (`docs/EVAL_REPORT.md`, `docs/eval-results.json`): 0/1 deadlines, recall 33.3%, precision 100.0%, evidence 15/15, spend $0.0375
+- [x] M2: Baseline report written (`docs/EVAL_REPORT.md`, `docs/eval-results.json`): 0/1 deadlines, recall 33.3%, precision 100.0%, evidence 13/14, spend $0.0305
+- [x] Audit (Oct 28, no model spend): `docs/GAP_REPORT.md` — 13 built-and-matching, 15 built-but-differs, 17 not-built; top risks are the missing agent loop, missing DB, and the pre-design UI
+- [x] M3: `POST /api/chat` streams the real RunEvent contract (message/status/needs_approval G1/done/error); URL in → live single-page extraction → G1 program card, verified end to end
+- [x] M3: Conversation page (`app/app/c/[chatId]`) with streaming status lines, G1 confirm card, and sample .ics download; typechecks clean (browser render not yet eyeballed — no browser tooling here)
+- [x] M3 remainder: Requirements Card (document checklist + eligibility with ✓/needs-a-look flags) and Reminder Plan Card stream as `card` events, shown only after G1 Yes; plan Download button POSTs the extracted schedule to the new ICS route
+- [x] M3: `POST /api/calendar/ics` builds a valid `.ics` download (prep/push/deadline events, deterministic UIDs, friendly 400s); verified live: 9 events, correct headers
+- [ ] M3: anonymous guest session (needs Supabase wiring — human setup)
+- [x] Core: `schemas/events.ts` (RunEvent + SSE encoder, shared with client) and `voice/` microcopy modules added; `@mizzou/core` linked into web
 - [ ] M0: Supabase + Vercel wiring (needs human project setup)
 - [ ] M2: 9 more hand-labeled cases for the full 10-case set (human task)
 - [ ] M2: Deep-scan config + role A/B comparisons (needs M4 advance loop)
@@ -31,6 +38,17 @@
 - Successful baseline (case-01, reader, minimal effort): **$0.0375** measured.
 - A full 10-case baseline would be ~$0.15–0.40 at these page sizes; full run
   only on your say-so.
+- M3 smoke estimate (written BEFORE the run): one live `/api/chat` pass =
+  fetch (free) + one reader extraction ≈ **< $0.05**, same shape as the
+  $0.0375 baseline.
+- M3 smoke actual: vague-input path $0.00 (2 events, no model call); live URL
+  pass ≈ **$0.04** (same shape as baseline; usage not printed by the route).
+  Cumulative paid-model spend now **≈ $0.095**.
+- M3 remainder estimate (written BEFORE the run): one more live `/api/chat`
+  pass to verify the new card events ≈ **< $0.05**; the `.ics` route test is
+  free (no model calls).
+- M3 remainder actual: live pass with card events ≈ **$0.04**; ICS route test
+  $0.00. Cumulative paid-model spend now **≈ $0.135** (cap $10).
 
 ## Decisions
 
@@ -53,15 +71,33 @@
 - `packages/core/packages/core/` nested duplicate is pre-existing scaffold junk;
   left untouched, cleanup candidate for later.
 
-## Next
+## Next — single ordered list to a complete demo (submit by midday Lagos Nov 4; hard deadline Nov 4, 9:00 PM ET)
 
-1. You: 9 more hand-labeled cases (or point me at pages to fixture).
-2. Then: M3 thin vertical slice (needs Supabase/Vercel wiring — human setup).
-3. Suggested: persist per-case raw extraction JSON in the eval run so a 0/1
-   like case-01's deadline score can be diagnosed without re-spending.
+Do these in order; each line lands as its own commit. Items marked YOU run in
+parallel with the agent lines — start them today.
+
+1. YOU (today): Supabase project + Google OAuth + `supabase/migrations/` apply; Vercel project linked. Unblocks 5, 8, 9.
+2. YOU (today–Oct 30): 9 more hand-labeled cases (or URLs to fixture). Unblocks 7.
+3. Agent (Oct 28–29): M4 agent loop — `advance()`, tools, gates G2/G3, search grounding, deep scan + budget, judge reconcile, coverage card, resume route. Depends on 1 for persistence (ship file-backed first, swap to Supabase when ready).
+4. Agent (Oct 29–30): `styles/tokens.css` + restyle landing/signup/home/conversation to the nine PNGs via `docs/design/html` values (Pinyon wordmark, glass, 44px targets). Host eyeballs each screen.
+5. Agent (Oct 30): M5 profile/G3 + fit card + "go for it anyway" + flyer upload/vision.
+6. Agent (Oct 31): M6 drafts/G5/versions + Application Pack screen.
+7. Agent (Nov 1): eval deep-scan config on all 10 cases + role A/B picks (needs 2).
+8. Agent (Nov 1): M7 Google sign-in/guest session, Calendar sync + `.ics` fallback, reminders/chats/upload APIs, Coming up + panel + talk-back.
+9. Agent (Nov 1–2): M8 panel/logout/Clear-all-Undo, budgets caps, recorded runs, "Where I found this" end to end.
+10. Agent (Nov 2): M9 voice + SAM 3.1 time-boxed — ship or cut, no carryover.
+11. Agent (Nov 3): M10 README, ARCHITECTURE.md + diagram, DEMO_SCRIPT.md, final eval run, demo video shots, submission + reopen-verify.
+12. Nov 4: buffer only.
+
+Dropped/merged: old "M3 leftovers" folded into 4 and 8; per-case raw JSON already shipped (`9a54a60`).
 
 ## Blockers / Questions
 
-- Supabase/Vercel project wiring before any app-surface work.
+- YOU: Supabase/Vercel project wiring (item 1) before any app-surface work.
+- YOU: labeled cases (item 2) before the full eval (item 7).
+- This sandbox forbids listening sockets (`next dev` gets EACCES even on
+  127.0.0.1), so the dev server could not run here — routes were verified
+  by invoking handlers directly, pages by typecheck + code-to-HTML
+  comparison only. Host eyeball pass required for every screen (item 4).
 - `.pnpm-store/` in the repo root is local pnpm churn from the earlier failed
   installs — untracked, do not commit.

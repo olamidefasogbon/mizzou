@@ -5,12 +5,13 @@
     "type": "url",
     "value": "https://gsas.yale.edu/admissions/phdmasters-application-process/dates-deadlines"
   },
+  "program_hint": "Computer Science (PhD)",
   "expected": {
     "opens": null,
     "deadlines": [
       {
-        "label": "Application Deadline",
-        "iso_utc": "2026-12-15T23:59:59Z"
+        "label": "Application Deadline — Computer Science (PhD)",
+        "iso_utc": "2026-12-16T04:59:59Z"
       }
     ],
     "documents": [
@@ -20,6 +21,6 @@
     ],
     "unusual_rules": []
   },
-  "notes": "Yale Graduate School test benchmark case",
+  "notes": "Yale Graduate School test benchmark case. The page lists three application deadlines (Dec 1 / Dec 15 2026, Jan 2 2027); the labeled one is the Dec 15 group containing Computer Science (PhD). The page states all application deadlines are 11:59 pm Eastern, so the label stores the true UTC instant (23:59 EST = 04:59 UTC next day).",
   "labeled": true
 }

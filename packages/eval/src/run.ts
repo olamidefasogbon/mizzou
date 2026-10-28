@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Extraction } from '@mizzou/core';
-import { deadlineHit, norm, summarizeDeadlines, type ExtractedDeadlineSummary } from './scoring.js';
+import { deadlineHit, norm, summarizeDeadlines, type ExtractedDeadlineSummary } from './scoring.ts';
 
 // M2 baseline runner. Single page, no link following, gates auto-approved.
 // Executes the production reader path: callModel (role reader, zod schema,
@@ -65,11 +65,18 @@ interface ExpectedCase {
   } | null;
   notes: string;
   labeled?: boolean;
+  // Confirmed program group this benchmark scores (mirrors the G1 context
+  // the production deep scan runs with). Narrows attention, never the answer:
+  // every date must still come from the page with an exact evidence quote.
+  program_hint?: string | null;
 }
 
-const READER_PROMPT = (pageText: string, sourceUrl: string): string =>
+const READER_PROMPT = (pageText: string, sourceUrl: string, programHint?: string | null): string =>
   `Extract application facts from the page text below. Return ONLY one JSON object with EXACTLY this structure ` +
   `(all keys present; null or [] where nothing is found; never guess a date):\n` +
+  (programHint
+    ? `Confirmed program context (post-G1): extract ALL deadlines on the page, and make sure the deadline for "${programHint}" is included with an exact evidence quote.\n`
+    : '') +
   `{"opportunity_type": one of [academic_program|job|fellowship|grant|competition|hackathon|scholarship|incubator|generic_opportunity] — classify what the page offers,\n` +
   ` "program": {"name": EV_STR, "unit": EV_STR, "institution": EV_STR, "portal_url": string|null, "language_read": string},\n` +
   ` "opens": DATEFIELD|null,\n` +
@@ -117,7 +124,7 @@ async function runCase(c: ExpectedCase): Promise<CaseResult> {
   const result = await callModel({
     role: 'reader',
     systemPrompt: 'You read one official admissions page into the extraction schema. Return only JSON matching the schema.',
-    prompt: READER_PROMPT(pageText, c.input.value),
+    prompt: READER_PROMPT(pageText, c.input.value, c.program_hint ?? null),
     schema: ExtractionSchema,
     temperature: 0,
     userId: 'eval',

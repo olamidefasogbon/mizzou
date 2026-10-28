@@ -1,46 +1,49 @@
 import { describe, expect, it } from 'vitest';
 import { ExtractionSchema } from '@mizzou/core';
-import { deadlineHit, normDate, summarizeDeadlines } from './scoring.js';
+import { deadlineHit, sourceDay, summarizeDeadlines } from './scoring.ts';
 
-// Locks the eval deadline rule for case-01 (expected: "Application Deadline",
-// 2026-12-15T23:59:59Z) without calling any model.
+// Locks the eval deadline rule for case-01 without calling any model.
+// Label: "Application Deadline — Computer Science (PhD)",
+// true UTC instant of 23:59 EST Dec 15: 2026-12-16T04:59:59Z.
 
-const EXPECTED = { label: 'Application Deadline', iso_utc: '2026-12-15T23:59:59Z' };
+const EXPECTED = { label: 'Application Deadline — Computer Science (PhD)', iso_utc: '2026-12-16T04:59:59Z' };
 
-describe('normDate', () => {
-  it('keeps only the YYYY-MM-DD prefix', () => {
-    expect(normDate('2026-12-15T23:59:59Z')).toBe('2026-12-15');
+describe('sourceDay', () => {
+  it('reads the calendar day in the source wall timezone', () => {
+    expect(sourceDay('2026-12-15T23:59:59Z')).toBe('2026-12-15');
   });
 
-  it('returns null when there is no date', () => {
-    expect(normDate(null)).toBeNull();
-    expect(normDate('')).toBeNull();
+  it('normalizes a correct UTC conversion back to the same wall day', () => {
+    // 23:59 EST Dec 15 == 04:59 UTC Dec 16.
+    expect(sourceDay('2026-12-16T04:59:59Z')).toBe('2026-12-15');
+  });
+
+  it('returns null when there is no usable date', () => {
+    expect(sourceDay(null)).toBeNull();
+    expect(sourceDay('')).toBeNull();
+    expect(sourceDay('not-a-date')).toBeNull();
   });
 });
 
 describe('deadlineHit', () => {
-  it('hits on the same UTC day when the label carries the expected first word', () => {
+  it('hits for a naive wall-as-UTC value on the right Eastern day', () => {
     const extracted = [{ label: 'Application deadline for Computer Science (PhD)', iso_utc: '2026-12-15T23:59:59Z' }];
     expect(deadlineHit(extracted, EXPECTED)).toBe(true);
   });
 
-  it('misses a different UTC day', () => {
+  it('hits for a correct UTC conversion of the same deadline', () => {
+    // This scored a miss under the old UTC-calendar-day rule (the case-01 0/1).
+    const extracted = [{ label: 'Application Deadline', iso_utc: '2026-12-16T04:59:59Z' }];
+    expect(deadlineHit(extracted, EXPECTED)).toBe(true);
+  });
+
+  it('misses a different Eastern day', () => {
     const extracted = [{ label: 'Application Deadline', iso_utc: '2026-12-01T23:59:59Z' }];
     expect(deadlineHit(extracted, EXPECTED)).toBe(false);
   });
 
   it('misses when the label lacks the expected first word, even on the right day', () => {
     const extracted = [{ label: 'December 15, 2026', iso_utc: '2026-12-15T23:59:59Z' }];
-    expect(deadlineHit(extracted, EXPECTED)).toBe(false);
-  });
-
-  it('documents the Eastern-midnight edge: a correct UTC conversion scores a miss today', () => {
-    // The fixture states all application deadlines are "11:59 pm Eastern
-    // time", so 23:59 EST on Dec 15 is 2026-12-16T04:59:59Z. The matcher
-    // compares UTC calendar days, hence the miss. Locked in as current
-    // behavior until scoring goes timezone-aware; do not "fix" by editing
-    // this expectation — change the matcher instead.
-    const extracted = [{ label: 'Application Deadline', iso_utc: '2026-12-16T04:59:59Z' }];
     expect(deadlineHit(extracted, EXPECTED)).toBe(false);
   });
 });
@@ -61,7 +64,7 @@ describe('summarizeDeadlines', () => {
         {
           label: 'Application Deadline',
           field: {
-            value: { iso_utc: '2026-12-15T23:59:59Z', original_tz: 'America/New_York', all_day: false, rolling: false },
+            value: { iso_utc: '2026-12-16T04:59:59Z', original_tz: 'America/New_York', all_day: false, rolling: false },
             evidence_quote: 'December 15, 2026',
             source_url: 'https://example.edu/x',
             confidence: 'high',
@@ -80,7 +83,7 @@ describe('summarizeDeadlines', () => {
     expect(summarizeDeadlines(extraction)).toEqual([
       {
         label: 'Application Deadline',
-        iso_utc: '2026-12-15T23:59:59Z',
+        iso_utc: '2026-12-16T04:59:59Z',
         evidence_quote: 'December 15, 2026',
         checked: false,
       },

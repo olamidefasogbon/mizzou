@@ -3,7 +3,10 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
-    "noEmit": true
+    "noEmit": true,
+    // eval runs directly from source via node type-stripping (see "eval"
+    // script), so relative imports use explicit .ts extensions here.
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*"]
 }

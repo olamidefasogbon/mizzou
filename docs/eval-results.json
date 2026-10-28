@@ -4,28 +4,60 @@
     {
       "id": "case-01",
       "model": "muse-spark-1.3",
-      "deadlinesCorrect": 0,
+      "deadlinesCorrect": 1,
       "deadlinesTotal": 1,
+      "extractedDeadlines": [
+        {
+          "label": "Application deadline for Biological and Biomedical Sciences (BBS) and others - December 1, 2026",
+          "iso_utc": "2026-12-02T04:59:00Z",
+          "evidence_quote": "December 1, 2026 Application deadline for: Biological and Biomedical Sciences (BBS) Chemistry Computational Biology and Biomedical Informatics (MS)",
+          "checked": true
+        },
+        {
+          "label": "Application deadline for Computer Science (PhD) - December 15, 2026",
+          "iso_utc": "2026-12-16T04:59:00Z",
+          "evidence_quote": "December 15, 2026 Application deadline for: American Studies* Anthropology* Applied Physics Astronomy Biomedical Engineering Black Studies* Chemical and Environmental Engineering Classics* Comparative Literature* Computer Science (PhD)",
+          "checked": true
+        },
+        {
+          "label": "Deadline for fee waiver requests - January 2, 2027",
+          "iso_utc": "2027-01-03T04:59:00Z",
+          "evidence_quote": "January 2, 2027 Deadline for fee waiver requests",
+          "checked": true
+        },
+        {
+          "label": "Application deadline for Computer Science (MS) and others - January 2, 2027",
+          "iso_utc": "2027-01-03T04:59:00Z",
+          "evidence_quote": "Application deadline for: African Studies Applied and Computational Mathematics Archaeological Studies Architecture Computer Science (MS)",
+          "checked": false
+        },
+        {
+          "label": "Reply deadline for most offers of admission for fall 2027 - April 15, 2027",
+          "iso_utc": "2027-04-15T00:00:00Z",
+          "evidence_quote": "April 15, 2027 The reply deadline for most offers of admission for fall 2027.",
+          "checked": true
+        }
+      ],
       "docsRecallHit": 1,
       "docsExpected": 3,
       "docsPrecisionHit": 1,
       "docsReturned": 1,
-      "evidencePassed": 15,
+      "evidencePassed": 14,
       "evidenceTotal": 15,
       "needsHuman": 0,
-      "costUsd": 0.0375065,
-      "latencyMs": 37216,
-      "notes": "Yale Graduate School test benchmark case"
+      "costUsd": 0.03768475,
+      "latencyMs": 44371,
+      "notes": "Yale Graduate School test benchmark case. The page lists three application deadlines (Dec 1 / Dec 15 2026, Jan 2 2027); the labeled one is the Dec 15 group containing Computer Science (PhD). The page states all application deadlines are 11:59 pm Eastern, so the label stores the true UTC instant (23:59 EST = 04:59 UTC next day)."
     }
   ],
   "totals": {
-    "dCorr": 0,
+    "dCorr": 1,
     "dTot": 1,
     "recall": 0.3333333333333333,
     "precision": 1,
-    "ePass": 15,
+    "ePass": 14,
     "eTot": 15,
-    "cost": 0.0375065
+    "cost": 0.03768475
   },
-  "at": "2026-10-27T17:41:55.505Z"
+  "at": "2026-10-28T12:14:20.241Z"
 }

@@ -1,15 +1,28 @@
+import { DateTime } from 'luxon';
 import type { Extraction } from '@mizzou/core';
 
 // Pure scoring helpers for the eval runner (no model calls, no I/O).
-// deadlineHit preserves the baseline rule exactly: same UTC calendar day
-// plus the expected label's first word appearing in the extracted label.
+//
+// deadlineHit implements PROMPT.md section 10 ("date exact-match accuracy
+// after timezone normalization"): the expected and extracted instants are
+// compared by calendar day in the source page's wall timezone, so a naive
+// wall-as-UTC value and a correct UTC conversion of the same deadline
+// both hit. The expected label's first word must still appear in the
+// extracted label.
+
+// Wall timezone stated on the benchmark pages
+// ("All application deadlines are as of 11:59 pm Eastern time").
+export const SOURCE_TZ = 'America/New_York';
 
 export const norm = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
 
-export const normDate = (s: string | null): string | null => {
+// Calendar day (YYYY-MM-DD) of an instant in the source wall timezone.
+// Null for missing or unparseable input.
+export const sourceDay = (s: string | null): string | null => {
   if (!s) return null;
-  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : null;
+  const dt = DateTime.fromISO(s, { zone: 'utc' });
+  if (!dt.isValid) return null;
+  return dt.setZone(SOURCE_TZ).toISODate();
 };
 
 export interface ExpectedDeadline {
@@ -23,9 +36,9 @@ export interface ExtractedDeadline {
 }
 
 export function deadlineHit(extracted: ExtractedDeadline[], expected: ExpectedDeadline): boolean {
-  const wantDay = normDate(expected.iso_utc);
+  const wantDay = sourceDay(expected.iso_utc);
   const wantWord = norm(expected.label).split(' ')[0];
-  return extracted.some((d) => normDate(d.iso_utc) === wantDay && norm(d.label).includes(wantWord));
+  return extracted.some((d) => sourceDay(d.iso_utc) === wantDay && norm(d.label).includes(wantWord));
 }
 
 export interface ExtractedDeadlineSummary {

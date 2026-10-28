@@ -199,6 +199,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@mizzou/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@supabase/ssr':
         specifier: ^0.12.7
         version: 0.12.7(@supabase/supabase-js@2.118.0)
@@ -278,6 +281,28 @@ importers:
       zod:
         specifier: ^4.6.7
         version: 4.6.7
+    devDependencies:
+      '@types/luxon':
+        specifier: ^3.7.6
+        version: 3.7.6
+      '@types/node':
+        specifier: ^20.19.43
+        version: 20.19.43
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@20.19.43)(vite@8.3.5(@types/node@20.19.43)(jiti@2.7.0))
+
+  packages/eval:
+    dependencies:
+      '@mizzou/core':
+        specifier: workspace:*
+        version: link:../core
+      luxon:
+        specifier: ^3.7.2
+        version: 3.7.2
     devDependencies:
       '@types/luxon':
         specifier: ^3.7.6

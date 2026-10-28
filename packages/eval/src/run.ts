@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Extraction } from '@mizzou/core';
+import { deadlineHit, norm, summarizeDeadlines, type ExtractedDeadlineSummary } from './scoring.js';
 
 // M2 baseline runner. Single page, no link following, gates auto-approved.
 // Executes the production reader path: callModel (role reader, zod schema,
@@ -52,13 +53,6 @@ function stripHtml(html: string): string {
   return t.replace(/\s+/g, ' ').trim();
 }
 
-const norm = (s: string): string => s.replace(/\s+/g, ' ').trim().toLowerCase();
-const normDate = (s: string | null): string | null => {
-  if (!s) return null;
-  const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : null;
-};
-
 interface ExpectedCase {
   id: string;
   kind: string;
@@ -76,7 +70,8 @@ interface ExpectedCase {
 const READER_PROMPT = (pageText: string, sourceUrl: string): string =>
   `Extract application facts from the page text below. Return ONLY one JSON object with EXACTLY this structure ` +
   `(all keys present; null or [] where nothing is found; never guess a date):\n` +
-  `{"program": {"name": EV_STR, "unit": EV_STR, "institution": EV_STR, "portal_url": string|null, "language_read": string},\n` +
+  `{"opportunity_type": one of [academic_program|job|fellowship|grant|competition|hackathon|scholarship|incubator|generic_opportunity] — classify what the page offers,\n` +
+  ` "program": {"name": EV_STR, "unit": EV_STR, "institution": EV_STR, "portal_url": string|null, "language_read": string},\n` +
   ` "opens": DATEFIELD|null,\n` +
   ` "deadlines": [{"label": string, "field": DATEFIELD}],\n` +
   ` "documents": [{"value": {"name": string, "limit": string|null, "optional": boolean}, "evidence_quote": string, "source_url": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}],\n` +
@@ -91,6 +86,7 @@ interface CaseResult {
   model: string;
   deadlinesCorrect: number;
   deadlinesTotal: number;
+  extractedDeadlines: ExtractedDeadlineSummary[];
   docsRecallHit: number;
   docsExpected: number;
   docsPrecisionHit: number;
@@ -147,12 +143,10 @@ async function runCase(c: ExpectedCase): Promise<CaseResult> {
   const needsHuman = fields.filter((f) => (f as { needs_human?: unknown }).needs_human === true).length;
 
   const exp = c.expected!;
+  const extractedInputs = checked.deadlines.map((d) => ({ label: d.label, iso_utc: d.field.value.iso_utc }));
   let deadlinesCorrect = 0;
   for (const e of exp.deadlines) {
-    const hit = checked.deadlines.some(
-      (d) => normDate(d.field.value.iso_utc) === normDate(e.iso_utc) && norm(d.label).includes(norm(e.label).split(' ')[0]),
-    );
-    if (hit) deadlinesCorrect += 1;
+    if (deadlineHit(extractedInputs, e)) deadlinesCorrect += 1;
   }
   let docsRecallHit = 0;
   for (const e of exp.documents) {
@@ -172,6 +166,7 @@ async function runCase(c: ExpectedCase): Promise<CaseResult> {
     model: result.model,
     deadlinesCorrect,
     deadlinesTotal: exp.deadlines.length,
+    extractedDeadlines: summarizeDeadlines(checked),
     docsRecallHit,
     docsExpected: exp.documents.length,
     docsPrecisionHit,

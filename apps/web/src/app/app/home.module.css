@@ -35,15 +35,13 @@
 }
 
 .body {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 108px;
-  bottom: 96px;
+  position: relative;
+  z-index: 1;
   box-sizing: border-box;
-  padding: 0 16px;
+  padding: 116px 16px 120px;
   display: flex;
   flex-direction: column;
+  flex: 1;
 }
 
 .greeting {

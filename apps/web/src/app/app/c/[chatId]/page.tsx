@@ -4,6 +4,8 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowUp, Check, Download, Loader2, X } from 'lucide-react';
 import { formatG1Prompt } from '@mizzou/core';
+import { Blobs } from '@/components/chrome';
+import { useEvidence } from '@/components/evidence';
 
 function g1Title(program: { name: string; unit: string; institution: string }, opportunityType?: string): {
   title: string;
@@ -39,6 +41,8 @@ interface RequirementDoc {
   optional: boolean;
   confidence: string;
   needs_human: boolean;
+  evidenceQuote?: string;
+  sourceUrl?: string | null;
 }
 
 interface RequirementRule {
@@ -46,6 +50,8 @@ interface RequirementRule {
   hard: boolean;
   confidence: string;
   needs_human: boolean;
+  evidenceQuote?: string;
+  sourceUrl?: string | null;
 }
 
 interface PlanPayload {
@@ -236,18 +242,31 @@ function ChatContent(): React.JSX.Element {
               }
             } else if (event.t === 'card') {
               const payload = (event.payload ?? {}) as {
-                documents?: RequirementDoc[];
-                eligibility?: RequirementRule[];
+                documents?: Array<RequirementDoc & { evidence_quote?: string; source_url?: string }>;
+                eligibility?: Array<RequirementRule & { evidence_quote?: string; source_url?: string }>;
                 title?: string;
                 deadlines?: string[];
                 items?: string[];
                 portalUrl?: string | null;
                 text?: string;
               };
+              const toDoc = (d: RequirementDoc & { evidence_quote?: string; source_url?: string }): RequirementDoc => ({
+                ...d,
+                evidenceQuote: typeof d.evidence_quote === 'string' ? d.evidence_quote : undefined,
+                sourceUrl: typeof d.source_url === 'string' ? d.source_url : null,
+              });
+              const toRule = (e: RequirementRule & { evidence_quote?: string; source_url?: string }): RequirementRule => ({
+                ...e,
+                evidenceQuote: typeof e.evidence_quote === 'string' ? e.evidence_quote : undefined,
+                sourceUrl: typeof e.source_url === 'string' ? e.source_url : null,
+              });
               if (event.kind === 'requirements' && Array.isArray(payload.documents) && Array.isArray(payload.eligibility)) {
                 setPendingCards((prev) => ({
                   ...(prev ?? {}),
-                  requirements: { documents: payload.documents ?? [], eligibility: payload.eligibility ?? [] },
+                  requirements: {
+                    documents: (payload.documents ?? []).map(toDoc),
+                    eligibility: (payload.eligibility ?? []).map(toRule),
+                  },
                 }));
               } else if (
                 event.kind === 'plan' &&
@@ -299,20 +318,18 @@ function ChatContent(): React.JSX.Element {
     void sendText(initialQ);
   }, [initialQ, chatId, router, sendText]);
 
-  return (
-    <div className="min-h-screen bg-[#E9E9EB] text-black">
-      <div className="mx-auto flex min-h-screen w-full max-w-[720px] flex-col px-4 pb-6">
-        <header className="flex items-center justify-between py-4">
-          <span className="text-lg font-bold tracking-tight">Mizzou</span>
-          <button
-            type="button"
-            onClick={() => setFeed([])}
-            className="rounded-full bg-black/5 px-4 py-2 text-sm font-medium text-black hover:bg-black/10"
-          >
-            New chat
-          </button>
-        </header>
+  const { select } = useEvidence();
+  const [openEvidence, setOpenEvidence] = useState<string | null>(null);
 
+  return (
+    <div className="relative z-[1] flex w-full flex-1 flex-col px-4 pb-6 pt-[116px] text-black">
+      <Blobs
+        specs={[
+          { top: -80, right: -100, size: 300, color: 'var(--mz-blob-1)', blur: 60 },
+          { top: 300, left: -120, size: 280, color: 'var(--mz-blob-2)', blur: 60 },
+          { bottom: 200, right: -110, size: 320, color: 'var(--mz-blob-3)', blur: 70 },
+        ]}
+      />
         <div ref={feedRef} className="flex flex-1 flex-col gap-3 overflow-y-auto pb-4">
           {feed.map((item) => {
             if (item.kind === 'user') {
@@ -415,22 +432,49 @@ function ChatContent(): React.JSX.Element {
                     <div className="mt-2">
                       <p className="text-[13px] font-medium text-[#3A3A3A]">Documents</p>
                       <ul className="mt-1 space-y-1.5">
-                        {item.requirements.documents.map((d, i) => (
-                          <li key={i} className="flex items-start gap-2 text-[15px]">
-                            {needsLook(d.confidence, d.needs_human) ? (
-                              <span aria-label="needs a look" className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-600 text-[11px] font-bold text-white">
-                                !
+                        {item.requirements.documents.map((d, i) => {
+                          const evKey = `req-${item.id}-d-${i}`;
+                          return (
+                            <li key={i} className="flex items-start gap-2 text-[15px]">
+                              {needsLook(d.confidence, d.needs_human) ? (
+                                <span aria-label="needs a look" className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-600 text-[11px] font-bold text-white">
+                                  !
+                                </span>
+                              ) : (
+                                <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700" aria-label="clear" />
+                              )}
+                              <span>
+                                {d.name}
+                                {d.limit ? <span className="text-[#3A3A3A]"> · {d.limit}</span> : null}
+                                {d.optional ? <span className="text-[#3A3A3A]"> · optional</span> : null}
+                                {d.evidenceQuote ? (
+                                  <span className="block">
+                                    <button
+                                      type="button"
+                                      className="text-[13px] text-black underline underline-offset-[3px]"
+                                      onClick={() => {
+                                        setOpenEvidence(openEvidence === evKey ? null : evKey);
+                                        select({ title: d.name, quote: d.evidenceQuote as string, sourceUrl: d.sourceUrl ?? null });
+                                      }}
+                                    >
+                                      Where I found this
+                                    </button>
+                                    {openEvidence === evKey ? (
+                                      <span className="mt-1 block rounded-xl border border-black/10 bg-white p-2.5 text-sm text-[#3A3A3A]">
+                                        &ldquo;{d.evidenceQuote}&rdquo;
+                                        {d.sourceUrl ? (
+                                          <a href={d.sourceUrl} target="_blank" rel="noreferrer" className="mt-1 block text-sm text-black underline">
+                                            Open the source page
+                                          </a>
+                                        ) : null}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                ) : null}
                               </span>
-                            ) : (
-                              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700" aria-label="clear" />
-                            )}
-                            <span>
-                              {d.name}
-                              {d.limit ? <span className="text-[#3A3A3A]"> · {d.limit}</span> : null}
-                              {d.optional ? <span className="text-[#3A3A3A]"> · optional</span> : null}
-                            </span>
-                          </li>
-                        ))}
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
@@ -438,18 +482,47 @@ function ChatContent(): React.JSX.Element {
                     <div className="mt-2">
                       <p className="text-[13px] font-medium text-[#3A3A3A]">Eligibility</p>
                       <ul className="mt-1 space-y-1.5">
-                        {item.requirements.eligibility.map((e, i) => (
-                          <li key={i} className="flex items-start gap-2 text-[15px]">
-                            {needsLook(e.confidence, e.needs_human) ? (
-                              <span aria-label="needs a look" className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-600 text-[11px] font-bold text-white">
-                                !
+                        {item.requirements.eligibility.map((e, i) => {
+                          const evKey = `req-${item.id}-e-${i}`;
+                          return (
+                            <li key={i} className="flex items-start gap-2 text-[15px]">
+                              {needsLook(e.confidence, e.needs_human) ? (
+                                <span aria-label="needs a look" className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-600 text-[11px] font-bold text-white">
+                                  !
+                                </span>
+                              ) : (
+                                <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700" aria-label="clear" />
+                              )}
+                              <span>
+                                {e.rule}
+                                {e.evidenceQuote ? (
+                                  <span className="block">
+                                    <button
+                                      type="button"
+                                      className="text-[13px] text-black underline underline-offset-[3px]"
+                                      onClick={() => {
+                                        setOpenEvidence(openEvidence === evKey ? null : evKey);
+                                        select({ title: e.rule, quote: e.evidenceQuote as string, sourceUrl: e.sourceUrl ?? null });
+                                      }}
+                                    >
+                                      Where I found this
+                                    </button>
+                                    {openEvidence === evKey ? (
+                                      <span className="mt-1 block rounded-xl border border-black/10 bg-white p-2.5 text-sm text-[#3A3A3A]">
+                                        &ldquo;{e.evidenceQuote}&rdquo;
+                                        {e.sourceUrl ? (
+                                          <a href={e.sourceUrl} target="_blank" rel="noreferrer" className="mt-1 block text-sm text-black underline">
+                                            Open the source page
+                                          </a>
+                                        ) : null}
+                                      </span>
+                                    ) : null}
+                                  </span>
+                                ) : null}
                               </span>
-                            ) : (
-                              <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700" aria-label="clear" />
-                            )}
-                            <span>{e.rule}</span>
-                          </li>
-                        ))}
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
@@ -551,7 +624,6 @@ function ChatContent(): React.JSX.Element {
             <ArrowUp className="h-4 w-4" />
           </button>
         </div>
-      </div>
     </div>
   );
 }

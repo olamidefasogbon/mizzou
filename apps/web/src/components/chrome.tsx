@@ -62,7 +62,7 @@ export function TopBar({ onMenu, onNewChat }: { onMenu: () => void; onNewChat: (
       >
         Mizzou
       </div>
-      <button type="button" onClick={onMenu} aria-label="Open menu" className="mz-glass mz-icon-btn" style={{ position: "absolute", top: 56, left: 20 }}>
+      <button type="button" onClick={onMenu} aria-label="Open menu" className="mz-glass mz-icon-btn mz-hide-wide" style={{ position: "absolute", top: 56, left: 20 }}>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
           <path d={MENU_PATH} />
         </svg>

@@ -1,44 +1,45 @@
 'use client';
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Blobs, Composer, TopBar } from "@/components/chrome";
-import styles from "./home.module.css";
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Blobs, Composer } from '@/components/chrome';
+import styles from './home.module.css';
 
-// Home screen. Matched files: docs/design/html/Chat.html for the screen,
-// docs/design/html/PlusMenu.html for the upload overlay (in chrome.tsx).
-// Greeting name and Coming-up rows are fictional demo data (PROMPT.md 9.4);
-// they come from the profile + reminders APIs in M7.
+// Home. Matched files: docs/design/html/Chat.html (greeting, Coming up,
+// composer) and docs/design/html/PlusMenu.html (upload overlay, in chrome).
+// Greeting name and Coming-up rows are fictional demo data (PROMPT.md 9.4)
+// until the profile + reminders APIs land. The shell provides the top bar,
+// the left panel and the evidence rail.
 
 const ROTATING_WORDS = [
-  "scholarships",
-  "universities",
-  "PhD programs",
-  "jobs",
-  "fellowships",
-  "internships",
-  "research grants",
-  "graduate programs",
-  "exchange programs",
-  "conferences",
+  'scholarships',
+  'universities',
+  'PhD programs',
+  'jobs',
+  'fellowships',
+  'internships',
+  'research grants',
+  'graduate programs',
+  'exchange programs',
+  'conferences',
 ];
 
 const COMING_UP = [
-  { title: "Fulbright 2027", sub: "Statement of purpose, not finished", pill: "6 days" },
-  { title: "Yale PhD, Food Science", sub: "Portal opens soon, I'm watching it", pill: "Soon" },
-  { title: "Summer research internship", sub: "2 documents left", pill: "9 days" },
+  { title: 'Fulbright 2027', sub: 'Statement of purpose, not finished', pill: '6 days' },
+  { title: 'Yale PhD, Food Science', sub: "Portal opens soon, I'm watching it", pill: 'Soon' },
+  { title: 'Summer research internship', sub: '2 documents left', pill: '9 days' },
 ];
 
 export default function HomeClient() {
   const router = useRouter();
   const [wordIndex, setWordIndex] = useState(0);
   const [wordVisible, setWordVisible] = useState(true);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [pickedFile, setPickedFile] = useState<string | null>(null);
 
   useEffect(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const timer = setInterval(() => {
       setWordVisible(false);
       setTimeout(() => {
@@ -57,31 +58,22 @@ export default function HomeClient() {
   };
 
   return (
-    <div className="mz-shell">
+    <>
       <Blobs
         specs={[
-          { top: -80, right: -100, size: 300, color: "var(--mz-blob-1)", blur: 60 },
-          { top: 280, left: -120, size: 280, color: "var(--mz-blob-2)", blur: 60 },
-          { bottom: 120, right: -110, size: 320, color: "var(--mz-blob-3)", blur: 70 },
+          { top: -80, right: -100, size: 300, color: 'var(--mz-blob-1)', blur: 60 },
+          { top: 280, left: -120, size: 280, color: 'var(--mz-blob-2)', blur: 60 },
+          { bottom: 120, right: -110, size: 320, color: 'var(--mz-blob-3)', blur: 70 },
         ]}
       />
-      {/* Panel drawer lands in the M8 UI pass; the button renders per design. */}
-      <TopBar
-        onMenu={() => {}}
-        onNewChat={() => {
-          setInput("");
-          setMenuOpen(false);
-        }}
-      />
-
       <div className={styles.body}>
         <div className={styles.greeting}>
           <p className={styles.hello}>Howdy, John</p>
           <p className={styles.rotating}>
-            What{" "}
+            What{' '}
             <span className={`mz-fade ${styles.rotatingWord}`} style={{ opacity: wordVisible ? 1 : 0 }}>
               {ROTATING_WORDS[wordIndex]}
-            </span>{" "}
+            </span>{' '}
             are you applying for today?
           </p>
         </div>
@@ -115,6 +107,6 @@ export default function HomeClient() {
           setMenuOpen(false);
         }}
       />
-    </div>
+    </>
   );
 }

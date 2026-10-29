@@ -2,6 +2,12 @@
 // Short sentences, first person, warm, no jargon, no emoji, no preaching.
 // Status labels adapt to the opportunity at hand (section 5.4).
 
+export function formatCoverageRead(titles: string[]): string {
+  if (titles.length === 0) return 'I could not open any page to read.';
+  if (titles.length === 1) return `I read this page: ${titles[0]}.`;
+  return `I read ${titles.length} pages: ${titles.join('; ')}.`;
+}
+
 export const SAY_ON_IT = 'On it. Let me find the right page and see what they ask for.';
 export const SAY_GOT_IT = "Got everything. Here's my honest read.";
 export const SAY_PAGE_WOULD_NOT_OPEN = 'That page wouldn\u2019t open for me. Can you paste the text?';
@@ -36,6 +42,11 @@ export function formatReadingStatus(opportunityType: string, institutionName?: s
     default:
       return `Reading ${target} admissions details`;
   }
+}
+
+export function formatG2Conflict(fields: string[]): string {
+  if (fields.length === 1) return `Two official pages disagree on "${fields[0]}". Which one looks right to you?`;
+  return `Two official pages disagree on ${fields.length} items (${fields.slice(0, 3).join('; ')}). Which ones look right to you?`;
 }
 
 export function formatG1Prompt(opportunityType: string): string {

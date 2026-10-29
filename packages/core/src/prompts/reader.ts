@@ -13,6 +13,7 @@ export function buildReaderPrompt(pageText: string, sourceUrl: string, programHi
     (programHint
       ? `Confirmed program context (post-G1): extract ALL deadlines on the page, and make sure the deadline for "${programHint}" is included with an exact evidence quote.\n`
       : '') +
+    `When a date appears as a heading above the item it governs (for example a "January 2, 2027" heading over a program list), include that heading in the evidence_quote so the quote carries the full date.\n` +
     `{"opportunity_type": one of [academic_program|job|fellowship|grant|competition|hackathon|scholarship|incubator|generic_opportunity] — classify what the page offers,\n` +
     ` "program": {"name": EV_STR, "unit": EV_STR, "institution": EV_STR, "portal_url": string|null, "language_read": string},\n` +
     ` "opens": DATEFIELD|null,\n` +

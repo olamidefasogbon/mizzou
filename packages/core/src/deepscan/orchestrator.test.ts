@@ -9,6 +9,7 @@ import { BudgetExceededError } from '../meta/budget.js';
 import { SAY_BUDGET_HIT, SAY_GOT_IT, SAY_ON_IT } from '../voice/index.js';
 import type { Extraction } from '../schemas/extraction.js';
 import { FinishSchema, createDeepScanStep, type ModelTransport } from './orchestrator.js';
+import type { JudgeTransport } from '../extract/reconcile.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -289,6 +290,116 @@ describe('model-driven orchestrator', () => {
     const secondInput = JSON.stringify(model.inputs[1] ?? '');
     expect(secondInput).toContain(`${SITE}/faq/`);
     expect(secondInput).not.toContain('off.example');
+  });
+
+  it('halts at G2 with both sources when pages disagree and the judge cannot decide', async () => {
+    const a = makeExtraction(`${SITE}/`, ['Main deadline']);
+    const b = makeExtraction(`${SITE}/faq/`, ['Main deadline']);
+    b.deadlines[0].field.value.iso_utc = '2026-12-15T00:00:00Z';
+    b.deadlines[0].field.evidence_quote = 'December 15';
+    const model = scriptedModel([
+      { calls: [{ name: 'find_links', args: { page_url: `${SITE}/` } }, { name: 'read_page', args: { url: `${SITE}/` } }] },
+      { calls: [{ name: 'read_page', args: { url: `${SITE}/faq/` } }] },
+      { calls: [{ name: 'finish', args: { summary: 'done' } }] },
+    ]);
+    const judge: JudgeTransport = async () => ({
+      verdict: { resolutions: [{ field: 'deadlines:Main deadline', chosen_iso: null, reason: 'Neither source clearly wins.' }] },
+      costUsd: 0.02,
+    });
+    const run = fakeRun();
+    const step = createDeepScanStep({
+      model,
+      judge,
+      fetchPage: async (url) => (url === `${SITE}/`
+        ? { title: 'Program', text: 'Main page. Deadline December 1.', links: [{ href: '/faq/', text: 'FAQ' }] }
+        : { title: url, text: 'text', links: [] }),
+      readPage: async ({ url }) => ({ extraction: url === `${SITE}/` ? a : b, costUsd: 0 }),
+    });
+    const { outcome } = await drive(run, step);
+    expect(outcome.gate?.gate).toBe('G2');
+    expect(outcome.finished).toBeUndefined();
+    const evidence = outcome.gate?.evidence as { conflicts: Array<{ field: string; values: Array<{ source_url: string }> }> };
+    expect(evidence.conflicts).toHaveLength(1);
+    expect(evidence.conflicts[0].values.map((v) => v.source_url).sort()).toEqual([`${SITE}/`, `${SITE}/faq/`]);
+    const mem = run.state as { deepScan: { reconciled: Extraction | null } };
+    expect(mem.deepScan.reconciled?.deadlines.every((d) => d.field.needs_human)).toBe(true);
+  });
+
+  it('finishes after the human answers G2, without re-asking', async () => {
+    const a = makeExtraction(`${SITE}/`, ['Main deadline']);
+    const b = makeExtraction(`${SITE}/faq/`, ['Main deadline']);
+    b.deadlines[0].field.value.iso_utc = '2026-12-15T00:00:00Z';
+    const model = scriptedModel([
+      { calls: [{ name: 'find_links', args: { page_url: `${SITE}/` } }, { name: 'read_page', args: { url: `${SITE}/` } }] },
+      { calls: [{ name: 'read_page', args: { url: `${SITE}/faq/` } }] },
+      { calls: [{ name: 'finish', args: { summary: 'done' } }] },
+    ]);
+    const judge: JudgeTransport = async () => ({
+      verdict: { resolutions: [{ field: 'deadlines:Main deadline', chosen_iso: null, reason: 'Tie.' }] },
+      costUsd: 0,
+    });
+    const run = fakeRun();
+    const step = createDeepScanStep({
+      model,
+      judge,
+      fetchPage: async (url) => (url === `${SITE}/`
+        ? { title: 'Program', text: 'Main page. Deadline December 1.', links: [{ href: '/faq/', text: 'FAQ' }] }
+        : { title: url, text: 'text', links: [] }),
+      readPage: async ({ url }) => ({ extraction: url === `${SITE}/` ? a : b, costUsd: 0 }),
+    });
+    const first = await drive(run, step);
+    expect(first.outcome.gate?.gate).toBe('G2');
+    // Human answers (same shape recordDecision writes): next step must finish.
+    run.decisions.push({ gate: 'G2', decision: 'December 1 looks right', opId: 'op-1' });
+    run.pendingGate = null;
+    run.status = 'running';
+    const second = await drive(run, step);
+    expect(second.outcome.finished).toBeDefined();
+    expect(second.outcome.gate).toBeUndefined();
+    const finished = FinishSchema.parse(second.outcome.finished);
+    expect(finished.extraction?.deadlines.length).toBeGreaterThan(0);
+  });
+
+  it('lets the judge resolve a conflict and emits a coverage card', async () => {
+    const a = makeExtraction(`${SITE}/`, ['Main deadline']);
+    const b = makeExtraction(`${SITE}/faq/`, ['Main deadline']);
+    b.deadlines[0].field.value.iso_utc = '2026-12-15T00:00:00Z';
+    const model = scriptedModel([
+      { calls: [{ name: 'find_links', args: { page_url: `${SITE}/` } }, { name: 'read_page', args: { url: `${SITE}/` } }] },
+      { calls: [{ name: 'read_page', args: { url: `${SITE}/faq/` } }] },
+      { calls: [{ name: 'finish', args: { summary: 'done' } }] },
+    ]);
+    const judge: JudgeTransport = async () => ({
+      verdict: { resolutions: [{ field: 'deadlines:Main deadline', chosen_iso: '2026-12-01T00:00:00Z', reason: 'Program page governs.' }] },
+      costUsd: 0.02,
+      model: 'muse-spark-1.3',
+      inputTokens: 400,
+      outputTokens: 30,
+    });
+    const run = fakeRun();
+    const cardKinds: string[] = [];
+    const step = createDeepScanStep({
+      model,
+      judge,
+      fetchPage: async (url) => (url === `${SITE}/`
+        ? { title: 'Program', text: 'Main page. Deadline December 1.', links: [{ href: '/faq/', text: 'FAQ' }] }
+        : { title: url, text: 'text', links: [] }),
+      readPage: async ({ url }) => ({ extraction: url === `${SITE}/` ? a : b, costUsd: 0 }),
+    });
+    const wrapped = async (r: RunRecord) => {
+      const out = await step(r);
+      for (const e of out.events) if (e.t === 'card') cardKinds.push((e as { kind: string }).kind);
+      return out;
+    };
+    const { outcome } = await drive(run, wrapped);
+    expect(outcome.gate).toBeUndefined();
+    const finished = FinishSchema.parse(outcome.finished);
+    expect(finished.conflicts).toEqual([]);
+    expect(finished.extraction?.deadlines).toHaveLength(1);
+    expect(finished.extraction?.deadlines[0].field.needs_human).toBe(false);
+    expect(cardKinds).toContain('coverage');
+    const calls = (run.state as { deepScan: { calls: Array<{ role: string | null }> } }).deepScan.calls;
+    expect(calls.some((c) => c.role === 'judge')).toBe(true);
   });
 
   it('runs inside advance() with a file store and says got-it at the end', async () => {

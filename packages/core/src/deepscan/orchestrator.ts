@@ -16,14 +16,27 @@ import { responsesCall, type ResponsesFunctionTool } from '../meta/responses.js'
 import { ExtractionSchema, type Extraction } from '../schemas/extraction.js';
 import type { RunEvent } from '../schemas/events.js';
 import { verifyExtractionEvidence } from '../extract/evidence.js';
+import {
+  ConflictSchema,
+  JudgeVerdictSchema,
+  reconcileExtractions,
+  resolveConflictsWithJudge,
+  type Conflict,
+  type JudgeCall,
+  type JudgeTransport,
+  type ReconcilePage,
+} from '../extract/reconcile.js';
+import { buildCoveragePayload } from './coverage.js';
 import { READER_SYSTEM_PROMPT, buildReaderPrompt } from '../prompts/reader.js';
 import { ORCHESTRATOR_SYSTEM_PROMPT, buildOrchestratorContext } from '../prompts/orchestrator.js';
+import { JUDGE_SYSTEM_PROMPT, buildJudgePrompt } from '../prompts/judge.js';
 import {
   SAY_BUDGET_HIT,
   SAY_GOT_IT,
   SAY_ON_IT,
   SAY_PAGE_WOULD_NOT_OPEN,
   formatFindingStatus,
+  formatG2Conflict,
   formatReadingStatus,
 } from '../voice/index.js';
 import { PdfContentError, fetchBytes, fetchPageText, type OutboundLink } from './fetch.js';
@@ -53,6 +66,7 @@ export const FinishSchema = z.object({
   unreadable: z.array(z.object({ url: z.string(), reason: z.string() })),
   deadlinesFound: z.number(),
   extraction: ExtractionSchema.nullable(),
+  conflicts: z.array(ConflictSchema).default([]),
   error: z.string().nullable(),
   summary: z.string().nullable(),
   usage: z.array(UsageEntrySchema),
@@ -77,6 +91,9 @@ export interface DeepScanMemory {
   pages: Array<{ url: string; title: string }>;
   unreadable: Array<{ url: string; reason: string }>;
   extractions: Extraction[];
+  reconciled: Extraction | null;
+  conflicts: Conflict[];
+  g2Asked: boolean;
   usageUsd: number;
   calls: UsageEntry[];
   responseId: string | null;
@@ -125,6 +142,7 @@ export interface DeepScanTools {
     ctx: { programHint: string | null; opportunityType?: string; userId?: string },
   ) => Promise<ReadPageResult>;
   model?: ModelTransport;
+  judge?: JudgeTransport;
   maxPages?: number;
   maxDepth?: number;
 }
@@ -238,6 +256,25 @@ async function defaultReadPdf(url: string) {
   return readPdfText(bytes);
 }
 
+async function defaultJudge({ conflicts, userId }: { conflicts: Conflict[]; userId?: string }): Promise<JudgeCall> {
+  const result = await callModel({
+    role: 'judge',
+    systemPrompt: JUDGE_SYSTEM_PROMPT,
+    prompt: buildJudgePrompt(conflicts),
+    schema: JudgeVerdictSchema,
+    temperature: 0,
+    userId: userId ?? 'dev',
+  });
+  const verdict = JudgeVerdictSchema.parse(result.data);
+  return {
+    verdict,
+    costUsd: result.costUsd,
+    model: result.usage ? ROLE_MODEL_MAP.judge : undefined,
+    inputTokens: result.usage?.prompt_tokens,
+    outputTokens: result.usage?.completion_tokens,
+  };
+}
+
 /** request_approval: persist state and halt with needs_approval. */
 export function requestApproval(gate: PendingGate['gate'], what: string, evidence: unknown, options: unknown): StepOutcome {
   return { events: [], gate: { gate, what, evidence, options } };
@@ -260,7 +297,8 @@ function buildFinish(mem: DeepScanMemory): FinishResult {
     pagesRead: mem.pages,
     unreadable: mem.unreadable,
     deadlinesFound: mem.extractions.reduce((n, e) => n + e.deadlines.length, 0),
-    extraction: best,
+    extraction: mem.reconciled ?? best,
+    conflicts: mem.conflicts,
     error: null,
     summary: mem.summary,
     usage: mem.calls,
@@ -283,6 +321,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
   const readPdf = tools.readPdf ?? defaultReadPdf;
   const readPage = tools.readPage ?? defaultReadPage;
   const model = tools.model ?? defaultTransport;
+  const judge = tools.judge ?? defaultJudge;
   const maxPages = tools.maxPages ?? MAX_SCAN_PAGES;
   const maxDepth = tools.maxDepth ?? MAX_SCAN_DEPTH;
 
@@ -318,6 +357,9 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
         pages: [],
         unreadable: [],
         extractions: [],
+        reconciled: null,
+        conflicts: [],
+        g2Asked: false,
         usageUsd: 0,
         calls: [],
         responseId: null,
@@ -334,10 +376,83 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
       mem.started = true;
     }
 
-    if (mem.pages.length >= maxPages) {
+    const coveragePayload = () => {
+      const languages = [...new Set(mem.extractions.map((e) => e.program.language_read).filter((l) => typeof l === 'string' && l.trim() !== ''))];
+      return buildCoveragePayload({ pagesRead: mem.pages, unreadable: mem.unreadable, languages });
+    };
+
+    const pushCoverageCard = (): void => {
+      events.push({ t: 'card', id: `${run.id}-t${turn}-coverage`, kind: 'coverage', payload: coveragePayload() });
+    };
+
+    // Post-resume: the human answered the G2 conflict question. The
+    // reconciled result is already stored — finish instead of re-asking.
+    if (mem.g2Asked) {
+      mem.g2Asked = false;
+      writeMemory(run, mem);
+      pushCoverageCard();
+      say(SAY_GOT_IT, 'done');
+      return { events, finished: buildFinish(mem) };
+    }
+
+    /** Merge every page read; judge genuine conflicts; G2 when they stand. */
+    const settle = async (): Promise<StepOutcome> => {
+      const pairs: ReconcilePage[] = mem.pages
+        .map((p, i) => ({ url: p.url, title: p.title, extraction: mem.extractions[i] }))
+        .filter((p): p is ReconcilePage => Boolean(p.extraction));
+      const { merged, conflicts } = reconcileExtractions(pairs, mem.programUrl);
+      let active = merged;
+      let remaining = conflicts;
+      if (merged && conflicts.length > 0) {
+        try {
+          const res = await resolveConflictsWithJudge(merged, conflicts, judge, userId);
+          active = res.merged;
+          remaining = res.remaining;
+          mem.usageUsd += res.costUsd;
+          run.usageUsd = (typeof run.usageUsd === 'number' ? run.usageUsd : 0) + res.costUsd;
+          mem.calls.push({
+            turn,
+            kind: 'model',
+            tool: null,
+            role: 'judge',
+            model: res.judgeUsage?.model ?? null,
+            inputTokens: res.judgeUsage?.inputTokens ?? null,
+            outputTokens: res.judgeUsage?.outputTokens ?? null,
+            costUsd: res.costUsd,
+          });
+        } catch (err) {
+          if (err instanceof BudgetExceededError) {
+            say(SAY_BUDGET_HIT, 'failed');
+            writeMemory(run, mem);
+            return { events, finished: { ...buildFinish(mem), error: 'budget hit' } };
+          }
+          // Judge unreachable: fall through with code-detected conflicts.
+        }
+      }
+      mem.reconciled = active;
+      mem.conflicts = remaining;
+      const coverage = coveragePayload();
+      events.push({ t: 'card', id: `${run.id}-t${turn}-coverage`, kind: 'coverage', payload: coverage });
+      if (remaining.length > 0) {
+        mem.g2Asked = true;
+        writeMemory(run, mem);
+        return {
+          events,
+          gate: {
+            gate: 'G2',
+            what: formatG2Conflict(remaining.map((c) => c.field)),
+            evidence: { conflicts: remaining, coverage },
+            options: null,
+          },
+        };
+      }
       say(SAY_GOT_IT, 'done');
       writeMemory(run, mem);
       return { events, finished: buildFinish(mem) };
+    };
+
+    if (mem.pages.length >= maxPages) {
+      return settle();
     }
 
     const finishWithError = (reason: string): StepOutcome => {
@@ -401,9 +516,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
     if (transport.calls.length === 0) {
       // No tool calls: prose ends the scan (empty text is covered too).
       mem.summary = transport.text.length > 0 ? transport.text.slice(0, 500) : mem.summary;
-      say(SAY_GOT_IT, 'done');
-      writeMemory(run, mem);
-      return { events, finished: buildFinish(mem) };
+      return settle();
     }
 
     let sawReading = false;
@@ -437,9 +550,8 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
       if (call.name === 'finish') {
         const summary = str(args['summary']);
         mem.summary = summary ? summary.slice(0, 500) : mem.summary;
-        say(SAY_GOT_IT, 'done');
         writeMemory(run, mem);
-        return { events, finished: buildFinish(mem) };
+        return settle();
       }
 
       if (call.name === 'find_links') {

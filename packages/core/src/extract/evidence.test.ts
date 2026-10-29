@@ -110,4 +110,47 @@ describe('verifyExtractionEvidence', () => {
     verifyExtractionEvidence(PAGE, ext);
     expect(ext.program.name.checked).toBe(false);
   });
+
+  // Yale case-01 shape: the date lives in a heading ("January 2, 2027")
+  // that governs an item line naming no year ("Deadline for fee waiver
+  // requests"). The quote is verbatim and the year heads the section,
+  // so the correct value must NOT score checked: false.
+  const HEADING_PAGE = `Important dates. January 2, 2027 Deadline for fee waiver requests. Computer Science (MS). Apply by December 15, 2026.`;
+
+  const yearLess = (iso: string, quote: string) => baseExtraction({
+    deadlines: [
+      {
+        label: 'Deadline for fee waiver requests',
+        field: {
+          value: { iso_utc: iso, original_tz: null, all_day: true, rolling: false },
+          evidence_quote: quote,
+          source_url: 'https://gsas.yale.edu/dates-deadlines',
+          confidence: 'high',
+          needs_human: false,
+          checked: false,
+        },
+      },
+    ],
+  });
+
+  it('passes a year-less quote whose month and day match, year heading above', () => {
+    const out = verifyExtractionEvidence(HEADING_PAGE, yearLess('2027-01-02T00:00:00Z', 'Deadline for fee waiver requests'));
+    expect(out.deadlines[0].field.checked).toBe(true);
+    expect(out.deadlines[0].field.confidence).toBe('high');
+  });
+
+  it('fails the same quote when the year does not match', () => {
+    const out = verifyExtractionEvidence(HEADING_PAGE, yearLess('2028-01-02T00:00:00Z', 'Deadline for fee waiver requests'));
+    expect(out.deadlines[0].field.checked).toBe(false);
+    expect(out.deadlines[0].field.confidence).toBe('low');
+  });
+
+  it('fails a quote from a different section than the value', () => {
+    const twoSections = `${HEADING_PAGE} February 5, 2027 Deadline for late transcripts.`;
+    const ext = yearLess('2027-01-02T00:00:00Z', 'Deadline for late transcripts');
+    const out = verifyExtractionEvidence(twoSections, ext);
+    expect(out.deadlines[0].field.checked).toBe(false);
+    const right = verifyExtractionEvidence(twoSections, yearLess('2027-02-05T00:00:00Z', 'Deadline for late transcripts'));
+    expect(right.deadlines[0].field.checked).toBe(true);
+  });
 });

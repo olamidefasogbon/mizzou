@@ -59,6 +59,7 @@
   $0.00. Cumulative paid-model spend now **≈ $0.135** (cap $10).
 - Item-2 rerun estimate (stated BEFORE the run): < $0.05 for one reader call on the saved fixture (at most one repair retry). Actual: **$0.0377** (case-01, 1/1). Cumulative paid-model spend now **≈ $0.173** (cap $10). First attempt spent $0.00 (import error before any model call).
 - M4 step-1 estimate (stated BEFORE the run): one minimal-effort `/v1/responses` call with `web_search` ≈ **< $0.01** (~$0.0005 model + ~$0.0025 per-query search). Actual: in 2152 + out 171 → model **$0.0034**; no search line item in `usage` (dashboard-side). Cumulative paid-model spend now **≈ $0.176** (cap $10). Shape recorded in `docs/META_API_NOTES.md` §3.
+- M4 step-3 smoke estimate (stated BEFORE the run): orchestrator over the saved case-01 fixture, file-backed fetch, 2 real reader calls ≈ **< $0.05** (≈ $0.02). Actual: 2 turns, 2 pages read, 11 deadlines found (5 + 6, same text twice — dedup is step 4), finished `done` with SAY_GOT_IT → model **$0.0376**. Cumulative paid-model spend now **≈ $0.214** (cap $10). First pass stopped after 1 turn on the 80%-of-deadline guard and resumed cleanly on pass 2, which also exercised the resume path.
 
 ## Decisions
 

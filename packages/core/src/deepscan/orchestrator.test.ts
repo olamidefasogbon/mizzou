@@ -581,6 +581,71 @@ describe('model-driven orchestrator', () => {
     expect(finished.usage.some((u) => u.role === 'judge')).toBe(true);
   });
 
+  it('retries a flaky model call twice, then records the last error', async () => {
+    const slept: number[] = [];
+    let calls = 0;
+    const model = (async () => {
+      calls += 1;
+      if (calls <= 2) throw new Error('flaky transport');
+      return { responseId: 'r3', calls: [], text: 'All set.', model: 'm', inputTokens: 1, outputTokens: 1, costUsd: 0 };
+    }) as ModelTransport;
+    const run = fakeRun();
+    const step = createDeepScanStep({
+      model,
+      sleepMs: async (ms: number) => {
+        slept.push(ms);
+      },
+      fetchPage: async () => ({ title: 'P', text: 'text', links: [] }),
+      readPage: async ({ url }) => ({ extraction: makeExtraction(url, []), costUsd: 0 }),
+    });
+    const { outcome } = await drive(run, step);
+    expect(outcome.finished).toBeDefined();
+    expect(calls).toBe(3);
+    expect(slept).toEqual([500, 1000]);
+    const mem = run.state as { deepScan: { errors: number; lastError: string | null } };
+    expect(mem.deepScan.errors).toBe(0);
+    expect(mem.deepScan.lastError).toBeNull();
+  });
+
+  it('gives up after the retries and never retries a budget halt', async () => {
+    const slept: number[] = [];
+    let calls = 0;
+    const model = (async () => {
+      calls += 1;
+      throw new Error('down');
+    }) as ModelTransport;
+    const run = fakeRun();
+    const step = createDeepScanStep({
+      model,
+      sleepMs: async (ms: number) => {
+        slept.push(ms);
+      },
+      fetchPage: async () => ({ title: 'P', text: 'text', links: [] }),
+      readPage: async ({ url }) => ({ extraction: makeExtraction(url, []), costUsd: 0 }),
+    });
+    const { outcome } = await drive(run, step);
+    expect(calls).toBe(9);
+    expect(slept).toEqual([500, 1000, 500, 1000, 500, 1000]);
+    expect((outcome.finished as { error?: string }).error).toContain('orchestrator unreachable (down)');
+    const mem = run.state as { deepScan: { lastError: string | null } };
+    expect(mem.deepScan.lastError).toBe('down');
+
+    let budgetCalls = 0;
+    const budgetModel = (async () => {
+      budgetCalls += 1;
+      throw new BudgetExceededError('user');
+    }) as ModelTransport;
+    const budgetRun = fakeRun();
+    const budgetStep = createDeepScanStep({
+      model: budgetModel,
+      fetchPage: async () => ({ title: 'P', text: 'text', links: [] }),
+      readPage: async ({ url }) => ({ extraction: makeExtraction(url, []), costUsd: 0 }),
+    });
+    const { outcome: budgetOutcome } = await drive(budgetRun, budgetStep);
+    expect(budgetCalls).toBe(1);
+    expect((budgetOutcome.finished as { error?: string }).error).toBe('budget hit');
+  });
+
   it('runs inside advance() with a file store and says got-it at the end', async () => {
     const dir = await mkdtemp(join(HERE, '.tmp-orch-'));
     try {

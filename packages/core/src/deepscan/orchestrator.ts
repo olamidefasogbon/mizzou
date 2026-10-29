@@ -138,6 +138,11 @@ export type ModelTransport = (args: {
   turn: number;
 }) => Promise<ModelTransportResult>;
 
+/** Model-call retries per turn: initial attempt plus this many retries. */
+export const MAX_MODEL_RETRIES = 2;
+/** Short backoff between retries: base ms times the attempt number. */
+export const RETRY_BASE_MS = 500;
+
 export interface DeepScanTools {
   fetchPage?: (url: string) => Promise<{ title: string; text: string; links: OutboundLink[] }>;
   readPdf?: (url: string) => Promise<{ readable: true; text: string } | { readable: false; reason: string }>;
@@ -149,6 +154,8 @@ export interface DeepScanTools {
   judge?: JudgeTransport;
   maxPages?: number;
   maxDepth?: number;
+  /** Injectable for tests; production waits real time between retries. */
+  sleepMs?: (ms: number) => Promise<void>;
 }
 
 const TOOL_DEFS: ResponsesFunctionTool[] = [
@@ -328,6 +335,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
   const judge = tools.judge ?? defaultJudge;
   const maxPages = tools.maxPages ?? MAX_SCAN_PAGES;
   const maxDepth = tools.maxDepth ?? MAX_SCAN_DEPTH;
+  const sleepMs = tools.sleepMs ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
   return async (run) => {
     const turn = run.turnCount;
@@ -597,14 +605,27 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
               turnsLeft: Math.max(0, DEFAULT_MAX_TURNS - turn),
             });
       mem.pending = [];
-      transport = await model({
-        systemPrompt: ORCHESTRATOR_SYSTEM_PROMPT,
-        input,
-        tools: TOOL_DEFS,
-        previousResponseId: mem.responseId,
-        userId,
-        turn,
-      });
+      let attempt = 0;
+      for (;;) {
+        try {
+          transport = await model({
+            systemPrompt: ORCHESTRATOR_SYSTEM_PROMPT,
+            input,
+            tools: TOOL_DEFS,
+            previousResponseId: mem.responseId,
+            userId,
+            turn,
+          });
+          break;
+        } catch (err) {
+          // Budgets are gates, not blips: never retry those.
+          if (err instanceof BudgetExceededError) throw err;
+          attempt += 1;
+          mem.lastError = err instanceof Error ? err.message.slice(0, 280) : 'orchestrator call failed';
+          if (attempt > MAX_MODEL_RETRIES) throw err;
+          await sleepMs(RETRY_BASE_MS * attempt);
+        }
+      }
     } catch (err) {
       if (err instanceof BudgetExceededError) {
         say(SAY_BUDGET_HIT, 'failed');

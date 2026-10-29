@@ -10,6 +10,7 @@ import { SAY_BUDGET_HIT, SAY_GOT_IT, SAY_ON_IT } from '../voice/index.js';
 import type { Extraction } from '../schemas/extraction.js';
 import { FinishSchema, createDeepScanStep, type ModelTransport } from './orchestrator.js';
 import type { JudgeTransport } from '../extract/reconcile.js';
+import { BudgetGuard, InMemoryUsageStore } from '../meta/budget.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -520,6 +521,64 @@ describe('model-driven orchestrator', () => {
     expect(reads).toBe(0);
     const finished = FinishSchema.parse(outcome.finished);
     expect(finished.extraction?.deadlines).toHaveLength(1);
+  });
+
+  it('keeps the guard ledger equal to the run ledger across reader, orchestrator and judge', async () => {
+    // Stubs record through the guard exactly like the production transports
+    // do (check, then recordCall); the step must report every reported cost.
+    const guard = new BudgetGuard(new InMemoryUsageStore(), {
+      perUserDailyUsd: 10,
+      globalDailyUsd: 100,
+      guestRunsPerDay: 3,
+    });
+    const record = (userId: string, promptTokens: number, outputTokens: number): number =>
+      guard.recordCall({ userId, model: 'muse-spark-1.3', promptTokens, completionTokens: outputTokens });
+    const a = makeExtraction(`${SITE}/`, ['Main deadline']);
+    const b = makeExtraction(`${SITE}/faq/`, ['Main deadline']);
+    b.deadlines[0].field.value.iso_utc = '2026-12-15T00:00:00Z';
+    const scripted = scriptedModel([
+      { calls: [{ name: 'find_links', args: { page_url: `${SITE}/` } }, { name: 'read_page', args: { url: `${SITE}/` } }] },
+      { calls: [{ name: 'read_page', args: { url: `${SITE}/faq/` } }] },
+      { calls: [{ name: 'finish', args: { summary: 'done' } }] },
+    ]);
+    const taggedModel: ModelTransport = (async (args: { userId?: string; previousResponseId?: string | null; input?: unknown; turn: number }) => {
+      const cost = record(args.userId ?? 'u1', 100, 20);
+      const out = await scripted({
+        systemPrompt: '',
+        input: args.input ?? null,
+        tools: [],
+        previousResponseId: args.previousResponseId ?? null,
+        turn: args.turn,
+      });
+      return { ...out, costUsd: cost };
+    }) as ModelTransport;
+    const judge: JudgeTransport = async ({ userId }) => {
+      const cost = record(userId ?? 'u1', 200, 10);
+      return {
+        verdict: { resolutions: [{ field: 'deadlines:Main deadline', chosen_iso: '2026-12-01T00:00:00Z', reason: 'Program page governs.' }] },
+        costUsd: cost,
+      };
+    };
+    const run = fakeRun();
+    const step = createDeepScanStep({
+      model: taggedModel,
+      judge,
+      fetchPage: async (url) => (url === `${SITE}/`
+        ? { title: 'Program', text: 'Main page.', links: [{ href: '/faq/', text: 'FAQ' }] }
+        : { title: url, text: 'text', links: [] }),
+      readPage: async ({ url }, ctx) => {
+        const cost = record(ctx.userId ?? 'u1', 500, 100);
+        return { extraction: url === `${SITE}/` ? a : b, costUsd: cost };
+      },
+    });
+    const { outcome } = await drive(run, step);
+    const finished = FinishSchema.parse(outcome.finished);
+    const ledgerSum = finished.usage.reduce((n, u) => n + u.costUsd, 0);
+    expect(finished.usageUsd).toBeCloseTo(ledgerSum, 10);
+    // The guard counted the orchestrator turns, the reader calls and the
+    // judge — the same total the run reports.
+    expect(guard.spendToday('u1')).toBeCloseTo(ledgerSum, 10);
+    expect(finished.usage.some((u) => u.role === 'judge')).toBe(true);
   });
 
   it('runs inside advance() with a file store and says got-it at the end', async () => {

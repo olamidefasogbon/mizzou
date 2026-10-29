@@ -119,6 +119,8 @@ async function runDeep(c: DeepCase): Promise<void> {
     const store = new FileRunStore(dir);
     const run = newRun(`deep-${c.id}`, 'eval', null);
     run.state = { programUrl: c.programUrl, programHint: c.programHint, opportunityType: c.opportunityType };
+    // Eval auto-approves gates: the G1 confirm is already in, so the scan starts directly.
+    run.decisions.push({ gate: 'G1', decision: { confirmed: true }, opId: 'eval-auto' });
     await store.save(run);
     const step = createDeepScanStep({ fetchPage });
     let status = await advance(run.id, store, step, { maxTurns: 12 });

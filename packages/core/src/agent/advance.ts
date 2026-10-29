@@ -118,6 +118,51 @@ export async function resumeRun(
   return { run: advanced, duplicate: false, needsResume, events };
 }
 
+export interface ContinueResult {
+  run: RunRecord;
+  /** True when nothing stepped: the run is not running or the opId was seen. */
+  duplicate: boolean;
+  needsResume: boolean;
+  events: RunEvent[];
+}
+
+/**
+ * Continue a running run without a new gate decision (time-slice resume).
+ * The opId is still an idempotency key: repeating it replays the stored row
+ * without stepping again. Tracked in state.continueOpIds, next to decisions.
+ */
+export async function continueRun(
+  runId: string,
+  store: RunStore,
+  opId: string,
+  step: StepFn,
+  opts: AdvanceOptions = {},
+): Promise<ContinueResult> {
+  const run = await store.load(runId);
+  if (!run) throw new Error(`unknown run: ${runId}`);
+  if (run.status !== 'running') return { run, duplicate: true, needsResume: false, events: [] };
+  const state = run.state as Record<string, unknown>;
+  const seen = Array.isArray(state['continueOpIds'])
+    ? (state['continueOpIds'] as unknown[]).filter((s): s is string => typeof s === 'string')
+    : [];
+  if (seen.includes(opId)) {
+    const fresh = await store.load(runId);
+    return { run: fresh ?? run, duplicate: true, needsResume: false, events: [] };
+  }
+  seen.push(opId);
+  state['continueOpIds'] = seen;
+  await store.save(run);
+  const events: RunEvent[] = [];
+  const { run: advanced, needsResume } = await advance(runId, store, step, {
+    ...opts,
+    onEvent: (event) => {
+      events.push(event);
+      opts.onEvent?.(event);
+    },
+  });
+  return { run: advanced, duplicate: false, needsResume, events };
+}
+
 /**
  * Continue a halted run after a gate decision (POST /api/runs/[runId]/resume).
  * A repeated opId replays the stored row without applying anything twice.

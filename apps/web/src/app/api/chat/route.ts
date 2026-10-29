@@ -9,9 +9,13 @@ import {
   formatFindingStatus,
   formatG1Prompt,
   formatReadingStatus,
+  newRun,
   verifyExtractionEvidence,
+  type PendingGate,
   type RunEvent,
 } from '@mizzou/core';
+import { anonId } from '@/lib/session';
+import { runsStore } from '@/lib/runs';
 
 export const maxDuration = 60;
 
@@ -49,10 +53,14 @@ const READER_PROMPT = (pageText: string, sourceUrl: string): string =>
 
 export async function POST(req: Request): Promise<Response> {
   let message = '';
+  let chatId: string | null = null;
   try {
     const body: unknown = await req.json();
     if (typeof (body as { message?: unknown }).message === 'string') {
       message = (body as { message: string }).message;
+    }
+    if (typeof (body as { chatId?: unknown }).chatId === 'string') {
+      chatId = (body as { chatId: string }).chatId;
     }
   } catch {
     message = '';
@@ -109,6 +117,7 @@ export async function POST(req: Request): Promise<Response> {
           eligibility: Array<{ rule: string; hard: boolean; confidence: string; needs_human: boolean; evidence_quote: string; source_url: string }>;
         } | null = null;
         let plan: { title: string; deadlines: string[]; items: string[]; portalUrl: string | null } | null = null;
+        let quickExtraction: unknown = null;
         try {
           const result = await callModel({
             role: 'reader',
@@ -123,6 +132,7 @@ export async function POST(req: Request): Promise<Response> {
             throw new Error('Unexpected text response from reader');
           }
           const checked = verifyExtractionEvidence(pageText, result.data);
+          quickExtraction = checked;
           opportunityType = checked.opportunity_type;
           program = {
             name: checked.program.name.value,
@@ -174,12 +184,30 @@ export async function POST(req: Request): Promise<Response> {
           state: 'done',
         });
 
-        send({ t: 'message', id: crypto.randomUUID(), text: formatG1Prompt(opportunityType) });
-        send({
-          t: 'needs_approval',
+        // The quick pass doubles as the G1 evidence. Persist the run with a
+        // preset G1 gate; "Yes, that's it" resumes it into the deep scan and
+        // the quick extraction seeds the reconcile (no second reader call).
+        const userId = await anonId();
+        const store = runsStore();
+        const run = newRun(runId, userId, chatId);
+        run.state = {
+          programUrl: url,
+          opportunityType,
+          quickTitle: program.name,
+          quickExtraction,
+        };
+        run.status = 'needs_approval';
+        const g1Card = { kind: 'program', opportunity_type: opportunityType, ...program, source_url: url };
+        const g1Gate: PendingGate = {
           gate: 'G1',
-          card: { kind: 'program', opportunity_type: opportunityType, ...program, source_url: url },
-        });
+          what: formatG1Prompt(opportunityType),
+          evidence: { card: g1Card },
+          options: null,
+        };
+        run.pendingGate = g1Gate;
+        await store.save(run);
+        send({ t: 'message', id: crypto.randomUUID(), text: formatG1Prompt(opportunityType) });
+        send({ t: 'needs_approval', gate: 'G1', card: g1Card });
         // Buffered by the client and shown only after the G1 "Yes" —
         // the deep scan and calendar writes still wait for approval.
         if (requirements) {

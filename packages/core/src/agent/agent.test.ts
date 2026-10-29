@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { advance, recordDecision, resumeRun } from './advance.js';
+import { advance, continueRun, recordDecision, resumeRun } from './advance.js';
 import { FileRunStore } from './store.js';
 import { newRun } from './types.js';
 
@@ -122,6 +122,34 @@ describe('advance', () => {
       expect(replay.events).toEqual([]);
       expect(steps).toBe(1);
       expect(replay.run.decisions).toHaveLength(1);
+    } finally {
+      await cleanup(dir);
+    }
+  });
+
+  it('continues a running run once per continue opId', async () => {
+    const { store, dir } = await freshStore();
+    try {
+      await store.save(newRun('r10'));
+      let steps = 0;
+      const step = async () => {
+        steps += 1;
+        return { events: [] };
+      };
+      const opts = { maxTurns: 1 };
+      const first = await continueRun('r10', store, 'cop-1', step, opts);
+      expect(first.duplicate).toBe(false);
+      expect(first.run.status).toBe('running');
+      expect(first.needsResume).toBe(true);
+      expect(steps).toBe(1);
+      const replay = await continueRun('r10', store, 'cop-1', step, opts);
+      expect(replay.duplicate).toBe(true);
+      expect(replay.events).toEqual([]);
+      expect(steps).toBe(1);
+      const fresh = await continueRun('r10', store, 'cop-2', step, { maxTurns: 2 });
+      expect(fresh.duplicate).toBe(false);
+      expect(steps).toBe(2);
+      await expect(continueRun('nope', store, 'cop-3', step)).rejects.toThrow(/unknown run/);
     } finally {
       await cleanup(dir);
     }

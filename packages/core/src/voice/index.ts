@@ -12,6 +12,7 @@ export const SAY_ON_IT = 'On it. Let me find the right page and see what they as
 export const SAY_GOT_IT = "Got everything. Here's my honest read.";
 export const SAY_PAGE_WOULD_NOT_OPEN = 'That page wouldn\u2019t open for me. Can you paste the text?';
 export const SAY_BUDGET_HIT = 'I need a minute.';
+export const SAY_STUCK = 'I ran out of steps on this one. Send the link again and I\u2019ll pick up where I left off.';
 export const sayLanguageRead = (language: string): string => `I read this page in ${language}.`;
 
 export function formatFindingStatus(url: string): string {

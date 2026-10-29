@@ -36,6 +36,7 @@ import {
   SAY_ON_IT,
   SAY_PAGE_WOULD_NOT_OPEN,
   formatFindingStatus,
+  formatG1Prompt,
   formatG2Conflict,
   formatReadingStatus,
 } from '../voice/index.js';
@@ -85,6 +86,8 @@ export interface DeepScanMemory {
   programHint: string | null;
   opportunityType?: string;
   institution?: string;
+  /** True once the loop-native G1 confirm has been asked (chat may preset its own G1 instead). */
+  g1Asked: boolean;
   queue: QueuedPage[];
   seen: string[];
   depths: Record<string, number>;
@@ -360,6 +363,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
         extractions: [],
         reconciled: null,
         conflicts: [],
+        g1Asked: false,
         g2Asked: false,
         usageUsd: 0,
         calls: [],
@@ -397,11 +401,122 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
       return { events, finished: buildFinish(mem) };
     }
 
+    const g1Decision = run.decisions.find((d) => d.gate === 'G1');
+
+    // Loop-native G1 confirm: first contact on a confirmed URL reads the
+    // program page once (it counts as page 1 of the scan) and halts with the
+    // program card. Chat presets its own G1 instead, so this only fires for
+    // runs advanced with no G1 decision yet. A "not confirmed" answer ends
+    // the run quietly — the client already says so in its own words.
+    if (!mem.g1Asked && !g1Decision) {
+      return g1Turn();
+    }
+    if (mem.g1Asked && !run.pendingGate) {
+      mem.g1Asked = false;
+      writeMemory(run, mem);
+      const confirmed = (g1Decision?.decision as { confirmed?: unknown } | undefined)?.confirmed !== false;
+      if (!confirmed) {
+        mem.summary = 'Not the right program.';
+        return { events, finished: { ...buildFinish(mem), error: 'program not confirmed' } };
+      }
+    }
+
+    async function g1Turn(): Promise<StepOutcome> {
+      if (!mem) return finishWithError('no scan memory');
+      say(formatFindingStatus(mem.programUrl));
+      let title = mem.programUrl;
+      let text = '';
+      try {
+        const page = await fetchPage(mem.programUrl);
+        title = page.title || mem.programUrl;
+        text = page.text;
+      } catch (err) {
+        say(SAY_PAGE_WOULD_NOT_OPEN, 'failed');
+        writeMemory(run, mem);
+        return {
+          events,
+          finished: { ...buildFinish(mem), error: err instanceof Error ? err.message : 'fetch failed' },
+        };
+      }
+      if (text.length === 0) {
+        say(SAY_PAGE_WOULD_NOT_OPEN, 'failed');
+        writeMemory(run, mem);
+        return { events, finished: { ...buildFinish(mem), error: 'page has no readable text' } };
+      }
+      try {
+        const result = await readPage(
+          { url: mem.programUrl, title, text },
+          { programHint: mem.programHint, opportunityType: mem.opportunityType, userId },
+        );
+        mem.usageUsd += result.costUsd;
+        run.usageUsd = (typeof run.usageUsd === 'number' ? run.usageUsd : 0) + result.costUsd;
+        mem.calls.push({
+          turn,
+          kind: 'tool',
+          tool: 'read_page',
+          role: 'reader',
+          model: result.usage?.model ?? null,
+          inputTokens: result.usage?.inputTokens ?? null,
+          outputTokens: result.usage?.outputTokens ?? null,
+          costUsd: result.costUsd,
+        });
+        mem.extractions.push(result.extraction);
+        mem.pages.push({ url: mem.programUrl, title });
+      } catch (err) {
+        if (err instanceof BudgetExceededError) {
+          say(SAY_BUDGET_HIT, 'failed');
+          writeMemory(run, mem);
+          return { events, finished: { ...buildFinish(mem), error: 'budget hit' } };
+        }
+        say(SAY_PAGE_WOULD_NOT_OPEN, 'failed');
+        writeMemory(run, mem);
+        return {
+          events,
+          finished: { ...buildFinish(mem), error: err instanceof Error ? err.message : 'reader failed' },
+        };
+      }
+      const ext = mem.extractions[mem.extractions.length - 1];
+      mem.g1Asked = true;
+      writeMemory(run, mem);
+      return {
+        events,
+        gate: {
+          gate: 'G1',
+          what: formatG1Prompt(ext.opportunity_type),
+          evidence: {
+            card: {
+              kind: 'program',
+              opportunity_type: ext.opportunity_type,
+              name: ext.program.name.value,
+              unit: ext.program.unit.value,
+              institution: ext.program.institution.value,
+              portal_url: ext.program.portal_url,
+              source_url: mem.programUrl,
+            },
+          },
+          options: null,
+        },
+      };
+    }
+
     /** Merge every page read; judge genuine conflicts; G2 when they stand. */
     const settle = async (): Promise<StepOutcome> => {
       const pairs: ReconcilePage[] = mem.pages
         .map((p, i) => ({ url: p.url, title: p.title, extraction: mem.extractions[i] }))
         .filter((p): p is ReconcilePage => Boolean(p.extraction));
+      // Chat's quick pass already read the program page for G1. Fold it in
+      // so the scan never pays a second reader call for the same page and
+      // program-page dates are always in the merge.
+      const stateRow = run.state as Record<string, unknown>;
+      const quick = ExtractionSchema.safeParse(stateRow['quickExtraction']);
+      if (quick.success && !pairs.some((p) => p.url === mem.programUrl)) {
+        const quickTitle = stateRow['quickTitle'];
+        pairs.unshift({
+          url: mem.programUrl,
+          title: typeof quickTitle === 'string' && quickTitle.length > 0 ? quickTitle : mem.programUrl,
+          extraction: quick.data,
+        });
+      }
       const { merged, conflicts } = reconcileExtractions(pairs, mem.programUrl);
       let active = merged;
       let remaining = conflicts;

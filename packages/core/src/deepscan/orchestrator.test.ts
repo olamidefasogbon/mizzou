@@ -99,6 +99,9 @@ function sitePages() {
 function fakeRun(): RunRecord {
   const run = newRun('ds1', 'u1', 'c1');
   run.state = { programUrl: `${SITE}/`, programHint: 'Scholars' };
+  // Unit runs simulate post-G1 scanning: the G1 decision is already in.
+  // G1-turn tests below build their own runs without it.
+  run.decisions.push({ gate: 'G1', decision: { confirmed: true }, opId: 'test-auto' });
   return run;
 }
 
@@ -402,6 +405,121 @@ describe('model-driven orchestrator', () => {
     expect(cardKinds).toContain('coverage');
     const calls = (run.state as { deepScan: { calls: Array<{ role: string | null }> } }).deepScan.calls;
     expect(calls.some((c) => c.role === 'judge')).toBe(true);
+  });
+
+  it('asks G1 natively on first contact, counting the program page as page 1', async () => {
+    let modelCalls = 0;
+    const model = (async () => {
+      modelCalls += 1;
+      return { responseId: 'r', calls: [], text: '', model: 'm', inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    }) as ModelTransport;
+    const run = newRun('ds-g1', 'u1', 'c1');
+    run.state = { programUrl: `${SITE}/`, programHint: 'Scholars' };
+    const step = createDeepScanStep({
+      model,
+      fetchPage: async () => ({ title: 'Program', text: 'Main page. Deadline December 1.', links: [] }),
+      readPage: async ({ url }) => ({ extraction: makeExtraction(url, ['Main deadline']), costUsd: 0.01 }),
+    });
+    const outcome = await step(run);
+    expect(modelCalls).toBe(0);
+    expect(outcome.gate?.gate).toBe('G1');
+    const card = (outcome.gate?.evidence as { card: { kind: string; source_url: string } }).card;
+    expect(card.kind).toBe('program');
+    expect(card.source_url).toBe(`${SITE}/`);
+    const mem = run.state as { deepScan: { pages: unknown[]; g1Asked: boolean } };
+    expect(mem.deepScan.pages).toHaveLength(1);
+    expect(mem.deepScan.g1Asked).toBe(true);
+  });
+
+  it('ends the G1 turn with an error when the program page will not open', async () => {
+    const model = scriptedModel([{ text: 'unused' }]);
+    const run = newRun('ds-g1-err', 'u1', 'c1');
+    run.state = { programUrl: `${SITE}/` };
+    const step = createDeepScanStep({
+      model,
+      fetchPage: async () => {
+        throw new Error('blocked');
+      },
+    });
+    const outcome = await step(run);
+    expect(outcome.gate).toBeUndefined();
+    expect(outcome.finished).toBeDefined();
+    expect((outcome.finished as { error?: string }).error).toContain('blocked');
+  });
+
+  it('scans after a G1 yes and stops quietly on a G1 no', async () => {
+    const build = (id: string) => {
+      const run = newRun(id, 'u1', 'c1');
+      run.state = { programUrl: `${SITE}/`, programHint: 'Scholars' };
+      return run;
+    };
+    const scanning = (model: ModelTransport) =>
+      createDeepScanStep({
+        model,
+        fetchPage: async (url) => (url === `${SITE}/`
+          ? { title: 'Program', text: 'Main page.', links: [{ href: '/faq/', text: 'FAQ' }] }
+          : { title: url, text: 'text', links: [] }),
+        readPage: async ({ url }) => ({ extraction: makeExtraction(url, ['Main deadline']), costUsd: 0 }),
+      });
+    // Yes: G1 turn first, then the scan proceeds on the resumed pass.
+    const yesRun = build('ds-g1-yes');
+    const yesModel = scriptedModel([
+      { calls: [{ name: 'find_links', args: { page_url: `${SITE}/` } }] },
+      { calls: [{ name: 'finish', args: { summary: 'done' } }] },
+    ]);
+    const first = await scanning(yesModel)(yesRun);
+    expect(first.gate?.gate).toBe('G1');
+    yesRun.decisions.push({ gate: 'G1', decision: { confirmed: true }, opId: 'op-yes' });
+    yesRun.pendingGate = null;
+    yesRun.status = 'running';
+    const { outcome: yesOutcome } = await drive(yesRun, scanning(yesModel));
+    expect(yesOutcome.finished).toBeDefined();
+    // No: the run ends without scanning further.
+    let modelCalls = 0;
+    const noModel = (async () => {
+      modelCalls += 1;
+      return { responseId: 'r', calls: [], text: '', model: 'm', inputTokens: 0, outputTokens: 0, costUsd: 0 };
+    }) as ModelTransport;
+    const noRun = build('ds-g1-no');
+    const noStep = scanning(noModel);
+    const gated = await noStep(noRun);
+    expect(gated.gate?.gate).toBe('G1');
+    noRun.decisions.push({ gate: 'G1', decision: { confirmed: false }, opId: 'op-no' });
+    noRun.pendingGate = null;
+    noRun.status = 'running';
+    const refused = await noStep(noRun);
+    expect(modelCalls).toBe(0);
+    expect(refused.finished).toBeDefined();
+    expect((refused.finished as { error?: string }).error).toBe('program not confirmed');
+  });
+
+  it('merges the chat quick extraction instead of re-reading the program page', async () => {
+    const run = fakeRun();
+    run.state = {
+      programUrl: `${SITE}/`,
+      programHint: 'Scholars',
+      quickTitle: 'Program',
+      quickExtraction: makeExtraction(`${SITE}/`, ['Main deadline']),
+    };
+    let reads = 0;
+    const model = scriptedModel([
+      { calls: [{ name: 'find_links', args: { page_url: `${SITE}/` } }] },
+      { calls: [{ name: 'finish', args: { summary: 'done' } }] },
+    ]);
+    const step = createDeepScanStep({
+      model,
+      fetchPage: async (url) => (url === `${SITE}/`
+        ? { title: 'Program', text: 'Main page.', links: [{ href: '/faq/', text: 'FAQ' }] }
+        : { title: url, text: 'text', links: [] }),
+      readPage: async ({ url }) => {
+        reads += 1;
+        return { extraction: makeExtraction(url, []), costUsd: 0 };
+      },
+    });
+    const { outcome } = await drive(run, step);
+    expect(reads).toBe(0);
+    const finished = FinishSchema.parse(outcome.finished);
+    expect(finished.extraction?.deadlines).toHaveLength(1);
   });
 
   it('runs inside advance() with a file store and says got-it at the end', async () => {

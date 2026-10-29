@@ -63,9 +63,14 @@ interface PlanPayload {
   portalUrl: string | null;
 }
 
+interface G2Conflict {
+  field: string;
+  values: Array<{ iso: string | null; quote: string; source_url: string }>;
+}
+
 interface FeedItem {
   id: string;
-  kind: 'user' | 'message' | 'status' | 'g1' | 'requirements' | 'plan' | 'rolling' | 'error';
+  kind: 'user' | 'message' | 'status' | 'g1' | 'g2' | 'coverage' | 'requirements' | 'plan' | 'rolling' | 'error';
   text?: string;
   label?: string;
   state?: StatusState;
@@ -73,10 +78,24 @@ interface FeedItem {
   opportunity_type?: string;
   link?: string;
   decision?: 'yes' | 'no';
+  resolved?: boolean;
+  what?: string;
+  conflicts?: G2Conflict[];
+  lines?: string[];
+  unreadable?: Array<{ url: string; reason: string }>;
   requirements?: { documents: RequirementDoc[]; eligibility: RequirementRule[] };
   plan?: PlanPayload;
   downloading?: boolean;
 }
+
+type ClientEvent =
+  | { t: 'message'; id: string; text: string }
+  | { t: 'status'; id: string; label: string; state: StatusState }
+  | { t: 'needs_approval'; gate: string; card: unknown }
+  | { t: 'card'; id: string; kind: string; payload: unknown }
+  | { t: 'done'; runId?: string }
+  | { t: 'continue'; runId: string }
+  | { t: 'error'; friendly: string; link?: string };
 
 function formatDay(iso: string): string {
   const m = iso.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -162,12 +181,205 @@ function ChatContent(): React.JSX.Element {
     [patch],
   );
 
+  const runIdRef = useRef<string | null>(null);
+  const g1YesRef = useRef(false);
+  const streamsRef = useRef(0);
+  const enterStream = useCallback((): void => {
+    streamsRef.current += 1;
+    setBusy(true);
+  }, []);
+  const leaveStream = useCallback((): void => {
+    streamsRef.current = Math.max(0, streamsRef.current - 1);
+    if (streamsRef.current === 0) setBusy(false);
+  }, []);
+  const handleEventRef = useRef<(event: ClientEvent) => void>(() => {});
+  const resumeRef = useRef<(body: Record<string, unknown>) => Promise<void>>(async () => {});
+
+  const pump = useCallback(async (res: Response): Promise<void> => {
+    if (!res.body) throw new Error('Empty stream.');
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() ?? '';
+      for (const frame of frames) {
+        for (const line of frame.split('\n')) {
+          if (!line.startsWith('data:')) continue;
+          handleEventRef.current(JSON.parse(line.slice(5).trim()) as ClientEvent);
+        }
+      }
+    }
+  }, []);
+
+  handleEventRef.current = (event: ClientEvent): void => {
+    if (event.t === 'message') {
+      setFeed((prev) => {
+        const existing = prev.find((item) => item.id === event.id);
+        if (existing) {
+          return prev.map((item) =>
+            item.id === event.id ? { ...item, text: `${item.text ?? ''}${event.text}` } : item,
+          );
+        }
+        return [...prev, { id: event.id, kind: 'message', text: event.text }];
+      });
+    } else if (event.t === 'status') {
+      setFeed((prev) => {
+        if (prev.some((item) => item.id === event.id)) {
+          return prev.map((item) =>
+            item.id === event.id ? { ...item, label: event.label, state: event.state } : item,
+          );
+        }
+        return [...prev, { id: event.id, kind: 'status', label: event.label, state: event.state }];
+      });
+    } else if (event.t === 'needs_approval') {
+      const card = (event.card ?? {}) as {
+        kind?: string;
+        opportunity_type?: string;
+        name?: string;
+        unit?: string;
+        institution?: string;
+        portal_url?: string | null;
+        what?: string;
+        conflicts?: G2Conflict[];
+      };
+      if (event.gate === 'G1' && card.kind === 'program') {
+        setFeed((prev) => [
+          ...prev,
+          {
+            id: `g1-${Date.now()}`,
+            kind: 'g1',
+            program: {
+              name: card.name ?? 'Unknown program',
+              unit: card.unit ?? '',
+              institution: card.institution ?? '',
+              portal_url: card.portal_url ?? null,
+            },
+            opportunity_type: typeof card.opportunity_type === 'string' ? card.opportunity_type : undefined,
+          },
+        ]);
+      } else if (event.gate === 'G2' && Array.isArray(card.conflicts)) {
+        setFeed((prev) => [
+          ...prev,
+          {
+            id: `g2-${Date.now()}`,
+            kind: 'g2',
+            what: typeof card.what === 'string' ? card.what : undefined,
+            conflicts: card.conflicts as G2Conflict[],
+          },
+        ]);
+      }
+    } else if (event.t === 'card') {
+      const payload = (event.payload ?? {}) as {
+        documents?: Array<RequirementDoc & { evidence_quote?: string; source_url?: string }>;
+        eligibility?: Array<RequirementRule & { evidence_quote?: string; source_url?: string }>;
+        title?: string;
+        deadlines?: string[];
+        items?: string[];
+        portalUrl?: string | null;
+        text?: string;
+        lines?: string[];
+        unreadable?: Array<{ url: string; reason: string }>;
+      };
+      const toDoc = (d: RequirementDoc & { evidence_quote?: string; source_url?: string }): RequirementDoc => ({
+        ...d,
+        evidenceQuote: typeof d.evidence_quote === 'string' ? d.evidence_quote : undefined,
+        sourceUrl: typeof d.source_url === 'string' ? d.source_url : null,
+      });
+      const toRule = (e: RequirementRule & { evidence_quote?: string; source_url?: string }): RequirementRule => ({
+        ...e,
+        evidenceQuote: typeof e.evidence_quote === 'string' ? e.evidence_quote : undefined,
+        sourceUrl: typeof e.source_url === 'string' ? e.source_url : null,
+      });
+      if (event.kind === 'requirements' && Array.isArray(payload.documents) && Array.isArray(payload.eligibility)) {
+        const built = {
+          documents: (payload.documents ?? []).map(toDoc),
+          eligibility: (payload.eligibility ?? []).map(toRule),
+        };
+        if (g1YesRef.current) {
+          const id = `req-${Date.now()}`;
+          setFeed((prev) => [...prev, { id, kind: 'requirements', requirements: built }]);
+        } else {
+          setPendingCards((prev) => ({ ...(prev ?? {}), requirements: built }));
+        }
+      } else if (
+        event.kind === 'plan' &&
+        typeof payload.title === 'string' &&
+        Array.isArray(payload.deadlines) &&
+        Array.isArray(payload.items)
+      ) {
+        const built: PlanPayload = {
+          title: payload.title as string,
+          deadlines: payload.deadlines as string[],
+          items: payload.items as string[],
+          portalUrl: typeof payload.portalUrl === 'string' ? payload.portalUrl : null,
+        };
+        if (g1YesRef.current) {
+          const id = `plan-${Date.now()}`;
+          setFeed((prev) => [...prev, { id, kind: 'plan', plan: built }]);
+        } else {
+          setPendingCards((prev) => ({ ...(prev ?? {}), plan: built }));
+        }
+      } else if (event.kind === 'rolling_notice' && typeof payload.text === 'string') {
+        if (g1YesRef.current) {
+          const id = `rolling-${Date.now()}`;
+          setFeed((prev) => [...prev, { id, kind: 'rolling', text: payload.text as string }]);
+        } else {
+          setPendingCards((prev) => ({ ...(prev ?? {}), rolling: { text: payload.text as string } }));
+        }
+      } else if (event.kind === 'coverage' && Array.isArray(payload.lines)) {
+        setFeed((prev) => [
+          ...prev,
+          {
+            id: `coverage-${Date.now()}`,
+            kind: 'coverage',
+            lines: payload.lines as string[],
+            unreadable: Array.isArray(payload.unreadable) ? payload.unreadable : [],
+          },
+        ]);
+      }
+    } else if (event.t === 'done') {
+      if (typeof event.runId === 'string') runIdRef.current = event.runId;
+    } else if (event.t === 'continue') {
+      runIdRef.current = event.runId;
+      void resumeRef.current({ opId: crypto.randomUUID() });
+    } else if (event.t === 'error') {
+      setFeed((prev) => [...prev, { id: `err-${Date.now()}`, kind: 'error', text: event.friendly, link: event.link }]);
+    }
+  };
+
+  resumeRef.current = async (body: Record<string, unknown>): Promise<void> => {
+    const id = runIdRef.current;
+    if (!id) return;
+    enterStream();
+    try {
+      const res = await fetch(`/api/runs/${id}/resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await pump(res);
+    } catch {
+      setFeed((prev) => [
+        ...prev,
+        { id: `err-${Date.now()}`, kind: 'error', text: 'Something went wrong on my side. Give it a minute and try again.' },
+      ]);
+    } finally {
+      leaveStream();
+      feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight });
+    }
+  };
+
   const sendText = useCallback(
     async (raw: string): Promise<void> => {
       const text = raw.trim();
       if (!text || busy) return;
       setInput('');
-    setBusy(true);
+    enterStream();
     const userId = `user-${Date.now()}`;
     setFeed((prev) => [...prev, { id: userId, kind: 'user', text }]);
     setPendingCards(null);
@@ -178,133 +390,19 @@ function ChatContent(): React.JSX.Element {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, chatId }),
       });
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const frames = buffer.split('\n\n');
-        buffer = frames.pop() ?? '';
-        for (const frame of frames) {
-          for (const line of frame.split('\n')) {
-            if (!line.startsWith('data:')) continue;
-            const event = JSON.parse(line.slice(5).trim()) as
-              | { t: 'message'; id: string; text: string }
-              | { t: 'status'; id: string; label: string; state: StatusState }
-              | { t: 'needs_approval'; gate: string; card: unknown }
-              | { t: 'card'; id: string; kind: string; payload: unknown }
-              | { t: 'done' }
-              | { t: 'error'; friendly: string; link?: string };
-            if (event.t === 'message') {
-              setFeed((prev) => {
-                const existing = prev.find((item) => item.id === event.id);
-                if (existing) {
-                  return prev.map((item) =>
-                    item.id === event.id ? { ...item, text: `${item.text ?? ''}${event.text}` } : item,
-                  );
-                }
-                return [...prev, { id: event.id, kind: 'message', text: event.text }];
-              });
-            } else if (event.t === 'status') {
-              setFeed((prev) => {
-                if (prev.some((item) => item.id === event.id)) {
-                  return prev.map((item) =>
-                    item.id === event.id ? { ...item, label: event.label, state: event.state } : item,
-                  );
-                }
-                return [...prev, { id: event.id, kind: 'status', label: event.label, state: event.state }];
-              });
-            } else if (event.t === 'needs_approval') {
-              const card = (event.card ?? {}) as {
-                kind?: string;
-                opportunity_type?: string;
-                name?: string;
-                unit?: string;
-                institution?: string;
-                portal_url?: string | null;
-              };
-              if (event.gate === 'G1' && card.kind === 'program') {
-                setFeed((prev) => [
-                  ...prev,
-                  {
-                    id: `g1-${Date.now()}`,
-                    kind: 'g1',
-                    program: {
-                      name: card.name ?? 'Unknown program',
-                      unit: card.unit ?? '',
-                      institution: card.institution ?? '',
-                      portal_url: card.portal_url ?? null,
-                    },
-                    opportunity_type: typeof card.opportunity_type === 'string' ? card.opportunity_type : undefined,
-                  },
-                ]);
-              }
-            } else if (event.t === 'card') {
-              const payload = (event.payload ?? {}) as {
-                documents?: Array<RequirementDoc & { evidence_quote?: string; source_url?: string }>;
-                eligibility?: Array<RequirementRule & { evidence_quote?: string; source_url?: string }>;
-                title?: string;
-                deadlines?: string[];
-                items?: string[];
-                portalUrl?: string | null;
-                text?: string;
-              };
-              const toDoc = (d: RequirementDoc & { evidence_quote?: string; source_url?: string }): RequirementDoc => ({
-                ...d,
-                evidenceQuote: typeof d.evidence_quote === 'string' ? d.evidence_quote : undefined,
-                sourceUrl: typeof d.source_url === 'string' ? d.source_url : null,
-              });
-              const toRule = (e: RequirementRule & { evidence_quote?: string; source_url?: string }): RequirementRule => ({
-                ...e,
-                evidenceQuote: typeof e.evidence_quote === 'string' ? e.evidence_quote : undefined,
-                sourceUrl: typeof e.source_url === 'string' ? e.source_url : null,
-              });
-              if (event.kind === 'requirements' && Array.isArray(payload.documents) && Array.isArray(payload.eligibility)) {
-                setPendingCards((prev) => ({
-                  ...(prev ?? {}),
-                  requirements: {
-                    documents: (payload.documents ?? []).map(toDoc),
-                    eligibility: (payload.eligibility ?? []).map(toRule),
-                  },
-                }));
-              } else if (
-                event.kind === 'plan' &&
-                typeof payload.title === 'string' &&
-                Array.isArray(payload.deadlines) &&
-                Array.isArray(payload.items)
-              ) {
-                setPendingCards((prev) => ({
-                  ...(prev ?? {}),
-                  plan: {
-                    title: payload.title as string,
-                    deadlines: payload.deadlines as string[],
-                    items: payload.items as string[],
-                    portalUrl: typeof payload.portalUrl === 'string' ? payload.portalUrl : null,
-                  },
-                }));
-              } else if (event.kind === 'rolling_notice' && typeof payload.text === 'string') {
-                setPendingCards((prev) => ({ ...(prev ?? {}), rolling: { text: payload.text as string } }));
-              }
-            } else if (event.t === 'error') {
-              setFeed((prev) => [...prev, { id: `err-${Date.now()}`, kind: 'error', text: event.friendly, link: event.link }]);
-            }
-          }
-        }
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await pump(res);
     } catch {
       setFeed((prev) => [
         ...prev,
         { id: `err-${Date.now()}`, kind: 'error', text: 'Something went wrong on my side. Give it a minute and try again.' },
       ]);
     } finally {
-      setBusy(false);
+      leaveStream();
       feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight });
     }
     },
-    [busy, chatId],
+    [busy, chatId, enterStream, leaveStream, pump],
   );
 
   const send = useCallback((): void => {
@@ -380,6 +478,8 @@ function ChatContent(): React.JSX.Element {
                         type="button"
                         onClick={() => {
                           patch(item.id, { decision: 'yes' });
+                          g1YesRef.current = true;
+                          void resumeRef.current({ gate: 'G1', decision: { confirmed: true }, opId: crypto.randomUUID() });
                           setFeed((prev) => {
                             const extra: FeedItem[] = [];
                             if (pendingCards?.requirements) {
@@ -408,6 +508,7 @@ function ChatContent(): React.JSX.Element {
                         onClick={() => {
                           patch(item.id, { decision: 'no' });
                           setPendingCards(null);
+                          void resumeRef.current({ gate: 'G1', decision: { confirmed: false }, opId: crypto.randomUUID() });
                         }}
                         className="rounded-full bg-black/[0.07] px-4 py-2 text-sm font-medium text-black"
                       >
@@ -425,6 +526,59 @@ function ChatContent(): React.JSX.Element {
                   {item.decision === 'no' && (
                     <p className="mt-3 text-sm text-[#3A3A3A]">No problem — paste a different link and I&apos;ll check that one.</p>
                   )}
+                </div>
+              );
+            }
+            if (item.kind === 'g2' && item.conflicts) {
+              return (
+                <div key={item.id} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
+                  <p className="text-sm font-medium">{item.what ?? 'Two official pages disagree. Which one looks right to you?'}</p>
+                  <ul className="mt-2 space-y-2">
+                    {item.conflicts.map((c, i) => (
+                      <li key={i} className="text-[13px] text-[#3A3A3A]">
+                        <span className="font-medium text-black">{c.field}</span>
+                        <ul className="mt-1 space-y-1">
+                          {c.values.map((v, j) => (
+                            <li key={j}>
+                              {v.iso ?? 'no date'} ·{' '}
+                              <a href={v.source_url} target="_blank" rel="noreferrer" className="underline underline-offset-[3px]">
+                                source
+                              </a>
+                              <span className="block italic">“{v.quote.slice(0, 140)}”</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
+                  </ul>
+                  {item.resolved !== true && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        patch(item.id, { resolved: true });
+                        void resumeRef.current({ gate: 'G2', decision: { useBest: true }, opId: crypto.randomUUID() });
+                      }}
+                      className="mt-3 rounded-full bg-black px-4 py-2 text-sm font-medium text-white"
+                    >
+                      Continue with your best read
+                    </button>
+                  )}
+                </div>
+              );
+            }
+            if (item.kind === 'coverage' && item.lines) {
+              return (
+                <div key={item.id} className="rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-[15px] shadow-sm">
+                  {item.lines.map((line, i) => (
+                    <p key={i} className={i > 0 ? 'mt-1' : undefined}>
+                      {line}
+                    </p>
+                  ))}
+                  {(item.unreadable ?? []).map((u) => (
+                    <a key={u.url} href={u.url} target="_blank" rel="noreferrer" className="mt-1 block text-sm underline">
+                      Open the page
+                    </a>
+                  ))}
                 </div>
               );
             }

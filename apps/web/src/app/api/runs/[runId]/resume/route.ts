@@ -1,6 +1,14 @@
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { FileRunStore, createDeepScanStep, resumeRun, type Gate } from '@mizzou/core';
+import {
+  DEFAULT_MAX_TURNS,
+  SAY_STUCK,
+  continueRun,
+  createDeepScanStep,
+  encodeSseEvent,
+  resumeRun,
+  type Gate,
+  type RunEvent,
+} from '@mizzou/core';
+import { runsStore } from '@/lib/runs';
 
 export const maxDuration = 60;
 
@@ -11,11 +19,11 @@ function badRequest(message: string): Response {
 }
 
 /**
- * POST /api/runs/[runId]/resume — record a gate decision and continue the run.
- * Body: { gate: 'G1'|'G2'|'G3'|'G4'|'G5', decision: unknown, opId: string }.
- * The opId is an idempotency key: repeating it replays the stored row with
- * { duplicate: true } and never re-runs the step. Fresh decisions continue
- * the deep scan inside this route's 60s budget (the loop stops at 80%).
+ * POST /api/runs/[runId]/resume — continue the agent over server-sent events.
+ * Body always carries { opId } (idempotency key) and, when answering a gate,
+ * { gate, decision }. A repeated opId replays without stepping again.
+ * Terminal frames: needs_approval on a gate, continue when only time ran
+ * out (the client re-posts with a fresh opId), done with the run id.
  */
 export async function POST(req: Request, ctx: { params: Promise<{ runId: string }> }): Promise<Response> {
   const { runId } = await ctx.params;
@@ -25,47 +33,90 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
   } catch {
     return badRequest('Expected a JSON body.');
   }
-  const gate = (body as { gate?: unknown }).gate;
-  const decision = (body as { decision?: unknown }).decision;
-  const opId = (body as { opId?: unknown }).opId;
-  if (typeof gate !== 'string' || !GATES.has(gate)) {
-    return badRequest('Expected gate to be one of G1, G2, G3, G4, G5.');
-  }
-  if (!('decision' in (body as Record<string, unknown>))) {
-    return badRequest('Expected a decision value.');
-  }
+  const record = body as Record<string, unknown>;
+  const gate = record['gate'];
+  const decision = record['decision'];
+  const opId = record['opId'];
   if (typeof opId !== 'string' || opId.length === 0 || opId.length > 128) {
     return badRequest('Expected opId to be a non-empty string up to 128 characters.');
   }
-  const store = new FileRunStore(join(process.env.MIZZOU_DATA_DIR ?? join(tmpdir(), 'mizzou'), 'runs'));
-  try {
-    const { run, duplicate, needsResume, events } = await resumeRun(
-      runId,
-      store,
-      { gate: gate as Gate, decision, opId },
-      createDeepScanStep(),
-      { deadlineMs: 60_000 },
-    );
-    return Response.json({
-      runId,
-      duplicate,
-      status: run.status,
-      pendingGate: run.pendingGate,
-      needsResume,
-      events,
-      result: (run.state as { result?: unknown }).result ?? null,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Resume failed.';
-    if (message.startsWith('unknown run:')) {
-      return Response.json({ error: 'Unknown run.' }, { status: 404 });
+  const answering = gate !== undefined || 'decision' in record;
+  if (answering) {
+    if (typeof gate !== 'string' || !GATES.has(gate)) {
+      return badRequest('Expected gate to be one of G1, G2, G3, G4, G5.');
     }
-    if (message.startsWith('no open ')) {
-      return Response.json({ error: message }, { status: 409 });
+    if (!('decision' in record)) {
+      return badRequest('Expected a decision value.');
     }
-    if (message.startsWith('unsafe run id:')) {
-      return badRequest('Invalid run id.');
-    }
-    return Response.json({ error: 'Resume failed.' }, { status: 500 });
   }
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const enc = new TextEncoder();
+      const send = (e: RunEvent): void => {
+        controller.enqueue(enc.encode(encodeSseEvent(e)));
+      };
+      const fail = (friendly: string, link?: string): void => {
+        send({ t: 'error', friendly, link });
+        send({ t: 'done', runId });
+        controller.close();
+      };
+      try {
+        const store = runsStore();
+        const step = createDeepScanStep();
+        const outcome = answering
+          ? await resumeRun(
+              runId,
+              store,
+              { gate: gate as Gate, decision, opId },
+              step,
+              { maxTurns: DEFAULT_MAX_TURNS, onEvent: send },
+            )
+          : await continueRun(runId, store, opId, step, { maxTurns: DEFAULT_MAX_TURNS, onEvent: send });
+        const run = outcome.run;
+        if (run.pendingGate) {
+          const evidence = run.pendingGate.evidence as { card?: unknown } | Record<string, unknown> | null | undefined;
+          const base =
+            evidence && typeof evidence === 'object' && 'card' in evidence && evidence.card !== null && typeof evidence.card === 'object'
+              ? (evidence.card as Record<string, unknown>)
+              : ((evidence as Record<string, unknown> | null | undefined) ?? {});
+          send({
+            t: 'needs_approval',
+            gate: run.pendingGate.gate,
+            card: { ...base, what: run.pendingGate.what },
+          });
+        } else if (outcome.needsResume && run.status === 'running') {
+          if (run.turnCount < DEFAULT_MAX_TURNS) {
+            send({ t: 'continue', runId });
+          } else {
+            fail(SAY_STUCK);
+            return;
+          }
+        }
+        send({ t: 'done', runId });
+        controller.close();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Resume failed.';
+        if (message.startsWith('unknown run:')) {
+          fail('I could not find that run. Send the link again and I\u2019ll start over.');
+        } else if (message.startsWith('no open ')) {
+          fail('That question is no longer open. Send the link again and I\u2019ll start over.');
+        } else if (message.startsWith('unsafe run id:')) {
+          fail('That run id looks wrong. Send the link again and I\u2019ll start over.');
+        } else if (message === 'budget hit' || message.includes('budget')) {
+          fail('I need a minute.');
+        } else {
+          fail('Something went wrong on my side. Give it a minute and try again.');
+        }
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    },
+  });
 }

@@ -30,19 +30,11 @@ export default function LandingPage() {
         <div className={styles.blob3} />
       </div>
 
-      <div className={styles.topbar}>
-        <div className={`mz-wordmark ${styles.topWordmark}`}>Mizzou</div>
-        <Link href="/signup" className={styles.topLogin}>
-          Log in
-        </Link>
-      </div>
-
       <div className={`mz-fg ${styles.screen}`}>
         <div className={styles.lead}>
           <div className={styles.hero}>
             <div className={`mz-wordmark ${styles.wordmark}`}>Mizzou</div>
             <p className={styles.headline}>From link to executed application.</p>
-            <div className={`mz-glass ${styles.pill}`}>You approve every step</div>
           </div>
 
           <div className={styles.cta}>

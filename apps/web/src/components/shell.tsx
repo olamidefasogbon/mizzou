@@ -15,11 +15,17 @@ function TopBar({
   onMenu,
   onNewChat,
   menuRef,
+  panelOpen,
 }: {
   onMenu: () => void;
   onNewChat: () => void;
   menuRef: React.RefObject<HTMLButtonElement | null>;
+  panelOpen: boolean;
 }) {
+  // One wordmark per screen: while the panel (which carries its own
+  // wordmark) is open, the bar's menu button and wordmark hide. They stay
+  // mounted so focus returns to the menu button on close.
+  const hidden = panelOpen ? shell.barHidden : '';
   return (
     <div className={shell.topbar}>
       <button
@@ -27,13 +33,15 @@ function TopBar({
         type="button"
         onClick={onMenu}
         aria-label="Open menu"
-        className={`mz-glass mz-icon-btn ${shell.topLeft}`}
+        aria-hidden={panelOpen}
+        tabIndex={panelOpen ? -1 : undefined}
+        className={`mz-glass mz-icon-btn ${shell.topLeft} ${hidden}`}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
           <path d="M4 8h16M4 16h10" />
         </svg>
       </button>
-      <div className={`mz-wordmark ${shell.wordmark}`} aria-hidden="true">
+      <div className={`mz-wordmark ${shell.wordmark} ${hidden}`} aria-hidden="true">
         Mizzou
       </div>
       <button
@@ -90,7 +98,7 @@ function ShellBody({ children }: { children: React.ReactNode }) {
 
   return (
     <div className={`mz-shell ${shell.root}`}>
-      <TopBar onMenu={() => setPanelOpen(true)} onNewChat={goNew} menuRef={menuRef} />
+      <TopBar onMenu={() => setPanelOpen(true)} onNewChat={goNew} menuRef={menuRef} panelOpen={panelOpen} />
       <div className={shell.main}>
         <div className={shell.mainInner}>{children}</div>
       </div>

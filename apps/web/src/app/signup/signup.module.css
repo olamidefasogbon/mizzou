@@ -120,7 +120,7 @@
 }
 
 /* Tablet: centered glass card 480px, back button inside its top-left. */
-@media (min-width: 768px) and (max-width: 1099px) {
+@media (min-width: 768px) and (max-width: 1023px) {
   .blob1 {
     top: 60px;
     right: -160px;
@@ -173,8 +173,9 @@
 }
 
 /* Desktop: split screen. Wordmark + headline left, 440px card right,
-   back button at the viewport top-left. */
-@media (min-width: 1100px) {
+   back button at the viewport top-left. The card wordmark hides here:
+   the left brand block is the single wordmark. */
+@media (min-width: 1024px) {
   .blob1 {
     top: 80px;
     right: -180px;
@@ -245,6 +246,10 @@
   .card {
     width: 440px;
     max-width: 100%;
+  }
+
+  .card .wordmark {
+    display: none;
   }
 
   .footer {

@@ -58,6 +58,7 @@
 - M3 remainder actual: live pass with card events ≈ **$0.04**; ICS route test
   $0.00. Cumulative paid-model spend now **≈ $0.135** (cap $10).
 - Item-2 rerun estimate (stated BEFORE the run): < $0.05 for one reader call on the saved fixture (at most one repair retry). Actual: **$0.0377** (case-01, 1/1). Cumulative paid-model spend now **≈ $0.173** (cap $10). First attempt spent $0.00 (import error before any model call).
+- M4 step-1 estimate (stated BEFORE the run): one minimal-effort `/v1/responses` call with `web_search` ≈ **< $0.01** (~$0.0005 model + ~$0.0025 per-query search). Actual: in 2152 + out 171 → model **$0.0034**; no search line item in `usage` (dashboard-side). Cumulative paid-model spend now **≈ $0.176** (cap $10). Shape recorded in `docs/META_API_NOTES.md` §3.
 
 ## Decisions
 

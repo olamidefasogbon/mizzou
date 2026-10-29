@@ -56,9 +56,31 @@ through it (reader role, `response_format: {type:"json_object"}`, one repair
 retry) and returned schema-valid extraction. So both `/v1/responses` and the
 SDK chat-completions path work with `muse-spark-1.3`.
 
-## 3. Built-in search tool syntax / citations / billing — PENDING
+## 3. Built-in search tool syntax / citations / billing — VERIFIED (M4 step 1)
 
-Not yet exercised. Needed before M4 (search grounding in the orchestrator).
+One minimal-effort call, prompt "Use the web_search tool to check: which
+university hosts the OIST research internship program? ...", with
+`"tools": [{"type": "web_search"}]` (OpenAI Responses shape — accepted as-is).
+
+Observed item flow in `output[]`: `reasoning` → `message` ("I'll search to
+confirm ...") → `web_search_call` → `reasoning` → final `message`.
+`web_search_call` shape:
+
+```json
+{"type": "web_search_call", "id": "ws_call_<uuid>", "status": "completed",
+ "action": {"type": "search", "query": "<model-written query>"}}
+```
+
+- No separate citations came back on this call: both messages carry
+  `annotations: []`, and the final answer folds the result into plain text.
+  A citations-bearing shape (URL annotations) is NOT yet observed — the
+  orchestrator must not assume `annotations[0].url` exists.
+- Message items now carry an extra `phase` key vs the day-one shape.
+- `usage` for this call: `{input_tokens: 2152, output_tokens: 171,
+  reasoning_tokens: 37}` — input is large for a short prompt (search
+  context counts as input). No separate search line item in `usage`;
+  search billing is dashboard-side (spec list price $2.50 / 1k queries).
+- Model cost of the probe: 2152/1e6×$1.25 + 171/1e6×$4.25 ≈ **$0.0034**.
 
 ## 4. Structured output parameter — PARTIAL
 

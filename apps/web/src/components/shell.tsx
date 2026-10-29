@@ -53,11 +53,24 @@ function TopBar({
 function ShellBody({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelSection, setPanelSection] = useState<string | null>(null);
   const menuRef = useRef<HTMLButtonElement | null>(null);
 
   const closePanel = useCallback(() => {
     setPanelOpen(false);
+    setPanelSection(null);
     menuRef.current?.focus();
+  }, []);
+
+  // Home's "See all" opens the menu at a section (UI_CORRECTIONS.md 3).
+  useEffect(() => {
+    const onOpenPanel = (e: Event) => {
+      const section = (e as CustomEvent<{ section?: string }>).detail?.section ?? null;
+      setPanelSection(section);
+      setPanelOpen(true);
+    };
+    window.addEventListener('mz:open-panel', onOpenPanel);
+    return () => window.removeEventListener('mz:open-panel', onOpenPanel);
   }, []);
 
   const goNew = useCallback(() => {
@@ -85,7 +98,7 @@ function ShellBody({ children }: { children: React.ReactNode }) {
         <>
           <button type="button" aria-label="Close menu" className={shell.scrim} onClick={closePanel} />
           <div className={shell.overlay} role="dialog" aria-modal="true" aria-label="Menu">
-            <Panel onNavigate={goNew} onClose={closePanel} />
+            <Panel onNavigate={goNew} onClose={closePanel} section={panelSection} />
           </div>
         </>
       ) : null}

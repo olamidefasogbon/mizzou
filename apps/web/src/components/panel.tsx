@@ -10,13 +10,23 @@ import styles from './panel.module.css';
 // (drawer) and docs/design/html/Logout.html (modal). Lists render only real
 // store rows: empty until reminders/chats exist. No demo data in app code.
 
-export function Panel({ onNavigate, onClose }: { onNavigate: () => void; onClose: () => void }) {
+export function Panel({
+  onNavigate,
+  onClose,
+  section,
+}: {
+  onNavigate: () => void;
+  onClose: () => void;
+  /** Home "See all" opens the panel scrolled to this section. */
+  section?: string | null;
+}) {
   const router = useRouter();
   const { name, reminders, chats, clearChats, undoClearChats, undoArmed, expireUndo } = useStore();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const remindersRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -60,6 +70,13 @@ export function Panel({ onNavigate, onClose }: { onNavigate: () => void; onClose
     return () => document.removeEventListener('keydown', onKey, true);
   }, [onClose]);
 
+  // Home "See all" lands the panel at Reminders.
+  useEffect(() => {
+    if (section !== 'reminders') return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    remindersRef.current?.scrollIntoView({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+  }, [section]);
+
   useEffect(() => {
     if (!undoArmed) return;
     if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -94,7 +111,7 @@ export function Panel({ onNavigate, onClose }: { onNavigate: () => void; onClose
         <span className={styles.settingsLabel}>New chat</span>
       </button>
 
-      <div className={styles.sectionRow}>
+      <div className={styles.sectionRow} ref={remindersRef}>
         <span className={styles.sectionLabel}>Reminders</span>
         <span className={styles.countBadge}>{reminders.filter((r) => !r.done).length}</span>
       </div>

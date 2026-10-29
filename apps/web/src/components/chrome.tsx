@@ -152,6 +152,7 @@ export function Composer({
   menuOpen,
   onToggleMenu,
   onPick,
+  docked = true,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -159,11 +160,13 @@ export function Composer({
   menuOpen: boolean;
   onToggleMenu: () => void;
   onPick: (file: File) => void;
+  /** Absolute bottom-dock (conversation, mobile home) vs in-flow (tablet/desktop home). */
+  docked?: boolean;
 }) {
   return (
     <div
       style={{
-        position: "absolute",
+        position: docked ? "absolute" : "static",
         left: 0,
         right: 0,
         bottom: 0,

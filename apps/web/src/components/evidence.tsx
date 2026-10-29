@@ -1,9 +1,10 @@
 'use client';
 
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 
 // Selected "Where I found this" evidence, shared between the conversation
-// cards and the right-hand rail (1100px+). No data fetching here.
+// cards and the per-device overlay (docs/design/UI_CORRECTIONS.md 4).
+// No data fetching here.
 
 export interface SelectedEvidence {
   title: string;
@@ -14,16 +15,19 @@ export interface SelectedEvidence {
 const EvidenceContext = createContext<{
   selected: SelectedEvidence | null;
   select: (e: SelectedEvidence) => void;
-}>({ selected: null, select: () => {} });
+  clear: () => void;
+}>({ selected: null, select: () => {}, clear: () => {} });
 
 export function useEvidence(): {
   selected: SelectedEvidence | null;
   select: (e: SelectedEvidence) => void;
+  clear: () => void;
 } {
   return useContext(EvidenceContext);
 }
 
 export function EvidenceProvider({ children }: { children: ReactNode }) {
   const [selected, setSelected] = useState<SelectedEvidence | null>(null);
-  return <EvidenceContext.Provider value={{ selected, select: setSelected }}>{children}</EvidenceContext.Provider>;
+  const clear = useCallback(() => setSelected(null), []);
+  return <EvidenceContext.Provider value={{ selected, select: setSelected, clear }}>{children}</EvidenceContext.Provider>;
 }

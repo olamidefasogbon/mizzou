@@ -6,6 +6,7 @@ import { ArrowUp, Check, Download, Loader2, X } from 'lucide-react';
 import { formatG1Prompt } from '@mizzou/core';
 import { Blobs } from '@/components/chrome';
 import { useEvidence } from '@/components/evidence';
+import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { ensureChatAction } from '@/lib/actions';
 
 function g1Title(program: { name: string; unit: string; institution: string }, opportunityType?: string): {
@@ -320,8 +321,12 @@ function ChatContent(): React.JSX.Element {
     void sendText(initialQ);
   }, [initialQ, chatId, router, sendText]);
 
-  const { select } = useEvidence();
-  const [openEvidence, setOpenEvidence] = useState<string | null>(null);
+  const { select, clear } = useEvidence();
+
+  // The overlay belongs to one chat: changing chats closes it.
+  useEffect(() => {
+    clear();
+  }, [chatId, clear]);
 
   return (
     <div className="relative z-[1] flex w-full flex-1 flex-col px-4 pb-6 pt-[116px] text-black">
@@ -435,7 +440,6 @@ function ChatContent(): React.JSX.Element {
                       <p className="text-[13px] font-medium text-[#3A3A3A]">Documents</p>
                       <ul className="mt-1 space-y-1.5">
                         {item.requirements.documents.map((d, i) => {
-                          const evKey = `req-${item.id}-d-${i}`;
                           return (
                             <li key={i} className="flex items-start gap-2 text-[15px]">
                               {needsLook(d.confidence, d.needs_human) ? (
@@ -455,22 +459,11 @@ function ChatContent(): React.JSX.Element {
                                       type="button"
                                       className="text-[13px] text-black underline underline-offset-[3px]"
                                       onClick={() => {
-                                        setOpenEvidence(openEvidence === evKey ? null : evKey);
                                         select({ title: d.name, quote: d.evidenceQuote as string, sourceUrl: d.sourceUrl ?? null });
                                       }}
                                     >
                                       Where I found this
                                     </button>
-                                    {openEvidence === evKey ? (
-                                      <span className="mt-1 block rounded-xl border border-black/10 bg-white p-2.5 text-sm text-[#3A3A3A]">
-                                        &ldquo;{d.evidenceQuote}&rdquo;
-                                        {d.sourceUrl ? (
-                                          <a href={d.sourceUrl} target="_blank" rel="noreferrer" className="mt-1 block text-sm text-black underline">
-                                            Open the source page
-                                          </a>
-                                        ) : null}
-                                      </span>
-                                    ) : null}
                                   </span>
                                 ) : null}
                               </span>
@@ -485,7 +478,6 @@ function ChatContent(): React.JSX.Element {
                       <p className="text-[13px] font-medium text-[#3A3A3A]">Eligibility</p>
                       <ul className="mt-1 space-y-1.5">
                         {item.requirements.eligibility.map((e, i) => {
-                          const evKey = `req-${item.id}-e-${i}`;
                           return (
                             <li key={i} className="flex items-start gap-2 text-[15px]">
                               {needsLook(e.confidence, e.needs_human) ? (
@@ -503,22 +495,11 @@ function ChatContent(): React.JSX.Element {
                                       type="button"
                                       className="text-[13px] text-black underline underline-offset-[3px]"
                                       onClick={() => {
-                                        setOpenEvidence(openEvidence === evKey ? null : evKey);
                                         select({ title: e.rule, quote: e.evidenceQuote as string, sourceUrl: e.sourceUrl ?? null });
                                       }}
                                     >
                                       Where I found this
                                     </button>
-                                    {openEvidence === evKey ? (
-                                      <span className="mt-1 block rounded-xl border border-black/10 bg-white p-2.5 text-sm text-[#3A3A3A]">
-                                        &ldquo;{e.evidenceQuote}&rdquo;
-                                        {e.sourceUrl ? (
-                                          <a href={e.sourceUrl} target="_blank" rel="noreferrer" className="mt-1 block text-sm text-black underline">
-                                            Open the source page
-                                          </a>
-                                        ) : null}
-                                      </span>
-                                    ) : null}
                                   </span>
                                 ) : null}
                               </span>
@@ -626,6 +607,7 @@ function ChatContent(): React.JSX.Element {
             <ArrowUp className="h-4 w-4" />
           </button>
         </div>
+        <EvidenceOverlay />
     </div>
   );
 }

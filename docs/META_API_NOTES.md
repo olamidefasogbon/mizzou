@@ -88,9 +88,24 @@ confirm ...") → `web_search_call` → `reasoning` → final `message`.
 (baseline extraction validated against the zod schema after one repair).
 Native Responses-API structured-output parameter shape still unverified.
 
-## 5. Function-calling loop shape — PENDING
+## 5. Function-calling loop shape — VERIFIED (orchestrator loop)
 
-Call ids, parallel calls, streamed arguments not yet observed (needed M4).
+Two tiny probes (echo tool, then `previous_response_id` continuation).
+
+- Definition accepted as-is (OpenAI Responses shape):
+  `tools: [{type: 'function', name, description, parameters (JSON Schema)}]`.
+- The model emits `output[]` item `{type: 'function_call', id, call_id,
+  name, arguments (JSON string), status: 'completed'}`.
+- Continue with `previous_response_id: <first response id>` plus
+  `input: [{type: 'function_call_output', call_id, output (string)}]`.
+  Do NOT replay `function_call` items as input — that triggered a spurious
+  refusal. `call_id` (not `id`) links outputs to calls. Parallel calls and
+  streamed arguments not yet observed.
+- Quirk: one toy follow-up returned empty text after heavy reasoning
+  (562 reasoning tokens). The loop treats empty-text-with-no-calls as
+  finish, never as a retry.
+- `usage` present on every call; no search/citation line items.
+- Probe cost ≈ $0.007 for 4 tiny calls.
 
 ## 6. Streaming event format; error/429 shapes — PENDING
 

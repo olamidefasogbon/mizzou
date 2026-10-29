@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { advance, recordDecision } from './advance.js';
+import { advance, recordDecision, resumeRun } from './advance.js';
 import { FileRunStore } from './store.js';
 import { newRun } from './types.js';
 
@@ -96,6 +96,32 @@ describe('advance', () => {
       expect(stepped).toBe(false);
       expect(run.status).toBe('running');
       expect(needsResume).toBe(true);
+    } finally {
+      await cleanup(dir);
+    }
+  });
+
+  it('resumes a decided run exactly once per opId', async () => {
+    const { store, dir } = await freshStore();
+    try {
+      await store.save(newRun('r9'));
+      const gate = { gate: 'G2' as const, what: 'Which date?', evidence: null, options: null };
+      await advance('r9', store, async () => ({ events: [], gate }));
+      let steps = 0;
+      const step = async () => {
+        steps += 1;
+        return { events: [{ t: 'done' as const, runId: 'r9' }], finished: { ok: 1 } };
+      };
+      const first = await resumeRun('r9', store, { gate: 'G2', decision: 'a', opId: 'op-9' }, step);
+      expect(first.duplicate).toBe(false);
+      expect(first.run.status).toBe('done');
+      expect(first.events).toHaveLength(1);
+      expect(steps).toBe(1);
+      const replay = await resumeRun('r9', store, { gate: 'G2', decision: 'a', opId: 'op-9' }, step);
+      expect(replay.duplicate).toBe(true);
+      expect(replay.events).toEqual([]);
+      expect(steps).toBe(1);
+      expect(replay.run.decisions).toHaveLength(1);
     } finally {
       await cleanup(dir);
     }

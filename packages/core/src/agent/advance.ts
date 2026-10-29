@@ -85,6 +85,39 @@ export async function advance(
   return { run, needsResume: run.status === 'running' };
 }
 
+export interface ResumeResult {
+  run: RunRecord;
+  /** True when the opId was already applied: nothing re-ran. */
+  duplicate: boolean;
+  needsResume: boolean;
+  events: RunEvent[];
+}
+
+/**
+ * The POST /api/runs/[runId]/resume composition: record the gate decision,
+ * then continue the run when the decision was fresh. A repeated opId replays
+ * the stored row and returns no events without running the step again.
+ */
+export async function resumeRun(
+  runId: string,
+  store: RunStore,
+  decision: GateDecision,
+  step: StepFn,
+  opts: AdvanceOptions = {},
+): Promise<ResumeResult> {
+  const { run, duplicate } = await recordDecision(runId, store, decision);
+  if (duplicate) return { run, duplicate: true, needsResume: false, events: [] };
+  const events: RunEvent[] = [];
+  const { run: advanced, needsResume } = await advance(runId, store, step, {
+    ...opts,
+    onEvent: (event) => {
+      events.push(event);
+      opts.onEvent?.(event);
+    },
+  });
+  return { run: advanced, duplicate: false, needsResume, events };
+}
+
 /**
  * Continue a halted run after a gate decision (POST /api/runs/[runId]/resume).
  * A repeated opId replays the stored row without applying anything twice.

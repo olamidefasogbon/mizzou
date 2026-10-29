@@ -8,7 +8,8 @@
     "typecheck": "pnpm --filter @mizzou/core typecheck",
     "eval": "pnpm --filter @mizzou/eval eval",
     "dev:seed": "node scripts/dev-seed.mjs seed",
-    "dev:unseed": "node scripts/dev-seed.mjs unseed"
+    "dev:unseed": "node scripts/dev-seed.mjs unseed",
+    "fixture:fetch": "node scripts/fixture-fetch.mjs"
   },
   "keywords": [],
   "author": "",

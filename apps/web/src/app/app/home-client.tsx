@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Blobs, Composer } from '@/components/chrome';
 import { useStore } from '@/components/store-context';
-import type { Reminder } from '@/lib/stores';
+import { DISMISS_COOKIE, remindersVersion, shouldShowComingUp } from './coming-up';
 import styles from './home.module.css';
 
 // Home. Matched files: docs/design/html/Chat.html (greeting, Coming up,
@@ -13,8 +13,10 @@ import styles from './home.module.css';
 // "Howdy" and no Coming up card. No demo data in app code.
 //
 // Coming up (docs/design/UI_CORRECTIONS.md section 3): renders only when at
-// least one reminder exists. Closing stores the reminders version locally;
-// a new or newly-due reminder changes the version, so the card returns.
+// least one reminder exists. The dismissal version arrives as a prop, read
+// from the request cookie before first paint, so the card never renders
+// then hides. A new or newly-due reminder changes the version, so the card
+// returns.
 
 const ROTATING_WORDS = [
   'scholarships',
@@ -29,13 +31,7 @@ const ROTATING_WORDS = [
   'conferences',
 ];
 
-const DISMISS_KEY = 'mz-comingup-dismissed';
-
-function remindersVersion(reminders: Reminder[]): string {
-  return reminders.map((r) => `${r.id}:${r.pill}:${r.done}:${r.dueAt ?? ''}`).join('|');
-}
-
-export default function HomeClient() {
+export default function HomeClient({ dismissedServer }: { dismissedServer: string | null }) {
   const router = useRouter();
   const { name, reminders } = useStore();
   const [wordIndex, setWordIndex] = useState(0);
@@ -43,15 +39,8 @@ export default function HomeClient() {
   const [input, setInput] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [pickedFile, setPickedFile] = useState<string | null>(null);
-  const [dismissed, setDismissed] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      setDismissed(window.localStorage.getItem(DISMISS_KEY));
-    } catch {
-      setDismissed(null);
-    }
-  }, []);
+  // Known before first paint: the server read it from the request cookie.
+  const [dismissed, setDismissed] = useState<string | null>(dismissedServer);
 
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -73,13 +62,13 @@ export default function HomeClient() {
   };
 
   const version = useMemo(() => remindersVersion(reminders), [reminders]);
-  const showComingUp = reminders.length > 0 && dismissed !== version;
+  const showComingUp = useMemo(() => shouldShowComingUp(reminders, dismissed), [reminders, dismissed]);
 
   const dismissComingUp = () => {
     try {
-      window.localStorage.setItem(DISMISS_KEY, version);
+      document.cookie = `${DISMISS_COOKIE}=${encodeURIComponent(version)}; path=/; max-age=31536000; SameSite=Lax`;
     } catch {
-      // Storage unavailable: dismissal lasts for this view only.
+      // Cookie unavailable: dismissal lasts for this view only.
     }
     setDismissed(version);
   };

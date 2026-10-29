@@ -1,3 +1,4 @@
+import 'server-only';
 import { costForCall, estimateCostForPrompt } from './pricing.js';
 
 // Budget guard for PROMPT.md section 9.3.

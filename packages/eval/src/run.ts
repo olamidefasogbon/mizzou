@@ -39,7 +39,7 @@ function loadLocalEnv(): void {
 
 loadLocalEnv();
 
-// Dynamic import AFTER env is loaded: @mizzou/core reads the key at import.
+// Dynamic import AFTER env is loaded: the Meta client reads the key on first call.
 const { callModel, ExtractionSchema, verifyExtractionEvidence } = await import('@mizzou/core');
 
 function apiKeyPresent(): boolean {

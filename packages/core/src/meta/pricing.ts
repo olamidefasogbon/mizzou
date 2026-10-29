@@ -1,3 +1,5 @@
+import 'server-only';
+
 // Model pricing in USD per 1M tokens, from PROMPT.md section 4
 // (official model list and pricing pages, checked Oct 27).
 // Search grounding: $2.50 per 1,000 queries. Voice transcribe: $0.18/hour.

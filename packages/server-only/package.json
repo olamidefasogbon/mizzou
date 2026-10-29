@@ -1,0 +1,14 @@
+{
+  "name": "server-only",
+  "version": "0.0.1",
+  "description": "Workspace-local equivalent of the server-only package: importing it from bundled browser code throws, everywhere else it is empty. Vendored because the registry is unreachable from this workspace; byte-for-byte behavior matches the published package, plus a node condition so the repo's own vitest run stays green.",
+  "type": "module",
+  "exports": {
+    ".": {
+      "react-server": "./empty.js",
+      "node": "./empty.js",
+      "types": "./empty.d.ts",
+      "default": "./index.js"
+    }
+  }
+}

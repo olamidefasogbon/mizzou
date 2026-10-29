@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowUp, Check, Download, Loader2, X } from 'lucide-react';
-import { formatG1Prompt } from '@mizzou/core';
+import { formatG1Prompt } from '@mizzou/core/voice';
 import { Blobs } from '@/components/chrome';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';

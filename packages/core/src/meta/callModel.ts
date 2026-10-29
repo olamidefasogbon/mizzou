@@ -1,5 +1,6 @@
+import 'server-only';
 import { z } from 'zod';
-import { metaClient } from './client.js';
+import { getMetaClient } from './client.js';
 import { ModelRole, ROLE_MODEL_MAP } from './registry.js';
 import { BudgetExceededError, BudgetGuard, defaultBudgetGuard } from './budget.js';
 
@@ -74,7 +75,7 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
   while (attempt < MAX_ATTEMPTS) {
     attempt += 1;
     try {
-      const response = await metaClient.chat.completions.create({
+      const response = await getMetaClient().chat.completions.create({
         model,
         messages,
         temperature,
@@ -96,7 +97,7 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
       } catch (validationErr: unknown) {
         // Exactly one repair retry, then stop and report (spend rules).
         const message = validationErr instanceof Error ? validationErr.message : String(validationErr);
-        const repairResponse = await metaClient.chat.completions.create({
+        const repairResponse = await getMetaClient().chat.completions.create({
           model,
           messages: [
             ...messages,

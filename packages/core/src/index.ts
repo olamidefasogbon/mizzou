@@ -10,3 +10,8 @@ export * from './voice/index.js';
 export * from './agent/types.js';
 export * from './agent/store.js';
 export * from './agent/advance.js';
+export * from './deepscan/rank.js';
+export * from './deepscan/fetch.js';
+export * from './deepscan/pdf.js';
+export * from './deepscan/orchestrator.js';
+export * from './prompts/reader.js';

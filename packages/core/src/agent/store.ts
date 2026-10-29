@@ -2,7 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RunRecord } from './types.js';
 
-// Persistence seam for runs (PROMPT.md 5.3). The web app and the eval CLI
+// Persistence seam for runs (PROMPT.md 5.3). apps/web and the eval CLI
 // share this interface; only the implementation swaps at Supabase time.
 
 export interface RunStore {

@@ -52,15 +52,21 @@
   font-family: var(--mz-font);
 }
 
-/* Temporary narrow canvas for landing + sign-up until their step-2 layouts
-   land (desktop two-column and 440px card). Not for chat screens. */
-.mz-narrow {
-  width: 100%;
-  max-width: 430px;
-  min-height: 100dvh;
-  margin-inline: auto;
+/* Full-viewport background layer for landing + sign-up
+   (docs/design/UI_CORRECTIONS.md section 5). Page color and blobs live
+   here so no narrow wrapper clips them. Content sits on top of it.
+   z-index scale: blobs 0, content 1. */
+.mz-bg {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.mz-fg {
   position: relative;
-  overflow: clip;
+  z-index: 1;
 }
 
 .mz-wordmark {

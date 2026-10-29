@@ -46,13 +46,15 @@
   color: #000;
 }
 
+/* 40px type centered in the 56px bar leaves exactly 8px of clearance
+   top and bottom (UI_CORRECTIONS.md step-2 fix). */
 .wordmark {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 42px;
+  font-size: 40px;
   pointer-events: none;
 }
 
@@ -120,8 +122,10 @@
     right: 24px;
   }
 
+  /* Step-2 fix: the panel starts 16px from the top edge on tablet and
+     desktop alike, covering the top bar's menu button. */
   .overlay {
-    top: 12px;
+    top: 16px;
     bottom: 12px;
     left: 12px;
     width: 360px;

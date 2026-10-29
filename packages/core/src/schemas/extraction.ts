@@ -2,6 +2,20 @@ import { z } from 'zod';
 
 export const ConfidenceSchema = z.enum(["high", "medium", "low"]);
 
+export const OpportunityTypeSchema = z.enum([
+  "academic_program",
+  "job",
+  "fellowship",
+  "grant",
+  "competition",
+  "hackathon",
+  "scholarship",
+  "incubator",
+  "generic_opportunity",
+]);
+
+export type OpportunityType = z.infer<typeof OpportunityTypeSchema>;
+
 export const EvidencedSchema = <T extends z.ZodTypeAny>(v: T) => z.object({
   value: v,
   evidence_quote: z.string().max(400),
@@ -11,6 +25,10 @@ export const EvidencedSchema = <T extends z.ZodTypeAny>(v: T) => z.object({
   checked: z.boolean().default(false), // set by the evidence post-check
 });
 
+export const EvidencedStringSchema = EvidencedSchema(z.string());
+
+export type EvidencedString = z.infer<typeof EvidencedStringSchema>;
+
 export const DateFieldSchema = EvidencedSchema(z.object({
   iso_utc: z.string().nullable(),     // always UTC
   original_tz: z.string().nullable(), // IANA zone, or null if unstated
@@ -19,10 +37,11 @@ export const DateFieldSchema = EvidencedSchema(z.object({
 }));
 
 export const ExtractionSchema = z.object({
+  opportunity_type: OpportunityTypeSchema,
   program: z.object({
-    name: EvidencedSchema(z.string()),
-    unit: EvidencedSchema(z.string()),
-    institution: EvidencedSchema(z.string()),
+    name: EvidencedStringSchema, // Role title, Program name, Grant title, or Challenge name
+    unit: EvidencedStringSchema, // Division, Department, Team, or Track
+    institution: EvidencedStringSchema, // Company, University, Foundation, Host, or Sponsor
     portal_url: z.string().nullable(),
     language_read: z.string(),
   }),

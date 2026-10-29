@@ -4,6 +4,7 @@ import { verifyExtractionEvidence } from './evidence.js';
 
 function baseExtraction(overrides: Record<string, unknown> = {}) {
   return ExtractionSchema.parse({
+    opportunity_type: 'academic_program',
     program: {
       name: { value: 'MSc Computer Science', evidence_quote: 'MSc Computer Science', source_url: 'https://example.edu/msc', confidence: 'high', needs_human: false, checked: false },
       unit: { value: 'School of Computing', evidence_quote: 'School of Computing', source_url: 'https://example.edu/msc', confidence: 'high', needs_human: false, checked: false },

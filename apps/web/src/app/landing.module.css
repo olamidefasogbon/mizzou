@@ -210,10 +210,10 @@
   .lead {
     flex: 1;
     align-items: flex-start;
+    align-self: stretch;
     text-align: left;
     justify-content: center;
     max-width: 560px;
-    min-height: 100%;
   }
 
   .hero {

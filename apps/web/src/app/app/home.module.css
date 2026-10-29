@@ -190,9 +190,10 @@
   }
 
   /* Tablet/desktop: composer sits in flow directly below the greeting;
-     after the first message home hands off to a fresh conversation. */
+     after the first message home hands off to a fresh conversation.
+     Relative (not static) so the upload menu still anchors to it. */
   .composer {
-    position: static;
+    position: relative;
   }
 }
 

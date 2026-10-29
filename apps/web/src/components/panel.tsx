@@ -113,7 +113,9 @@ export function Panel({
 
       <div className={styles.sectionRow} ref={remindersRef}>
         <span className={styles.sectionLabel}>Reminders</span>
-        <span className={styles.countBadge}>{reminders.filter((r) => !r.done).length}</span>
+        {reminders.filter((r) => !r.done).length > 0 ? (
+          <span className={styles.countBadge}>{reminders.filter((r) => !r.done).length}</span>
+        ) : null}
       </div>
 
       <div className={styles.card}>
@@ -137,9 +139,11 @@ export function Panel({
 
       <div className={styles.sectionRowTight}>
         <span className={styles.sectionLabel}>Chats</span>
-        <button type="button" className={styles.clearAll} onClick={() => void clearChats()}>
-          Clear all
-        </button>
+        {chats.length > 0 ? (
+          <button type="button" className={styles.clearAll} onClick={() => void clearChats()}>
+            Clear all
+          </button>
+        ) : null}
       </div>
 
       <div className={styles.chatList}>

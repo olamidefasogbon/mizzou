@@ -1,7 +1,6 @@
 // Versioned system prompts (PROMPT.md: every system prompt lives here).
 // The reader turns one page of text into the extraction schema. The eval
-// harness carries its own copy for baseline stability; production reads go
-// through this module.
+// harness and the chat route import this module too — one source of truth.
 
 export const READER_SYSTEM_PROMPT =
   'You read one official admissions page into the extraction schema. Return only JSON matching the schema.';

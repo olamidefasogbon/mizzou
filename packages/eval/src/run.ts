@@ -40,7 +40,7 @@ function loadLocalEnv(): void {
 loadLocalEnv();
 
 // Dynamic import AFTER env is loaded: the Meta client reads the key on first call.
-const { callModel, ExtractionSchema, verifyExtractionEvidence } = await import('@mizzou/core');
+const { buildReaderPrompt, callModel, ExtractionSchema, READER_SYSTEM_PROMPT, verifyExtractionEvidence } = await import('@mizzou/core');
 
 function apiKeyPresent(): boolean {
   return Boolean(process.env.MODEL_API_KEY || process.env.META_API_KEY);
@@ -70,23 +70,6 @@ interface ExpectedCase {
   // every date must still come from the page with an exact evidence quote.
   program_hint?: string | null;
 }
-
-const READER_PROMPT = (pageText: string, sourceUrl: string, programHint?: string | null): string =>
-  `Extract application facts from the page text below. Return ONLY one JSON object with EXACTLY this structure ` +
-  `(all keys present; null or [] where nothing is found; never guess a date):\n` +
-  (programHint
-    ? `Confirmed program context (post-G1): extract ALL deadlines on the page, and make sure the deadline for "${programHint}" is included with an exact evidence quote.\n`
-    : '') +
-  `{"opportunity_type": one of [academic_program|job|fellowship|grant|competition|hackathon|scholarship|incubator|generic_opportunity] — classify what the page offers,\n` +
-  ` "program": {"name": EV_STR, "unit": EV_STR, "institution": EV_STR, "portal_url": string|null, "language_read": string},\n` +
-  ` "opens": DATEFIELD|null,\n` +
-  ` "deadlines": [{"label": string, "field": DATEFIELD}],\n` +
-  ` "documents": [{"value": {"name": string, "limit": string|null, "optional": boolean}, "evidence_quote": string, "source_url": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}],\n` +
-  ` "eligibility": [{"value": {"rule": string, "hard": boolean}, "evidence_quote": string, "source_url": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}],\n` +
-  ` "people": [EV_STR], "tests": [EV_STR], "money": [EV_STR], "unusual_rules": [EV_STR]}\n` +
-  `where EV_STR = {"value": string, "evidence_quote": string (max 400 chars, copied verbatim from the page text, must support the value), "source_url": string (always "${sourceUrl}"), "confidence": CONF, "needs_human": boolean, "checked": boolean},\n` +
-  `CONF = "high"|"medium"|"low", and DATEFIELD = {"value": {"iso_utc": string|null (UTC as YYYY-MM-DDTHH:MM:SSZ), "original_tz": string|null, "all_day": boolean, "rolling": boolean}, "evidence_quote": string, "source_url": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}.\n` +
-  `PAGE TEXT:\n${pageText}`;
 
 interface CaseResult {
   id: string;
@@ -123,8 +106,8 @@ async function runCase(c: ExpectedCase): Promise<CaseResult> {
 
   const result = await callModel({
     role: 'reader',
-    systemPrompt: 'You read one official admissions page into the extraction schema. Return only JSON matching the schema.',
-    prompt: READER_PROMPT(pageText, c.input.value, c.program_hint ?? null),
+    systemPrompt: READER_SYSTEM_PROMPT,
+    prompt: buildReaderPrompt(pageText, c.input.value, c.program_hint ?? null),
     schema: ExtractionSchema,
     temperature: 0,
     userId: 'eval',

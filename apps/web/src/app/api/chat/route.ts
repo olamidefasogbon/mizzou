@@ -1,5 +1,7 @@
 import {
+  buildReaderPrompt,
   ExtractionSchema,
+  READER_SYSTEM_PROMPT,
   SAY_BUDGET_HIT,
   SAY_ON_IT,
   SAY_PAGE_WOULD_NOT_OPEN,
@@ -36,20 +38,6 @@ function isUrl(text: string): string | null {
     return null;
   }
 }
-
-const READER_PROMPT = (pageText: string, sourceUrl: string): string =>
-  `Extract application facts from the page text below. Return ONLY one JSON object with EXACTLY this structure ` +
-  `(all keys present; null or [] where nothing is found; never guess a date):\n` +
-  `{"opportunity_type": one of [academic_program|job|fellowship|grant|competition|hackathon|scholarship|incubator|generic_opportunity] — classify what the page offers (a degree program, a job posting, a funding call, an event, or generic_opportunity when unclear),\n` +
-  ` "program": {"name": EV_STR, "unit": EV_STR, "institution": EV_STR, "portal_url": string|null, "language_read": string},\n` +
-  ` "opens": DATEFIELD|null,\n` +
-  ` "deadlines": [{"label": string, "field": DATEFIELD}],\n` +
-  ` "documents": [{"value": {"name": string, "limit": string|null, "optional": boolean}, "evidence_quote": string, "source_url": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}],\n` +
-  ` "eligibility": [{"value": {"rule": string, "hard": boolean}, "evidence_quote": string, "source_url": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}],\n` +
-  ` "people": [EV_STR], "tests": [EV_STR], "money": [EV_STR], "unusual_rules": [EV_STR]}\n` +
-  `where EV_STR = {"value": string, "evidence_quote": string (max 400 chars, copied verbatim from the page text, must support the value), "source_url": string (always "${sourceUrl}"), "confidence": CONF, "needs_human": boolean, "checked": boolean},\n` +
-  `CONF = "high"|"medium"|"low", and DATEFIELD = {"value": {"iso_utc": string|null (UTC as YYYY-MM-DDTHH:MM:SSZ), "original_tz": string|null, "all_day": boolean, "rolling": boolean}, "evidence_quote": string, "source_url": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}.\n` +
-  `PAGE TEXT:\n${pageText}`;
 
 export async function POST(req: Request): Promise<Response> {
   let message = '';
@@ -121,8 +109,8 @@ export async function POST(req: Request): Promise<Response> {
         try {
           const result = await callModel({
             role: 'reader',
-            systemPrompt: 'You read one official admissions page into the extraction schema. Return only JSON matching the schema.',
-            prompt: READER_PROMPT(pageText, url),
+            systemPrompt: READER_SYSTEM_PROMPT,
+            prompt: buildReaderPrompt(pageText, url),
             schema: ExtractionSchema,
             temperature: 0,
             userId: 'guest',

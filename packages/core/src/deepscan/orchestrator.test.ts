@@ -159,6 +159,8 @@ describe('model-driven orchestrator', () => {
     expect(reader).toHaveLength(2);
     expect(reader[0]).toMatchObject({ tool: 'read_page', model: 'muse-spark-1.3' });
     expect(run.usageUsd).toBeCloseTo(3 * 0.001 + 2 * 0.01, 10);
+    // The finish total includes every model call, not just the reader ones.
+    expect(finished.usageUsd).toBeCloseTo(run.usageUsd, 10);
     // Chained server-side history across turns.
     expect(model.previousIds[0]).toBeNull();
     expect(model.previousIds[1]).toBe('r1');

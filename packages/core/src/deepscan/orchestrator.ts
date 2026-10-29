@@ -100,6 +100,7 @@ export interface DeepScanMemory {
   pending: Array<{ callId: string; output: string }>;
   summary: string | null;
   errors: number;
+  lastError: string | null;
   started: boolean;
 }
 
@@ -366,6 +367,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
         pending: [],
         summary: null,
         errors: 0,
+        lastError: null,
         started: false,
       };
       writeMemory(run, mem);
@@ -495,12 +497,15 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
         return { events, finished: { ...buildFinish(mem), error: 'budget hit' } };
       }
       mem.errors += 1;
+      mem.lastError = err instanceof Error ? err.message.slice(0, 280) : 'orchestrator call failed';
       writeMemory(run, mem);
-      if (mem.errors >= 3) return finishWithError('orchestrator unreachable');
+      if (mem.errors >= 3) return finishWithError(`orchestrator unreachable (${mem.lastError})`);
       return { events };
     }
     mem.errors = 0;
+    mem.lastError = null;
     mem.responseId = transport.responseId || null;
+    mem.usageUsd += transport.costUsd;
     mem.calls.push({
       turn,
       kind: 'model',

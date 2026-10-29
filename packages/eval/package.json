@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "eval": "node src/run.ts",
+    "deep": "node src/deep.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

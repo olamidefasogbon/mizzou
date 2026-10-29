@@ -1,0 +1,33 @@
+{
+  "note": "Seeds only. sheet_claim comes from BME-Abroad_Opportunities.xlsx and may be stale or wrong. The labeled expected values must be confirmed by a human against the saved fixture.",
+  "cases": [
+    { "id": "case-02", "kind": "internship", "url": "https://www.projects.tuebingen.mpg.de/", "program_hint": "CaCTuS Summer Internship 2027",
+      "sheet_claim": "Portal opens 2026-10-21, deadline 2026-11-16, internship 2027-07-01 to 2027-09-30",
+      "tests": "clean page, several dates, deadline timezone likely not stated (should flag needs_human), old-year news on same site" },
+    { "id": "case-03", "kind": "internship", "url": "https://eee.epfl.ch/", "program_hint": "EPFL Excellence in Engineering (E3) Summer Program",
+      "sheet_claim": "Applications open in October, deadline November 1",
+      "tests": "deep scan: eligibility and FAQ subpages; check which year the page shows" },
+    { "id": "case-04", "kind": "fellowship", "url": "https://inf.ethz.ch/studies/summer-research-fellowship.html", "program_hint": "ETH Student Summer Research Fellowship",
+      "sheet_claim": "Opens November 1, deadline December 16",
+      "tests": "separate opening date and deadline; rules likely on linked subpages" },
+    { "id": "case-05", "kind": "internship", "url": "https://riss.ri.cmu.edu/", "program_hint": "CMU Robotics Institute Summer Scholars",
+      "sheet_claim": "Opens November 1, deadline January 17",
+      "tests": "year check; FAQ page for eligibility and international rules" },
+    { "id": "case-06", "kind": "internship", "url": "https://admissions.kaust.edu.sa/internship/search/project/machine-learning-for-biological-and-medical-imaging", "program_hint": "KAUST VSRP, ML for Biological and Medical Imaging",
+      "sheet_claim": "Rolling, first come first served; 4.375 CGPA and above; 3rd year and above only",
+      "tests": "rolling deadline (no deadline event), hard eligibility rules, non-US grading scale; confirm the rules against the page, not the sheet" },
+    { "id": "case-07", "kind": "internship", "url": "https://www.oist.jp/admissions/research-internship/apply-research-internship", "program_hint": "OIST Research Internship",
+      "sheet_claim": "Deadline 2026-10-15; 30 USD application fee; 4 to 6 months",
+      "tests": "deadline may already have passed; fee extraction; project-matching rule" },
+    { "id": "case-08", "kind": "internship", "url": "https://tigp.sinica.edu.tw/pages/3127", "program_hint": "Taiwan International Internship Program (TIIP), Academia Sinica",
+      "sheet_claim": "Deadline 2026-01-15; final-year students only; half of airfare covered",
+      "tests": "stale year: the date is likely last cycle. Correct behavior is to flag, not to invent a 2027 date" },
+    { "id": "case-09", "kind": "internship", "url": "https://careers.cern/programmes/summer-studentship/", "program_hint": "CERN Non-Member State Summer Student Programme",
+      "sheet_claim": "Deadline in January, opens late November",
+      "tests": "no exact date published yet is a valid answer: opens/deadline null plus a check-again reminder" },
+    { "id": "case-10", "kind": "job-listings", "url": "https://app.the-trackr.com/uk-tech/summer-internships", "program_hint": "pick ONE listing from the page",
+      "sheet_claim": "n/a",
+      "tests": "JavaScript-only page: plain fetch returns nothing. Expected behavior: say which page would not open and ask the user to paste the text. Then run the reader on the pasted text of one listing" }
+  ],
+  "later": "Image flyer case: use a screenshot of one Trackr listing once the vision path exists (M5). PDF case: swap in any program whose rules sit in a linked PDF if one turns up while fixturing."
+}

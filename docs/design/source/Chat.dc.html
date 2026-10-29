@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mizzou home</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Pinyon+Script&display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Inter',system-ui,sans-serif}
+a:active,button:active{opacity:0.72}
+input::placeholder{color:#48484A;opacity:1}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; background: #E9E9EB; color: #000; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', system-ui, sans-serif">
+  <div style="position: absolute; top: -80px; right: -100px; width: 300px; height: 300px; border-radius: 150px; background: #CFCFD4; filter: blur(60px)"></div>
+  <div style="position: absolute; top: 280px; left: -120px; width: 280px; height: 280px; border-radius: 140px; background: #F7F7F9; filter: blur(60px)"></div>
+  <div style="position: absolute; bottom: 120px; right: -110px; width: 320px; height: 320px; border-radius: 160px; background: #C4C4CA; filter: blur(70px)"></div>
+
+  <div style="position: absolute; top: 56px; left: 0; right: 0; height: 44px; display: flex; align-items: center; justify-content: center; font-family: 'Pinyon Script', cursive; font-size: 42px; line-height: 1; color: #000">Mizzou</div>
+
+  <a href="Panel.dc.html" aria-label="Open menu" style="position: absolute; top: 56px; left: 20px; width: 44px; height: 44px; border-radius: 22px; background: rgba(255,255,255,0.42); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); border: 1px solid rgba(255,255,255,0.7); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 30px rgba(0,0,0,0.07); display: flex; align-items: center; justify-content: center; text-decoration: none">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 8h16M4 16h10"/></svg>
+  </a>
+
+  <a href="Chat.dc.html" aria-label="New chat" style="position: absolute; top: 56px; right: 20px; width: 44px; height: 44px; border-radius: 22px; background: rgba(255,255,255,0.42); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); border: 1px solid rgba(255,255,255,0.7); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 30px rgba(0,0,0,0.07); display: flex; align-items: center; justify-content: center; text-decoration: none">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5H8.5A3.5 3.5 0 005 8.5v7A3.5 3.5 0 008.5 19h7a3.5 3.5 0 003.5-3.5V12M17.5 4.5a1.8 1.8 0 012.5 2.5L12 15l-3.5.5L9 12z"/></svg>
+  </a>
+
+  <div style="position: absolute; left: 0; right: 0; top: 108px; bottom: 96px; box-sizing: border-box; padding: 0 16px; display: flex; flex-direction: column">
+
+    <div style="flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 10px; padding: 0 12px">
+      <p style="margin: 0; font-size: 34px; line-height: 1.15; font-weight: 700; color: #000">Howdy, John</p>
+      <p style="margin: 0; min-height: 56px; max-width: 300px; font-size: 20px; line-height: 1.4; font-weight: 400; color: #000">What <span style="font-weight: 700; opacity: {{wordOpacity}}; transition: opacity 260ms ease">{{word}}</span> are you applying for today?</p>
+    </div>
+
+    <div style="flex: none; margin-bottom: 12px; box-sizing: border-box; padding: 16px 16px 8px; border-radius: 28px; background: rgba(255,255,255,0.42); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); border: 1px solid rgba(255,255,255,0.7); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 30px rgba(0,0,0,0.07)">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px 6px">
+        <span style="font-size: 15px; font-weight: 600; color: #000">Coming up</span>
+        <a href="Panel.dc.html" style="font-size: 14px; font-weight: 500; color: #000; text-decoration: none">See all</a>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 4px; border-top: 1px solid rgba(60,60,67,0.14)">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 15px; font-weight: 600; color: #000">Fulbright 2027</span>
+          <span style="font-size: 13px; color: #48484A">Statement of purpose, not finished</span>
+        </div>
+        <span style="flex: none; display: flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 14px; background: rgba(120,120,128,0.2); font-size: 13px; font-weight: 600; color: #000">6 days</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 4px; border-top: 1px solid rgba(60,60,67,0.14)">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 15px; font-weight: 600; color: #000">Yale PhD, Food Science</span>
+          <span style="font-size: 13px; color: #48484A">Portal opens soon, I'm watching it</span>
+        </div>
+        <span style="flex: none; display: flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 14px; background: rgba(120,120,128,0.2); font-size: 13px; font-weight: 600; color: #000">Soon</span>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 12px; min-height: 54px; padding: 0 4px; border-top: 1px solid rgba(60,60,67,0.14)">
+        <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+          <span style="font-size: 15px; font-weight: 600; color: #000">Summer research internship</span>
+          <span style="font-size: 13px; color: #48484A">2 documents left</span>
+        </div>
+        <span style="flex: none; display: flex; align-items: center; height: 28px; padding: 0 12px; border-radius: 14px; background: rgba(120,120,128,0.2); font-size: 13px; font-weight: 600; color: #000">9 days</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 0; box-sizing: border-box; padding: 12px 16px 32px; display: flex; align-items: center; gap: 10px">
+    <a href="PlusMenu.dc.html" aria-label="Add a photo" style="flex: none; width: 52px; height: 52px; border-radius: 26px; background: rgba(255,255,255,0.42); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); border: 1px solid rgba(255,255,255,0.7); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 30px rgba(0,0,0,0.07); display: flex; align-items: center; justify-content: center; text-decoration: none">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+    </a>
+    <div style="flex: 1; min-width: 0; height: 52px; box-sizing: border-box; border-radius: 26px; background: rgba(255,255,255,0.42); backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%); border: 1px solid rgba(255,255,255,0.7); box-shadow: 0 0 0 0.5px rgba(0,0,0,0.07), inset 0 1px 0 rgba(255,255,255,0.85), 0 10px 30px rgba(0,0,0,0.07); display: flex; align-items: center; padding: 0 8px 0 20px; gap: 8px">
+      <input aria-label="Message Mizzou" placeholder="Message Mizzou" style="flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-family: inherit; font-size: 17px; color: #000">
+      <div aria-hidden="true" style="flex: none; width: 36px; height: 36px; border-radius: 18px; background: rgba(120,120,128,0.2); display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  words() {
+    return [
+      'scholarships',
+      'universities',
+      'PhD programs',
+      'jobs',
+      'fellowships',
+      'internships',
+      'research grants',
+      'graduate programs',
+      'exchange programs',
+      'conferences'
+    ];
+  }
+  componentDidMount() {
+    this.setState({ i: 0, vis: true });
+    this.timer = setInterval(() => {
+      this.setState({ vis: false });
+      this.swap = setTimeout(() => {
+        const cur = (this.state && this.state.i) || 0;
+        this.setState({ i: (cur + 1) % this.words().length, vis: true });
+      }, 260);
+    }, 2800);
+  }
+  componentWillUnmount() {
+    clearInterval(this.timer);
+    clearTimeout(this.swap);
+  }
+  renderVals() {
+    const s = this.state || {};
+    const i = s.i || 0;
+    const vis = s.vis === false ? false : true;
+    return {
+      word: this.words()[i],
+      wordOpacity: vis ? '1' : '0'
+    };
+  }
+}
+</script>
+</body>
+</html>

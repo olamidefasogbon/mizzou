@@ -1,0 +1,34 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "Main.dc.html": { "h": 844, "is_interactive": true, "radius": 36, "title": "1. Landing", "w": 390, "x": 0, "y": 0 },
+    "SignUp.dc.html": { "h": 844, "is_interactive": true, "radius": 36, "title": "2. Sign up", "w": 390, "x": 470, "y": 0 },
+    "Chat.dc.html": { "h": 844, "is_interactive": true, "radius": 36, "title": "3. Home", "w": 390, "x": 940, "y": 0 },
+    "PlusMenu.dc.html": { "h": 844, "is_interactive": true, "radius": 36, "title": "4. Plus menu", "w": 390, "x": 1410, "y": 0 },
+    "Panel.dc.html": { "h": 844, "is_interactive": true, "radius": 36, "title": "5. Left panel", "w": 390, "x": 0, "y": 964 },
+    "Logout.dc.html": { "h": 844, "is_interactive": true, "radius": 36, "title": "6. Log out confirm", "w": 390, "x": 470, "y": 964 },
+    "Conversation.dc.html": { "h": 844, "radius": 36, "title": "7. Conversation", "w": 390, "x": 940, "y": 964 },
+    "Review.dc.html": { "h": 844, "radius": 36, "title": "8. Review: fit and requirements", "w": 390, "x": 1410, "y": 964 },
+    "Approve.dc.html": { "h": 844, "radius": 36, "title": "9. Review: plan and draft", "w": 390, "x": 0, "y": 1928 }
+  },
+  "createdOnFiles": { "at": "2026-10-24T14:50:00Z", "v": 1 },
+  "designSystems": [],
+  "launch": { "view": "canvas" },
+  "notes": {
+    "t1": { "kind": "title1", "maxW": 1800, "text": "Mizzou: mobile screens", "w": 240, "x": 0, "y": -300 }
+  },
+  "order": [
+    "Main.dc.html",
+    "SignUp.dc.html",
+    "Chat.dc.html",
+    "PlusMenu.dc.html",
+    "Panel.dc.html",
+    "Logout.dc.html",
+    "Conversation.dc.html",
+    "Review.dc.html",
+    "Approve.dc.html"
+  ],
+  "pages": [],
+  "title": "Mizzou Screens"
+}

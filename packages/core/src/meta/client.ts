@@ -9,13 +9,19 @@ import OpenAI from 'openai';
 // bundles with "Missing credentials". The key is read on first call,
 // which always runs on the server.
 
+export const META_BASE_URL = 'https://api.meta.ai/v1';
+
+export function readApiKey(): string {
+  return process.env.MODEL_API_KEY || process.env.META_API_KEY || '';
+}
+
 let cached: OpenAI | undefined;
 
 export function getMetaClient(): OpenAI {
   if (!cached) {
     cached = new OpenAI({
-      apiKey: process.env.MODEL_API_KEY || process.env.META_API_KEY || '',
-      baseURL: 'https://api.meta.ai/v1',
+      apiKey: readApiKey(),
+      baseURL: META_BASE_URL,
     });
   }
   return cached;

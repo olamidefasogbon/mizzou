@@ -9,6 +9,14 @@ import type { RunStore } from './store.js';
 // Section 5.1 hard cap.
 export const DEFAULT_MAX_TURNS = 12;
 
+/**
+ * Real platform budget in ms: Vercel Hobby maxDuration is 60s, matching the
+ * chat route's `export const maxDuration = 60`. The loop stops at 80% of
+ * this so the client can resume. Route handlers with their own maxDuration
+ * MUST pass deadlineMs explicitly — never rely on a test value here.
+ */
+export const PLATFORM_DEFAULT_DEADLINE_MS = 60_000;
+
 export interface StepOutcome {
   events: RunEvent[];
   /** Set to finish the run; stored at state.result. */
@@ -22,7 +30,11 @@ export type StepFn = (run: RunRecord) => Promise<StepOutcome>;
 
 export interface AdvanceOptions {
   maxTurns?: number;
-  /** Platform budget in ms; the loop stops at 80% so the client can resume. */
+  /**
+   * Platform budget in ms; the loop stops at 80% so the client can resume.
+   * Defaults to PLATFORM_DEFAULT_DEADLINE_MS (the real 60s ceiling, not a
+   * test value). Routes with their own maxDuration pass it explicitly.
+   */
   deadlineMs?: number;
   now?: () => number;
   onEvent?: (event: RunEvent) => void;
@@ -42,7 +54,7 @@ export async function advance(
 ): Promise<AdvanceResult> {
   const now = opts.now ?? Date.now;
   const startedAt = now();
-  const timeBudget = Math.floor((opts.deadlineMs ?? 60_000) * 0.8);
+  const timeBudget = Math.floor((opts.deadlineMs ?? PLATFORM_DEFAULT_DEADLINE_MS) * 0.8);
   const maxTurns = opts.maxTurns ?? DEFAULT_MAX_TURNS;
 
   const run = await store.load(runId);

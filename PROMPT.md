@@ -355,7 +355,7 @@ Build the screens to match the reference screenshots in `docs/design/` (copy the
 | Secondary button | Gray fill, black text |
 | Accent | None. Color only for function: small green check, red error |
 | Motion | Framer Motion springs. Cards rise in, status lines swap with a short fade, no looping decoration. Respect `prefers-reduced-motion` |
-| Layout | Responsive: under 768px a single column with the left panel as a drawer; 768px and up the panel pins left with chat in a centered column about 760px wide; 1100px and up adds a right-hand evidence rail for "Where I found this". Safe-area padding throughout. 44px minimum touch targets |
+| Layout | Responsive: under 768px a single column with the left panel as a drawer; 768px and up the panel floats over a centered column about 760px wide. "Where I found this" opens an evidence overlay (bottom sheet on mobile, right sheet on tablet, floating card on desktop), never a column or rail. `docs/design/UI_CORRECTIONS.md` is the layout source of truth. Safe-area padding throughout. 44px minimum touch targets |
 
 Rules: backdrop blur on at most three layers at once; every text-on-glass pair at least 4.5:1 contrast.
 

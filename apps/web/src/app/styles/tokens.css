@@ -138,9 +138,3 @@
   }
 }
 
-/* The drawer toggle lives only on phones; the panel is pinned at 768px+. */
-@media (min-width: 768px) {
-  .mz-hide-wide {
-    display: none !important;
-  }
-}

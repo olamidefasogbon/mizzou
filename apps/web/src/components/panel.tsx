@@ -10,12 +10,13 @@ import styles from './panel.module.css';
 // (drawer) and docs/design/html/Logout.html (modal). Lists render only real
 // store rows: empty until reminders/chats exist. No demo data in app code.
 
-export function Panel({ onNavigate }: { onNavigate: () => void }) {
+export function Panel({ onNavigate, onClose }: { onNavigate: () => void; onClose: () => void }) {
   const router = useRouter();
   const { name, reminders, chats, clearChats, undoClearChats, undoArmed, expireUndo } = useStore();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -28,6 +29,37 @@ export function Panel({ onNavigate }: { onNavigate: () => void }) {
     [],
   );
 
+  // Focus trap: keep Tab inside the overlay, Esc closes, focus lands back
+  // on the menu button via onClose.
+  useEffect(() => {
+    const root = rootRef.current;
+    const closeBtn = root?.querySelector<HTMLElement>('[data-autofocus="true"]');
+    (closeBtn ?? root)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key !== 'Tab' || !root) return;
+      const items = [...root.querySelectorAll<HTMLElement>('button, a[href], input')].filter(
+        (el) => !el.hasAttribute('disabled') && el.getAttribute('aria-hidden') !== 'true',
+      );
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+
   useEffect(() => {
     if (!undoArmed) return;
     if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -38,23 +70,29 @@ export function Panel({ onNavigate }: { onNavigate: () => void }) {
   }, [undoArmed, expireUndo]);
 
   return (
-    <div className={styles.drawer}>
+    <div className={styles.drawer} ref={rootRef} tabIndex={-1}>
       <div className={styles.topRow}>
         <div className={`mz-wordmark ${styles.wordmark}`}>Mizzou</div>
-        <button
-          type="button"
-          aria-label="New chat"
-          className={styles.roundBtn}
-          onClick={() => {
-            onNavigate();
-            router.push('/app');
-          }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 5H8.5A3.5 3.5 0 005 8.5v7A3.5 3.5 0 008.5 19h7a3.5 3.5 0 003.5-3.5V12M17.5 4.5a1.8 1.8 0 012.5 2.5L12 15l-3.5.5L9 12z" />
+        <button type="button" aria-label="Close menu" data-autofocus="true" className={styles.roundBtn} onClick={onClose}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
           </svg>
         </button>
       </div>
+
+      <button
+        type="button"
+        className={styles.newChatRow}
+        onClick={() => {
+          onNavigate();
+          router.push('/app');
+        }}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M12 5H8.5A3.5 3.5 0 005 8.5v7A3.5 3.5 0 008.5 19h7a3.5 3.5 0 003.5-3.5V12M17.5 4.5a1.8 1.8 0 012.5 2.5L12 15l-3.5.5L9 12z" />
+        </svg>
+        <span className={styles.settingsLabel}>New chat</span>
+      </button>
 
       <div className={styles.sectionRow}>
         <span className={styles.sectionLabel}>Reminders</span>

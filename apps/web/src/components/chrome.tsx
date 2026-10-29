@@ -22,6 +22,8 @@ export function Blobs({ specs }: { specs: BlobSpec[] }) {
           aria-hidden="true"
           style={{
             position: "absolute",
+            zIndex: 0,
+            pointerEvents: "none",
             top: b.top,
             left: b.left,
             right: b.right,
@@ -34,44 +36,6 @@ export function Blobs({ specs }: { specs: BlobSpec[] }) {
           }}
         />
       ))}
-    </>
-  );
-}
-
-const MENU_PATH = "M4 8h16M4 16h10";
-const EDIT_PATH =
-  "M12 5H8.5A3.5 3.5 0 005 8.5v7A3.5 3.5 0 008.5 19h7a3.5 3.5 0 003.5-3.5V12M17.5 4.5a1.8 1.8 0 012.5 2.5L12 15l-3.5.5L9 12z";
-
-export function TopBar({ onMenu, onNewChat }: { onMenu: () => void; onNewChat: () => void }) {
-  return (
-    <>
-      <div
-        style={{
-          position: "absolute",
-          top: 56,
-          left: 0,
-          right: 0,
-          height: 44,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 42,
-          lineHeight: 1,
-        }}
-        className="mz-wordmark"
-      >
-        Mizzou
-      </div>
-      <button type="button" onClick={onMenu} aria-label="Open menu" className="mz-glass mz-icon-btn mz-hide-wide" style={{ position: "absolute", top: 56, left: 20 }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-          <path d={MENU_PATH} />
-        </svg>
-      </button>
-      <button type="button" onClick={onNewChat} aria-label="New chat" className="mz-glass mz-icon-btn" style={{ position: "absolute", top: 56, right: 20 }}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d={EDIT_PATH} />
-        </svg>
-      </button>
     </>
   );
 }

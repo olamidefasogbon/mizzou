@@ -443,8 +443,10 @@ function ChatContent(): React.JSX.Element {
                           return (
                             <li key={i} className="flex items-start gap-2 text-[15px]">
                               {needsLook(d.confidence, d.needs_human) ? (
-                                <span aria-label="needs a look" className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-600 text-[11px] font-bold text-white">
-                                  !
+                                <span aria-label="needs a look" className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-600">
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+                                    <path d="M12 5v10M12 19v0.5" />
+                                  </svg>
                                 </span>
                               ) : (
                                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700" aria-label="clear" />
@@ -481,8 +483,10 @@ function ChatContent(): React.JSX.Element {
                           return (
                             <li key={i} className="flex items-start gap-2 text-[15px]">
                               {needsLook(e.confidence, e.needs_human) ? (
-                                <span aria-label="needs a look" className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-600 text-[11px] font-bold text-white">
-                                  !
+                                <span aria-label="needs a look" className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-600">
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+                                    <path d="M12 5v10M12 19v0.5" />
+                                  </svg>
                                 </span>
                               ) : (
                                 <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700" aria-label="clear" />

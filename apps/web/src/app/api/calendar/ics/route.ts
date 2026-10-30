@@ -23,9 +23,60 @@ function checklist(items: string[], portalUrl: string | null): string {
   return lines.join('\n');
 }
 
+// Fixed UTC offsets (minutes) for common deadline zone abbreviations.
+// AOE is a fixed UTC-12 offset — never a named luxon zone (luxon has no
+// AOE and throws "unsupported zone", which used to 500 this route).
+const ABBR_OFFSET_MINUTES: Record<string, number> = {
+  AOE: -720,
+  HST: -600,
+  AKST: -540,
+  AKDT: -480,
+  PST: -480,
+  PDT: -420,
+  MST: -420,
+  MDT: -360,
+  CST: -360,
+  CDT: -300,
+  EST: -300,
+  EDT: -240,
+  ET: -300,
+  CT: -360,
+  MT: -420,
+  PT: -480,
+  GMT: 0,
+  UTC: 0,
+  CET: 60,
+  CEST: 120,
+  BST: 60,
+};
+
+/**
+ * Parse one deadline value. ISO and date-only strings go through Date
+ * directly; a trailing zone abbreviation ("December 15, 2026 11:59 PM
+ * AOE", "2026-12-15 EST") interprets the wall clock in that fixed offset.
+ * Returns null for anything unparseable.
+ */
+export function parseDeadline(raw: string): Date | null {
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  const direct = new Date(raw);
+  if (!Number.isNaN(direct.getTime())) return direct;
+  const m = raw.match(/^(.*?)\s*([A-Za-z]{1,5})$/);
+  if (!m) return null;
+  const offsetMin = ABBR_OFFSET_MINUTES[m[2].toUpperCase()];
+  if (offsetMin === undefined) return null;
+  const wall = new Date(m[1].trim());
+  if (Number.isNaN(wall.getTime())) return null;
+  // Rebase the wall clock (parsed in server-local time) to UTC, then
+  // apply the abbreviation's fixed offset. getTimezoneOffset is
+  // UTC-minus-local, so wall-as-UTC subtracts it; server tz cancels out.
+  const utcMs = wall.getTime() - wall.getTimezoneOffset() * 60_000 - offsetMin * 60_000;
+  return new Date(utcMs);
+}
+
 /**
  * POST /api/calendar/ics — approved export only.
- * Body: { title: string, deadlines: string[] (ISO), items?: string[], portalUrl?: string|null }
+ * Body: { title: string, deadlines: string[] (ISO, date-only, or a common
+ * zone abbreviation like AOE/EST), items?: string[], portalUrl?: string|null }
  * Builds prep (14d before), final-push (3d before) and deadline-day events
  * with deterministic UIDs, so re-importing never duplicates.
  */
@@ -53,8 +104,8 @@ export async function POST(req: Request): Promise<Response> {
   const parsed: Date[] = [];
   for (const raw of input.deadlines) {
     if (typeof raw !== 'string') return badRequest('Every deadline must be an ISO date string.');
-    const d = new Date(raw);
-    if (Number.isNaN(d.getTime())) return badRequest(`Unparseable deadline: ${raw.slice(0, 60)}`);
+    const d = parseDeadline(raw);
+    if (!d) return badRequest(`Unparseable deadline: ${raw.slice(0, 60)}`);
     parsed.push(d);
   }
 
@@ -92,6 +143,7 @@ export async function POST(req: Request): Promise<Response> {
 
   const { error, value } = createEvents(events);
   if (error || !value) {
+    console.error('[calendar] ics build failed:', error);
     return Response.json({ error: 'Could not build the calendar file.' }, { status: 500 });
   }
   return new Response(value, {

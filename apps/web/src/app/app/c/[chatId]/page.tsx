@@ -87,6 +87,9 @@ interface FeedItem {
   requirements?: { documents: RequirementDoc[]; eligibility: RequirementRule[] };
   plan?: PlanPayload;
   downloading?: boolean;
+  approving?: boolean;
+  approved?: boolean;
+  planError?: string;
 }
 
 type ClientEvent =
@@ -98,14 +101,19 @@ type ClientEvent =
   | { t: 'continue'; runId: string }
   | { t: 'error'; friendly: string; link?: string };
 
-function formatDay(iso: string): string {
-  const m = iso.slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!m) return iso;
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+/**
+ * User-local date first, original zone muted. Stored deadlines are UTC
+ * instants, so the muted zone reads UTC; date-only values show the date
+ * alone with no zone guess. (Replaces the old day-only formatter.)
+ */
+function formatDeadline(iso: string): { main: string; sub: string | null } {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { main: iso, sub: null };
+  const date = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  const hasTime = d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0 || d.getUTCSeconds() !== 0;
+  if (!hasTime) return { main: date, sub: null };
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return { main: `${date}, ${time}`, sub: 'UTC' };
 }
 
 function needsLook(confidence: string, needsHuman: boolean): boolean {
@@ -185,7 +193,7 @@ function ChatContent(): React.JSX.Element {
 
   const downloadPlan = useCallback(
     async (itemId: string, plan: PlanPayload): Promise<void> => {
-      patch(itemId, { downloading: true });
+      patch(itemId, { downloading: true, planError: undefined });
       try {
         const res = await fetch('/api/calendar/ics', {
           method: 'POST',
@@ -197,7 +205,16 @@ function ChatContent(): React.JSX.Element {
             portalUrl: plan.portalUrl,
           }),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          let detail = 'Could not build the calendar file. Give it a minute and try again.';
+          try {
+            const data = (await res.json()) as { error?: unknown };
+            if (typeof data.error === 'string') detail = data.error;
+          } catch {
+            // Keep the default text when the body is not JSON.
+          }
+          throw new Error(detail);
+        }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -207,17 +224,43 @@ function ChatContent(): React.JSX.Element {
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-      } catch {
-        setFeed((prev) => [
-          ...prev,
-          {
-            id: `err-${Date.now()}`,
-            kind: 'error',
-            text: 'Could not build the calendar file. Give it a minute and try again.',
-          },
-        ]);
+      } catch (err) {
+        patch(itemId, {
+          planError: err instanceof Error ? err.message : 'Could not build the calendar file. Give it a minute and try again.',
+        });
       } finally {
         patch(itemId, { downloading: false });
+      }
+    },
+    [patch],
+  );
+
+  const approvePlan = useCallback(
+    async (itemId: string, plan: PlanPayload): Promise<void> => {
+      patch(itemId, { approving: true, planError: undefined });
+      try {
+        const res = await fetch('/api/reminders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: plan.title, deadlines: plan.deadlines, items: plan.items }),
+        });
+        if (!res.ok) {
+          let detail = 'Could not sync reminders. Give it a minute and try again.';
+          try {
+            const data = (await res.json()) as { error?: unknown };
+            if (typeof data.error === 'string') detail = data.error;
+          } catch {
+            // Keep the default text when the body is not JSON.
+          }
+          throw new Error(detail);
+        }
+        patch(itemId, { approved: true });
+      } catch (err) {
+        patch(itemId, {
+          planError: err instanceof Error ? err.message : 'Could not sync reminders. Give it a minute and try again.',
+        });
+      } finally {
+        patch(itemId, { approving: false });
       }
     },
     [patch],
@@ -713,15 +756,19 @@ function ChatContent(): React.JSX.Element {
               const plan = item.plan;
               return (
                 <div key={item.id} className={`${styles.card} ${styles.gapGroup}`}>
+                  <p className={styles.cardTitle}>{plan.title}</p>
                   <p className={styles.cardPrompt}>Here&apos;s the plan. Nothing goes on your calendar until you say so.</p>
                   {plan.deadlines.length > 0 && (
                     <ul className={`${styles.reqList} ${styles.mt2}`}>
-                      {plan.deadlines.map((iso, i) => (
-                        <li key={i} className={styles.planRow}>
-                          <span>Deadline</span>
-                          <span className={styles.conflictField}>{formatDay(iso)}</span>
-                        </li>
-                      ))}
+                      {plan.deadlines.map((iso, i) => {
+                        const when = formatDeadline(iso);
+                        return (
+                          <li key={i} className={styles.planRow}>
+                            <span>{when.main}</span>
+                            <span className={styles.reqDetail}>{when.sub ?? 'Deadline'}</span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                   {plan.items.length > 0 && (
@@ -733,23 +780,44 @@ function ChatContent(): React.JSX.Element {
                       ))}
                     </ul>
                   )}
-                  {plan.deadlines.length > 0 && (
-                    <button
-                      type="button"
-                      disabled={item.downloading === true}
-                      onClick={() => {
-                        if (item.plan) void downloadPlan(item.id, item.plan);
-                      }}
-                      className={`${styles.btnPrimary} ${styles.icsBtn}`}
-                    >
-                      {item.downloading === true ? (
-                        <Loader2 className={styles.spin} aria-label="working" />
-                      ) : (
-                        <Download className={styles.checkIcon} />
-                      )}
-                      Download .ics
-                    </button>
-                  )}
+                  <div className={styles.btnRow}>
+                    {item.approved === true ? (
+                      <p className={styles.syncedNote}>
+                        <Check className={styles.checkIcon} aria-label="synced" /> Synced to reminders
+                      </p>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={item.approving === true}
+                        onClick={() => {
+                          if (item.plan) void approvePlan(item.id, item.plan);
+                        }}
+                        className={styles.btnPrimary}
+                      >
+                        {item.approving === true ? 'Syncing…' : 'Approve & Sync'}
+                      </button>
+                    )}
+                    {plan.deadlines.length > 0 && (
+                      <button
+                        type="button"
+                        disabled={item.downloading === true}
+                        onClick={() => {
+                          if (item.plan) void downloadPlan(item.id, item.plan);
+                        }}
+                        className={styles.btnPrimary}
+                      >
+                        {item.downloading === true ? (
+                          <Loader2 className={styles.spin} aria-label="working" />
+                        ) : (
+                          <Download className={styles.checkIcon} />
+                        )}
+                        Download .ics
+                      </button>
+                    )}
+                  </div>
+                  {item.planError ? (
+                    <p className={styles.planError} role="alert">{item.planError}</p>
+                  ) : null}
                 </div>
               );
             }

@@ -311,6 +311,21 @@
   color: var(--mz-secondary);
 }
 
+.planError {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--mz-error);
+}
+
+.syncedNote {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
 .icsBtn {
   margin-top: 12px;
   display: inline-flex;

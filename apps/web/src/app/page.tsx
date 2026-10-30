@@ -1,10 +1,9 @@
 import Link from "next/link";
 import styles from "./landing.module.css";
 
-// Landing. Mobile matched file: docs/design/html/Main.html (values copied
-// exactly). Tablet and desktop per docs/design/UI_CORRECTIONS.md section 5:
-// one responsive tree, no per-device copies. Blobs live in the full-viewport
-// .mz-bg layer so nothing clips them; content sits on .mz-fg above it.
+// Landing. Meta.ai style: white canvas, blue primary, black text.
+// Tablet and desktop per docs/design/UI_CORRECTIONS.md section 5:
+// one responsive tree, no per-device copies.
 
 const CARDS: Array<[string, string]> = [
   [
@@ -24,12 +23,6 @@ const CARDS: Array<[string, string]> = [
 export default function LandingPage() {
   return (
     <div className="mz-shell">
-      <div className="mz-bg" aria-hidden="true">
-        <div className={styles.blob1} />
-        <div className={styles.blob2} />
-        <div className={styles.blob3} />
-      </div>
-
       <div className={`mz-fg ${styles.screen}`}>
         <div className={styles.lead}>
           <div className={styles.hero}>
@@ -52,7 +45,7 @@ export default function LandingPage() {
 
         <div className={styles.cards}>
           {CARDS.map(([title, body]) => (
-            <div key={title} className={`mz-glass ${styles.card}`}>
+            <div key={title} className={styles.card}>
               <p className={styles.cardTitle}>{title}</p>
               <p className={styles.cardBody}>{body}</p>
             </div>

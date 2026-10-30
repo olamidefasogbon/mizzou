@@ -35,7 +35,7 @@ function TopBar({
         aria-label="Open menu"
         aria-hidden={panelOpen}
         tabIndex={panelOpen ? -1 : undefined}
-        className={`mz-glass mz-icon-btn ${shell.topLeft} ${hidden}`}
+        className={`mz-icon-btn ${shell.topLeft} ${hidden}`}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
           <path d="M4 8h16M4 16h10" />

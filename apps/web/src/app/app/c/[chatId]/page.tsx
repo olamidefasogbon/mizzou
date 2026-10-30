@@ -4,10 +4,10 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowUp, Check, Download, Loader2, X } from 'lucide-react';
 import { formatG1Prompt } from '@mizzou/core/voice';
-import { Blobs } from '@/components/chrome';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { ensureChatAction } from '@/lib/actions';
+import styles from './conversation.module.css';
 
 function g1Title(program: { name: string; unit: string; institution: string }, opportunityType?: string): {
   title: string;
@@ -427,38 +427,29 @@ function ChatContent(): React.JSX.Element {
   }, [chatId, clear]);
 
   return (
-    <div className="relative z-[1] flex w-full flex-1 flex-col px-4 pb-6 pt-[116px] text-black">
-      <Blobs
-        specs={[
-          { top: -80, right: -100, size: 300, color: 'var(--mz-blob-1)', blur: 60 },
-          { top: 300, left: -120, size: 280, color: 'var(--mz-blob-2)', blur: 60 },
-          { bottom: 200, right: -110, size: 320, color: 'var(--mz-blob-3)', blur: 70 },
-        ]}
-      />
-        <div ref={feedRef} className="flex flex-1 flex-col gap-3 overflow-y-auto pb-4">
+    <div className={styles.screen}>
+        <div ref={feedRef} className={styles.feed}>
           {feed.map((item) => {
             if (item.kind === 'user') {
               return (
-                <div key={item.id} className="flex justify-end">
-                  <div className="max-w-[80%] rounded-2xl bg-black/[0.07] px-4 py-2.5 text-[15px]">{item.text}</div>
+                <div key={item.id} className={styles.userRow}>
+                  <div className={styles.userBubble}>{item.text}</div>
                 </div>
               );
             }
             if (item.kind === 'message') {
               return (
-                <div key={item.id} className="flex justify-start">
-                  <div className="max-w-[85%] rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-[15px] shadow-sm">
-                    {item.text}
-                  </div>
+                <div key={item.id} className={styles.assistantRow}>
+                  <p className={styles.assistantText}>{item.text}</p>
                 </div>
               );
             }
             if (item.kind === 'status') {
               return (
-                <div key={item.id} className="flex items-center gap-2 px-1 text-sm text-[#3A3A3A]">
-                  {item.state === 'active' && <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-label="working" />}
-                  {item.state === 'done' && <Check className="h-4 w-4 text-green-700" aria-label="done" />}
-                  {item.state === 'failed' && <X className="h-4 w-4 text-red-700" aria-label="failed" />}
+                <div key={item.id} className={styles.statusRow}>
+                  {item.state === 'active' && <Loader2 className={styles.spin} aria-label="working" />}
+                  {item.state === 'done' && <Check className={styles.checkIcon} aria-label="done" />}
+                  {item.state === 'failed' && <X className={styles.failIcon} aria-label="failed" />}
                   <span>{item.label}</span>
                 </div>
               );
@@ -466,14 +457,14 @@ function ChatContent(): React.JSX.Element {
             if (item.kind === 'g1' && item.program) {
               const heading = g1Title(item.program, item.opportunity_type);
               return (
-                <div key={item.id} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
-                  <p className="text-[13px] font-medium text-[#3A3A3A]">{formatG1Prompt(item.opportunity_type ?? 'generic_opportunity')}</p>
-                  <p className="mt-2 text-lg font-bold">{heading.title}</p>
+                <div key={item.id} className={styles.card}>
+                  <p className={styles.cardPrompt}>{formatG1Prompt(item.opportunity_type ?? 'generic_opportunity')}</p>
+                  <p className={styles.cardTitle}>{heading.title}</p>
                   {heading.subtitle.length > 0 && (
-                    <p className="text-sm text-[#3A3A3A]">{heading.subtitle}</p>
+                    <p className={styles.cardSub}>{heading.subtitle}</p>
                   )}
                   {item.decision === undefined && (
-                    <div className="mt-3 flex gap-2">
+                    <div className={styles.btnRow}>
                       <button
                         type="button"
                         onClick={() => {
@@ -499,7 +490,7 @@ function ChatContent(): React.JSX.Element {
                           });
                           setPendingCards(null);
                         }}
-                        className="rounded-full bg-black px-4 py-2 text-sm font-medium text-white"
+                        className={styles.btnPrimary}
                       >
                         Yes, that&apos;s it
                       </button>
@@ -510,41 +501,41 @@ function ChatContent(): React.JSX.Element {
                           setPendingCards(null);
                           void resumeRef.current({ gate: 'G1', decision: { confirmed: false }, opId: crypto.randomUUID() });
                         }}
-                        className="rounded-full bg-black/[0.07] px-4 py-2 text-sm font-medium text-black"
+                        className={styles.btnSecondary}
                       >
                         Not quite
                       </button>
                     </div>
                   )}
                   {item.decision === 'yes' && (
-                    <div className="mt-3 rounded-xl bg-black/[0.04] p-3">
-                      <p className="flex items-center gap-1.5 text-sm font-medium">
-                        <Check className="h-4 w-4 text-green-700" /> Confirmed. Here&apos;s what they ask for.
+                    <div className={styles.g1Done}>
+                      <p className={styles.g1DoneText}>
+                        <Check className={styles.checkIcon} aria-label="confirmed" /> Confirmed. Here&apos;s what they ask for.
                       </p>
                     </div>
                   )}
                   {item.decision === 'no' && (
-                    <p className="mt-3 text-sm text-[#3A3A3A]">No problem — paste a different link and I&apos;ll check that one.</p>
+                    <p className={styles.g1No}>No problem — paste a different link and I&apos;ll check that one.</p>
                   )}
                 </div>
               );
             }
             if (item.kind === 'g2' && item.conflicts) {
               return (
-                <div key={item.id} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
-                  <p className="text-sm font-medium">{item.what ?? 'Two official pages disagree. Which one looks right to you?'}</p>
-                  <ul className="mt-2 space-y-2">
+                <div key={item.id} className={styles.card}>
+                  <p className={styles.cardPrompt}>{item.what ?? 'Two official pages disagree. Which one looks right to you?'}</p>
+                  <ul className={styles.conflictValues}>
                     {item.conflicts.map((c, i) => (
-                      <li key={i} className="text-[13px] text-[#3A3A3A]">
-                        <span className="font-medium text-black">{c.field}</span>
-                        <ul className="mt-1 space-y-1">
+                      <li key={i} className={styles.cardSub}>
+                        <span className={styles.conflictField}>{c.field}</span>
+                        <ul className={styles.conflictValues}>
                           {c.values.map((v, j) => (
                             <li key={j}>
                               {v.iso ?? 'no date'} ·{' '}
-                              <a href={v.source_url} target="_blank" rel="noreferrer" className="underline underline-offset-[3px]">
+                              <a href={v.source_url} target="_blank" rel="noreferrer" className={styles.link}>
                                 source
                               </a>
-                              <span className="block italic">“{v.quote.slice(0, 140)}”</span>
+                              <span className={styles.conflictQuote}>“{v.quote.slice(0, 140)}”</span>
                             </li>
                           ))}
                         </ul>
@@ -558,7 +549,7 @@ function ChatContent(): React.JSX.Element {
                         patch(item.id, { resolved: true });
                         void resumeRef.current({ gate: 'G2', decision: { useBest: true }, opId: crypto.randomUUID() });
                       }}
-                      className="mt-3 rounded-full bg-black px-4 py-2 text-sm font-medium text-white"
+                      className={`${styles.btnPrimary} ${styles.icsBtn}`}
                     >
                       Continue with your best read
                     </button>
@@ -568,14 +559,14 @@ function ChatContent(): React.JSX.Element {
             }
             if (item.kind === 'coverage' && item.lines) {
               return (
-                <div key={item.id} className="rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-[15px] shadow-sm">
+                <div key={item.id} className={styles.card}>
                   {item.lines.map((line, i) => (
-                    <p key={i} className={i > 0 ? 'mt-1' : undefined}>
+                    <p key={i} className={styles.coverageLine}>
                       {line}
                     </p>
                   ))}
                   {(item.unreadable ?? []).map((u) => (
-                    <a key={u.url} href={u.url} target="_blank" rel="noreferrer" className="mt-1 block text-sm underline">
+                    <a key={u.url} href={u.url} target="_blank" rel="noreferrer" className={`${styles.link} ${styles.coverageOpen}`}>
                       Open the page
                     </a>
                   ))}
@@ -587,33 +578,33 @@ function ChatContent(): React.JSX.Element {
                 needsLook(f.confidence, f.needs_human),
               ).length;
               return (
-                <div key={item.id} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
-                  <p className="text-sm font-medium">What they ask for</p>
+                <div key={item.id} className={styles.card}>
+                  <p className={styles.cardPrompt}>What they ask for</p>
                   {item.requirements.documents.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-[13px] font-medium text-[#3A3A3A]">Documents</p>
-                      <ul className="mt-1 space-y-1.5">
+                    <div className={styles.mt2}>
+                      <p className={styles.sectionTitle}>Documents</p>
+                      <ul className={styles.reqList}>
                         {item.requirements.documents.map((d, i) => {
                           return (
-                            <li key={i} className="flex items-start gap-2 text-[15px]">
+                            <li key={i} className={styles.reqItem}>
                               {needsLook(d.confidence, d.needs_human) ? (
-                                <span aria-label="needs a look" className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-600">
+                                <span aria-label="needs a look" className={styles.warnBadge}>
                                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
                                     <path d="M12 5v10M12 19v0.5" />
                                   </svg>
                                 </span>
                               ) : (
-                                <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700" aria-label="clear" />
+                                <Check className={styles.checkIcon} aria-label="clear" />
                               )}
                               <span>
                                 {d.name}
-                                {d.limit ? <span className="text-[#3A3A3A]"> · {d.limit}</span> : null}
-                                {d.optional ? <span className="text-[#3A3A3A]"> · optional</span> : null}
+                                {d.limit ? <span className={styles.reqDetail}> · {d.limit}</span> : null}
+                                {d.optional ? <span className={styles.reqDetail}> · optional</span> : null}
                                 {d.evidenceQuote ? (
-                                  <span className="block">
+                                  <span className={styles.block}>
                                     <button
                                       type="button"
-                                      className="text-[13px] text-black underline underline-offset-[3px]"
+                                      className={styles.evidenceBtn}
                                       onClick={() => {
                                         select({ title: d.name, quote: d.evidenceQuote as string, sourceUrl: d.sourceUrl ?? null });
                                       }}
@@ -630,28 +621,28 @@ function ChatContent(): React.JSX.Element {
                     </div>
                   )}
                   {item.requirements.eligibility.length > 0 && (
-                    <div className="mt-2">
-                      <p className="text-[13px] font-medium text-[#3A3A3A]">Eligibility</p>
-                      <ul className="mt-1 space-y-1.5">
+                    <div className={styles.mt2}>
+                      <p className={styles.sectionTitle}>Eligibility</p>
+                      <ul className={styles.reqList}>
                         {item.requirements.eligibility.map((e, i) => {
                           return (
-                            <li key={i} className="flex items-start gap-2 text-[15px]">
+                            <li key={i} className={styles.reqItem}>
                               {needsLook(e.confidence, e.needs_human) ? (
-                                <span aria-label="needs a look" className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-amber-600">
+                                <span aria-label="needs a look" className={styles.warnBadge}>
                                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
                                     <path d="M12 5v10M12 19v0.5" />
                                   </svg>
                                 </span>
                               ) : (
-                                <Check className="mt-0.5 h-4 w-4 shrink-0 text-green-700" aria-label="clear" />
+                                <Check className={styles.checkIcon} aria-label="clear" />
                               )}
                               <span>
                                 {e.rule}
                                 {e.evidenceQuote ? (
-                                  <span className="block">
+                                  <span className={styles.block}>
                                     <button
                                       type="button"
-                                      className="text-[13px] text-black underline underline-offset-[3px]"
+                                      className={styles.evidenceBtn}
                                       onClick={() => {
                                         select({ title: e.rule, quote: e.evidenceQuote as string, sourceUrl: e.sourceUrl ?? null });
                                       }}
@@ -668,7 +659,7 @@ function ChatContent(): React.JSX.Element {
                     </div>
                   )}
                   {flagged > 0 && (
-                    <p className="mt-2 text-[13px] text-[#3A3A3A]">
+                    <p className={styles.flagNote}>
                       {flagged} {flagged === 1 ? 'item needs' : 'items need'} a look — the page wasn&apos;t clear there.
                     </p>
                   )}
@@ -678,22 +669,22 @@ function ChatContent(): React.JSX.Element {
             if (item.kind === 'plan' && item.plan && (item.plan.deadlines.length > 0 || item.plan.items.length > 0)) {
               const plan = item.plan;
               return (
-                <div key={item.id} className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm">
-                  <p className="text-sm font-medium">Here&apos;s the plan. Nothing goes on your calendar until you say so.</p>
+                <div key={item.id} className={styles.card}>
+                  <p className={styles.cardPrompt}>Here&apos;s the plan. Nothing goes on your calendar until you say so.</p>
                   {plan.deadlines.length > 0 && (
-                    <ul className="mt-2 space-y-1.5">
+                    <ul className={`${styles.reqList} ${styles.mt2}`}>
                       {plan.deadlines.map((iso, i) => (
-                        <li key={i} className="flex items-baseline justify-between gap-2 text-[15px]">
+                        <li key={i} className={styles.planRow}>
                           <span>Deadline</span>
-                          <span className="font-medium">{formatDay(iso)}</span>
+                          <span className={styles.conflictField}>{formatDay(iso)}</span>
                         </li>
                       ))}
                     </ul>
                   )}
                   {plan.items.length > 0 && (
-                    <ul className="mt-2 space-y-1">
+                    <ul className={`${styles.reqList} ${styles.mt2}`}>
                       {plan.items.map((task, i) => (
-                        <li key={i} className="text-[15px] text-[#3A3A3A]">
+                        <li key={i} className={styles.planTask}>
                           · {task}
                         </li>
                       ))}
@@ -706,12 +697,12 @@ function ChatContent(): React.JSX.Element {
                       onClick={() => {
                         if (item.plan) void downloadPlan(item.id, item.plan);
                       }}
-                      className="mt-3 flex items-center gap-1.5 rounded-full bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-30"
+                      className={`${styles.btnPrimary} ${styles.icsBtn}`}
                     >
                       {item.downloading === true ? (
-                        <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-label="working" />
+                        <Loader2 className={styles.spin} aria-label="working" />
                       ) : (
-                        <Download className="h-4 w-4" />
+                        <Download className={styles.checkIcon} />
                       )}
                       Download .ics
                     </button>
@@ -721,21 +712,21 @@ function ChatContent(): React.JSX.Element {
             }
             if (item.kind === 'rolling' && item.text) {
               return (
-                <div key={item.id} className="flex justify-start">
-                  <div className="max-w-[85%] rounded-2xl border border-black/10 bg-white px-4 py-2.5 shadow-sm">
-                    <span className="inline-block rounded-full bg-black/[0.07] px-3 py-1 text-[13px] font-medium">
+                <div key={item.id} className={styles.assistantRow}>
+                  <div>
+                    <span className={styles.rollingPill}>
                       Rolling / Unspecified Deadline
                     </span>
-                    <p className="mt-1.5 text-sm text-[#3A3A3A]">{item.text}</p>
+                    <p className={styles.rollingText}>{item.text}</p>
                   </div>
                 </div>
               );
             }
             return (
-              <div key={item.id} className="rounded-2xl border border-black/10 bg-white px-4 py-2.5 text-[15px]">
-                <p>{item.text}</p>
+              <div key={item.id} className={styles.card}>
+                <p className={styles.assistantText}>{item.text}</p>
                 {item.link && (
-                  <a href={item.link} target="_blank" rel="noreferrer" className="mt-1 block text-sm underline">
+                  <a href={item.link} target="_blank" rel="noreferrer" className={`${styles.link} ${styles.coverageOpen}`}>
                     Open the page
                   </a>
                 )}
@@ -744,7 +735,7 @@ function ChatContent(): React.JSX.Element {
           })}
         </div>
 
-        <div className="flex items-center gap-2 rounded-full border border-black/10 bg-white p-2 pl-4 shadow-sm">
+        <div className={styles.composer}>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -753,16 +744,16 @@ function ChatContent(): React.JSX.Element {
             }}
             placeholder="Message Mizzou"
             aria-label="Message Mizzou"
-            className="flex-1 bg-transparent text-[15px] outline-none placeholder:text-[#3A3A3A]"
+            className={styles.composerInput}
           />
           <button
             type="button"
             onClick={() => void send()}
             disabled={busy || input.trim().length === 0}
             aria-label="Send"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white disabled:opacity-30"
+            className={styles.sendBtn}
           >
-            <ArrowUp className="h-4 w-4" />
+            <ArrowUp className={styles.sendIcon} />
           </button>
         </div>
         <EvidenceOverlay />
@@ -772,7 +763,7 @@ function ChatContent(): React.JSX.Element {
 
 export default function ConversationPage(): React.JSX.Element {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm text-neutral-500">Loading chat...</div>}>
+    <Suspense fallback={<div className={styles.loadingFallback}>Loading chat...</div>}>
       <ChatContent />
     </Suspense>
   );

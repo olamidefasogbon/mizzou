@@ -1,90 +1,60 @@
-/* Mizzou design tokens. Single source of truth; every value copied from
-   docs/design/html/*.html, which wins over PROMPT.md section 8 on any number.
+/* Mizzou design tokens. Single source of truth; values follow
+   docs/design/META_STYLE.md section 1 (provisional until
+   docs/design/META_TOKENS.md exists, then that file wins).
    No one-off colors: screens and components use only these variables. */
 
 :root {
-  --mz-page: #e9e9eb;
-  --mz-ink: #000;
-  --mz-secondary: #48484a;
+  --mz-page: #FFFFFF;
+  --mz-ink: #000000;
+  --mz-secondary: #65676B;
+  --mz-blue: #0064E0;
+  --mz-blue-hover: #0057C2;
+  --mz-blue-pressed: #004BA8;
+  --mz-border: #DEE3E9;
+  --mz-muted: #F1F4F7;
+  --mz-success: #31A24C;
+  --mz-error: #E41E3F;
+  --mz-amber: #D97706;
 
-  --mz-blob-1: #cfcfd4;
-  --mz-blob-2: #f7f7f9;
-  --mz-blob-3: #c4c4ca;
+  --mz-wordmark-font: var(--font-pinyon, "Pinyon Script"), "Pinyon Script", cursive;
+  --mz-wordmark-color: #0064E0;
 
-  --mz-glass: rgba(255, 255, 255, 0.42);
-  --mz-glass-strong: rgba(255, 255, 255, 0.5);
-  --mz-glass-menu: rgba(255, 255, 255, 0.68);
-  --mz-glass-border: rgba(255, 255, 255, 0.7);
-  --mz-line: rgba(60, 60, 67, 0.14);
-  --mz-frame: rgba(60, 60, 67, 0.18);
-  --mz-pill: rgba(120, 120, 128, 0.2);
-  --mz-pill-soft: rgba(120, 120, 128, 0.16);
-  --mz-user-bubble: rgba(120, 120, 128, 0.22);
-  --mz-dot: #6c6c70;
-  --mz-connector: rgba(60, 60, 67, 0.25);
-  --mz-scrim: rgba(0, 0, 0, 0.1);
+  --mz-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
+  --mz-shadow-large: 0 8px 32px rgba(0, 0, 0, 0.14);
 
-  --mz-blur: blur(24px) saturate(180%);
-  --mz-shadow-card:
-    0 0 0 0.5px rgba(0, 0, 0, 0.07),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    0 10px 30px rgba(0, 0, 0, 0.07);
-  --mz-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.85);
-
-  --mz-radius-card: 28px;
+  --mz-radius-composer: 28px;
+  --mz-radius-card: 20px;
+  --mz-radius-bubble: 18px;
   --mz-radius-pill: 999px;
   --mz-touch: 44px;
 
   --mz-font:
-    -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-/* App background layer only: page color plus blobs. It must not have a
-   max-width (docs/design/RESPONSIVE.md section 3). Width comes from the
-   AppShell grid; chat columns cap themselves per breakpoint. */
+/* App shell: white canvas, single column. */
 .mz-shell {
   width: 100%;
   min-height: 100dvh;
   position: relative;
-  overflow: clip;
   background: var(--mz-page);
   color: var(--mz-ink);
   font-family: var(--mz-font);
 }
 
-/* Full-viewport background layer for landing + sign-up
-   (docs/design/UI_CORRECTIONS.md section 5). Page color and blobs live
-   here so no narrow wrapper clips them. Content sits on top of it.
-   z-index scale: blobs 0, content 1. */
-.mz-bg {
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
-  z-index: 0;
-  pointer-events: none;
-}
-
+/* Content layer above overlays. */
 .mz-fg {
   position: relative;
   z-index: 1;
 }
 
 .mz-wordmark {
-  font-family: var(--font-pinyon, "Pinyon Script"), "Pinyon Script", cursive;
+  font-family: var(--mz-wordmark-font);
   line-height: 1;
-  color: var(--mz-ink);
+  color: var(--mz-wordmark-color);
 }
 
-/* Shared glass surfaces. */
-.mz-glass {
-  background: var(--mz-glass);
-  backdrop-filter: var(--mz-blur);
-  -webkit-backdrop-filter: var(--mz-blur);
-  border: 1px solid var(--mz-glass-border);
-  box-shadow: var(--mz-shadow-card);
-}
-
-/* Buttons. Black is reserved for the single primary action per screen. */
+/* Buttons. Primary is always Meta Blue; black is text only, never buttons. */
 .mz-btn {
   display: flex;
   align-items: center;
@@ -96,18 +66,28 @@
   text-decoration: none;
   min-height: var(--mz-touch);
 }
-.mz-btn:active {
-  opacity: 0.72;
-}
 .mz-btn-primary {
-  background: #000;
+  background: var(--mz-blue);
   color: #fff;
   font-weight: 600;
 }
+@media (hover: hover) {
+  .mz-btn-primary:hover {
+    background: var(--mz-blue-hover);
+  }
+}
+.mz-btn-primary:active {
+  background: var(--mz-blue-pressed);
+}
 .mz-btn-secondary {
-  background: var(--mz-pill);
+  background: var(--mz-muted);
   color: var(--mz-ink);
   font-weight: 500;
+}
+@media (hover: hover) {
+  .mz-btn-secondary:hover {
+    background: var(--mz-border);
+  }
 }
 
 /* Small gray count / time pills. */
@@ -115,16 +95,19 @@
   display: inline-flex;
   align-items: center;
   border-radius: var(--mz-radius-pill);
-  background: var(--mz-pill);
+  background: var(--mz-muted);
   color: var(--mz-ink);
   font-weight: 600;
 }
 
-/* 44px round glass icon buttons (menu, new chat, back). */
+/* 44px round icon buttons (menu, new chat, back). White, hairline border. */
 .mz-icon-btn {
   width: var(--mz-touch);
   height: var(--mz-touch);
   border-radius: 22px;
+  border: 1px solid var(--mz-border);
+  background: #fff;
+  box-shadow: var(--mz-shadow);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -135,7 +118,15 @@
 
 .mz-divider {
   height: 1px;
-  background: var(--mz-line);
+  background: var(--mz-border);
+}
+
+/* 2px Meta Blue ring with 2px offset. */
+:where(button, a, input, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px #fff,
+    0 0 0 4px var(--mz-blue);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -143,4 +134,3 @@
     transition: none !important;
   }
 }
-

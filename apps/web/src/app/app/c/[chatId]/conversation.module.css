@@ -1,0 +1,421 @@
+/* Conversation screen. Meta.ai style: white canvas, plain assistant text,
+   muted user bubbles, white cards, blue primary actions. Only tokens. */
+
+.screen {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 1;
+  padding: 72px 16px 24px;
+  color: var(--mz-ink);
+}
+
+.feed {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 12px;
+  overflow-y: auto;
+  padding-bottom: 16px;
+}
+
+.userRow {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.userBubble {
+  max-width: 80%;
+  border-radius: var(--mz-radius-bubble);
+  background: var(--mz-muted);
+  padding: 10px 16px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.assistantRow {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.assistantText {
+  max-width: 100%;
+  font-size: 15px;
+  line-height: 1.65;
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 4px;
+  font-size: 14px;
+  color: var(--mz-secondary);
+}
+
+.spin {
+  width: 16px;
+  height: 16px;
+  color: var(--mz-blue);
+  animation: mz-spin 1s linear infinite;
+  flex: none;
+}
+
+@keyframes mz-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.checkIcon {
+  width: 16px;
+  height: 16px;
+  color: var(--mz-success);
+  flex: none;
+}
+
+.failIcon {
+  width: 16px;
+  height: 16px;
+  color: var(--mz-error);
+  flex: none;
+}
+
+/* Cards: program match, conflicts, coverage, requirements, plan. */
+.card {
+  border-radius: var(--mz-radius-card);
+  border: 1px solid var(--mz-border);
+  background: #fff;
+  padding: 20px;
+  box-shadow: var(--mz-shadow);
+}
+
+.cardPrompt {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mz-secondary);
+}
+
+.cardTitle {
+  margin: 8px 0 0;
+  font-size: 20px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.cardSub {
+  font-size: 14px;
+  color: var(--mz-secondary);
+}
+
+.btnRow {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.btnPrimary {
+  border: 0;
+  border-radius: var(--mz-radius-pill);
+  background: var(--mz-blue);
+  color: #fff;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .btnPrimary:hover {
+    background: var(--mz-blue-hover);
+  }
+}
+
+.btnPrimary:active {
+  background: var(--mz-blue-pressed);
+}
+
+.btnPrimary:disabled {
+  opacity: 0.3;
+}
+
+.btnSecondary {
+  border: 0;
+  border-radius: var(--mz-radius-pill);
+  background: var(--mz-muted);
+  color: var(--mz-ink);
+  padding: 8px 16px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .btnSecondary:hover {
+    background: var(--mz-border);
+  }
+}
+
+.g1Done {
+  margin-top: 12px;
+  border-radius: var(--mz-radius-bubble);
+  background: var(--mz-muted);
+  padding: 12px;
+}
+
+.g1DoneText {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.g1No {
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--mz-secondary);
+}
+
+.conflictField {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mz-ink);
+}
+
+.conflictValues {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.conflictQuote {
+  display: block;
+  font-style: italic;
+}
+
+.link {
+  color: var(--mz-blue);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (hover: hover) {
+  .link:hover {
+    text-decoration: underline;
+  }
+}
+
+.coverageLine {
+  margin: 0;
+}
+
+.coverageLine + .coverageLine {
+  margin-top: 4px;
+}
+
+.coverageOpen {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.sectionTitle {
+  margin: 8px 0 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mz-secondary);
+}
+
+.reqList {
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reqItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.reqDetail {
+  color: var(--mz-secondary);
+}
+
+.warnBadge {
+  margin-top: 2px;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--mz-amber);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.evidenceBtn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--mz-blue);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  display: block;
+}
+
+.flagNote {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--mz-secondary);
+}
+
+.planRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.planTask {
+  font-size: 15px;
+  color: var(--mz-secondary);
+}
+
+.icsBtn {
+  margin-top: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icsBtn:disabled {
+  opacity: 0.3;
+}
+
+.rollingPill {
+  display: inline-block;
+  border-radius: var(--mz-radius-pill);
+  background: var(--mz-muted);
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.rollingText {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--mz-secondary);
+}
+
+.block {
+  display: block;
+}
+
+.mt2 {
+  margin-top: 8px;
+}
+
+.warnMark {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.sendIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.errorCard {
+  border-radius: var(--mz-radius-bubble);
+  background: #fff;
+  border: 1px solid var(--mz-border);
+  padding: 10px 16px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.errorOpen {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+/* Composer: large rounded pill with a round blue send button. */
+.composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: var(--mz-radius-composer);
+  border: 1px solid var(--mz-border);
+  background: #fff;
+  padding: 8px 8px 8px 16px;
+  box-shadow: var(--mz-shadow);
+}
+
+.composerInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--mz-ink);
+}
+
+.composerInput::placeholder {
+  color: var(--mz-secondary);
+}
+
+.sendBtn {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--mz-blue);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.sendBtn:disabled {
+  background: var(--mz-muted);
+  color: var(--mz-secondary);
+  cursor: default;
+}
+
+.loadingFallback {
+  display: flex;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--mz-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}

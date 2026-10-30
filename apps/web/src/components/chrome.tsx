@@ -1,44 +1,7 @@
 'use client';
 
-// Shared phone chrome. Values from docs/design/html/Chat.html (top bar,
-// composer) and docs/design/html/PlusMenu.html (upload menu overlay).
-
-export interface BlobSpec {
-  top?: number;
-  left?: number;
-  right?: number;
-  bottom?: number;
-  size: number;
-  color: string;
-  blur: number;
-}
-
-export function Blobs({ specs }: { specs: BlobSpec[] }) {
-  return (
-    <>
-      {specs.map((b, i) => (
-        <div
-          key={i}
-          aria-hidden="true"
-          style={{
-            position: "absolute",
-            zIndex: 0,
-            pointerEvents: "none",
-            top: b.top,
-            left: b.left,
-            right: b.right,
-            bottom: b.bottom,
-            width: b.size,
-            height: b.size,
-            borderRadius: b.size / 2,
-            background: b.color,
-            filter: `blur(${b.blur}px)`,
-          }}
-        />
-      ))}
-    </>
-  );
-}
+// Shared composer chrome. Meta.ai style: white surfaces, hairline borders,
+// blue primary send. No blur, no glass.
 
 export interface ChosenFile {
   name: string;
@@ -55,13 +18,10 @@ export function PlusMenu({ onPick }: { onPick: (file: File) => void }) {
         width: 240,
         boxSizing: "border-box",
         padding: 8,
-        borderRadius: 28,
-        background: "rgba(255, 255, 255, 0.68)",
-        backdropFilter: "blur(28px) saturate(180%)",
-        WebkitBackdropFilter: "blur(28px) saturate(180%)",
-        border: "1px solid rgba(255, 255, 255, 0.8)",
-        boxShadow:
-          "0 0 0 0.5px rgba(0, 0, 0, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 16px 40px rgba(0, 0, 0, 0.12)",
+        borderRadius: 20,
+        background: "#fff",
+        border: "1px solid var(--mz-border)",
+        boxShadow: "var(--mz-shadow-large)",
         display: "flex",
         flexDirection: "column",
       }}
@@ -103,7 +63,7 @@ export function PlusMenu({ onPick }: { onPick: (file: File) => void }) {
           }}
         />
       </label>
-      <div style={{ height: 1, margin: "0 14px", background: "rgba(60, 60, 67, 0.14)" }} />
+      <div style={{ height: 1, margin: "0 14px", background: "var(--mz-border)" }} />
       <label
         style={{
           display: "flex",
@@ -163,6 +123,7 @@ export function Composer({
   /** Absolute bottom-dock (conversation, mobile home) vs in-flow (tablet/desktop home). */
   docked?: boolean;
 }) {
+  const hasText = value.trim().length > 0;
   return (
     <div
       style={{
@@ -181,18 +142,19 @@ export function Composer({
         type="button"
         onClick={onToggleMenu}
         aria-label={menuOpen ? "Close menu" : "Add a photo"}
-        className="mz-glass"
         style={{
           flex: "none",
           width: 52,
           height: 52,
           borderRadius: 26,
+          border: "1px solid var(--mz-border)",
+          background: "#fff",
+          boxShadow: "var(--mz-shadow)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           cursor: "pointer",
           color: "#000",
-          background: menuOpen ? "rgba(255, 255, 255, 0.68)" : undefined,
         }}
       >
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
@@ -200,13 +162,15 @@ export function Composer({
         </svg>
       </button>
       <div
-        className="mz-glass"
         style={{
           flex: 1,
           minWidth: 0,
           height: 52,
           boxSizing: "border-box",
           borderRadius: 26,
+          background: "#fff",
+          border: "1px solid var(--mz-border)",
+          boxShadow: "var(--mz-shadow)",
           display: "flex",
           alignItems: "center",
           padding: "0 8px 0 20px",
@@ -236,20 +200,21 @@ export function Composer({
           type="button"
           onClick={onSend}
           aria-label="Send"
+          disabled={!hasText}
           style={{
             flex: "none",
             width: 36,
             height: 36,
             border: 0,
             borderRadius: 18,
-            background: "rgba(120, 120, 128, 0.2)",
+            background: hasText ? "var(--mz-blue)" : "var(--mz-muted)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            cursor: "pointer",
+            cursor: hasText ? "pointer" : "default",
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={hasText ? "#fff" : "#000"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M12 19V5M6 11l6-6 6 6" />
           </svg>
         </button>

@@ -72,7 +72,7 @@ export function EvidenceOverlay(): React.JSX.Element | null {
         role="dialog"
         aria-modal="true"
         aria-label={`Where this was found: ${selected.title}`}
-        className={`mz-glass ${styles.sheet}`}
+        className={styles.sheet}
         onClick={(e) => e.stopPropagation()}
       >
         <div

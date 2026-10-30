@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Blobs, Composer } from '@/components/chrome';
+import { Composer } from '@/components/chrome';
 import { useStore } from '@/components/store-context';
 import { DISMISS_COOKIE, remindersVersion, shouldShowComingUp } from './coming-up';
 import styles from './home.module.css';
@@ -79,13 +79,6 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
 
   return (
     <>
-      <Blobs
-        specs={[
-          { top: -80, right: -100, size: 300, color: 'var(--mz-blob-1)', blur: 60 },
-          { top: 280, left: -120, size: 280, color: 'var(--mz-blob-2)', blur: 60 },
-          { bottom: 120, right: -110, size: 320, color: 'var(--mz-blob-3)', blur: 70 },
-        ]}
-      />
       <div className={styles.body}>
         <div className={styles.greeting}>
           <p className={styles.hello}>{name ? `Howdy, ${name}` : 'Howdy'}</p>
@@ -99,7 +92,7 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
         </div>
 
         {showComingUp ? (
-          <div key={version} className={`mz-glass ${styles.comingUp}`}>
+          <div key={version} className={styles.comingUp}>
             <div className={styles.comingUpHead}>
               <span className={styles.comingUpTitle}>Coming up</span>
               <span className={styles.comingUpActions}>

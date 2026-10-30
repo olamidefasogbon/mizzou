@@ -55,13 +55,16 @@
 
 /* Renders only when at least one reminder exists. Rises once per
    reminders version; closing stores the version, a new or newly-due
-   reminder shows it again. */
+   reminder shows it again. White card, hairline border. */
 .comingUp {
   flex: none;
   margin-bottom: 12px;
   box-sizing: border-box;
   padding: 8px 16px 8px;
   border-radius: var(--mz-radius-card);
+  background: #fff;
+  border: 1px solid var(--mz-border);
+  box-shadow: var(--mz-shadow);
   animation: coming-rise 240ms cubic-bezier(0.3, 1.1, 0.4, 1);
 }
 
@@ -129,7 +132,7 @@
   min-height: 54px;
   min-width: 0;
   padding: 0 4px;
-  border-top: 1px solid rgba(60, 60, 67, 0.14);
+  border-top: 1px solid var(--mz-border);
 }
 
 .rowText {

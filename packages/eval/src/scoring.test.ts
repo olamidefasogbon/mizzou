@@ -1,6 +1,9 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { ExtractionSchema } from '@mizzou/core';
-import { deadlineHit, sourceDay, summarizeDeadlines } from './scoring.ts';
+import { deadlineHit, scoreCopyReply, sourceDay, summarizeDeadlines } from './scoring.ts';
 
 // Locks the eval deadline rule for case-01 without calling any model.
 // Label: "Application Deadline — Computer Science (PhD)",
@@ -45,6 +48,29 @@ describe('deadlineHit', () => {
   it('misses when the label lacks the expected first word, even on the right day', () => {
     const extracted = [{ label: 'December 15, 2026', iso_utc: '2026-12-15T23:59:59Z' }];
     expect(deadlineHit(extracted, EXPECTED)).toBe(false);
+  });
+});
+
+describe('scoreCopyReply', () => {
+  it('passes sharp friend-texting replies', () => {
+    expect(scoreCopyReply('Found it — Northeastern\u2019s Align MSCS. Is this the one?')).toEqual([]);
+    expect(scoreCopyReply('Two dates on this one: December 15 and January 5. Which should I plan around?')).toEqual([]);
+  });
+
+  it('flags system words and layout pointers', () => {
+    expect(scoreCopyReply('As an AI assistant, see the card above.')).toEqual(['banned-term', 'layout-reference']);
+    expect(scoreCopyReply('The details are listed below.')).toEqual(['layout-reference']);
+  });
+
+  it('scores every conversational sample reply clean', async () => {
+    const here = dirname(fileURLToPath(import.meta.url));
+    const fixture = JSON.parse(readFileSync(join(here, '..', 'cases', 'conversational-samples.json'), 'utf8')) as {
+      replies: string[];
+    };
+    expect(fixture.replies.length).toBeGreaterThan(0);
+    for (const reply of fixture.replies) {
+      expect(scoreCopyReply(reply)).toEqual([]);
+    }
   });
 });
 

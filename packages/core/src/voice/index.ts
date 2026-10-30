@@ -24,6 +24,14 @@ export function hasLayoutReference(text: string): boolean {
   return /\b(above|below)\b/i.test(text);
 }
 
+/**
+ * System words the voice never uses. Mizzou talks about the degree, the
+ * cohort, the opening, the office — never about itself or its machinery.
+ */
+export function hasBannedTerm(text: string): boolean {
+  return /\b(ai|assistant|chatbot|model|dashboard)\b/i.test(text);
+}
+
 /** Rolling-review notice for listings with no fixed closing date. */
 export const ROLLING_NOTICE_TEXT =
   'No fixed closing date found on this listing. Applications may be reviewed on a rolling basis.';

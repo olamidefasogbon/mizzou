@@ -17,3 +17,8 @@ Rules:
 - Only cases with `"labeled": true` and a non-null `expected` run.
 - Never commit a real API key or personal data in a case file.
 - The runner defaults to `--limit 2`. A full 10-case run only on request.
+
+Conversational copy (`conversational-samples.json`) is scored by
+`scoreCopyReply` in the eval unit tests — no model calls, no budget.
+It stays `labeled: false` with a null `expected` so the extraction
+runner skips it.

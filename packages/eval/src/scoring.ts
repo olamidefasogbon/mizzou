@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import type { Extraction } from '@mizzou/core';
+import { hasBannedTerm, hasLayoutReference, type Extraction } from '@mizzou/core';
 
 // Pure scoring helpers for the eval runner (no model calls, no I/O).
 //
@@ -46,6 +46,16 @@ export interface ExtractedDeadlineSummary {
   iso_utc: string | null;
   evidence_quote: string;
   checked: boolean;
+}
+
+// Conversational copy check (no model calls): every sample assistant reply
+// must read like the voice section — no system words, no layout pointers.
+// Returns one violation string per problem, empty when clean.
+export function scoreCopyReply(text: string): string[] {
+  const violations: string[] = [];
+  if (hasBannedTerm(text)) violations.push('banned-term');
+  if (hasLayoutReference(text)) violations.push('layout-reference');
+  return violations;
 }
 
 // Minimal raw record persisted per case so a 0/1 deadline score can be

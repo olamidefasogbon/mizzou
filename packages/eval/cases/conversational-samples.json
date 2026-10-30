@@ -1,0 +1,15 @@
+{
+  "note": "Conversational copy samples. These are scored by scoreCopyReply in eval unit tests (no model calls, no budget). They never run through the labeled extraction runner: labeled is false and expected is null, so run.ts skips this file.",
+  "id": "conversational-samples",
+  "kind": "conversation",
+  "labeled": false,
+  "expected": null,
+  "replies": [
+    "Found it — Northeastern's Align MSCS, no CS background needed. Is this the one?",
+    "Two dates on this one: December 15 for the fellowship, January 5 for the program. Which should I plan around?",
+    "That page won't open for me. Paste the text and I'll read it here.",
+    "On it. Let me find the right page and see what they ask for.",
+    "Got everything. Here's my honest read.",
+    "Quick check before I go further. Is this the position you mean?"
+  ]
+}

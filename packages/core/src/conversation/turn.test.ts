@@ -263,6 +263,123 @@ describe('conversation turn usage', () => {
     expect(h.seen[1]?.previousResponseId).toBeNull();
   });
 
+describe('settled extraction card guards', () => {
+  function doc(name: string, optional = false) {
+    return {
+      value: { name, limit: null, optional },
+      evidence_quote: name,
+      source_url: 'https://example.edu/a',
+      confidence: 'high' as const,
+      needs_human: false,
+      checked: true,
+    };
+  }
+
+  function rule(text: string) {
+    return {
+      value: { rule: text, hard: true },
+      evidence_quote: text,
+      source_url: 'https://example.edu/a',
+      confidence: 'high' as const,
+      needs_human: false,
+      checked: true,
+    };
+  }
+
+  function jobExtraction(deadlines: Extraction['deadlines']): Extraction {
+    return {
+      ...stubExtraction(),
+      opportunity_type: 'job',
+      program: {
+        ...stubExtraction().program,
+        name: ev('Software Engineer'),
+        institution: ev('Acme Corp'),
+      },
+      deadlines,
+      documents: [doc('Resume'), doc('Portfolio', true)],
+      eligibility: [rule('US work authorization required')],
+    };
+  }
+
+  function isoDeadline(label: string, iso: string): Extraction['deadlines'][number] {
+    return {
+      label,
+      field: {
+        value: { iso_utc: iso, original_tz: 'America/New_York', all_day: false, rolling: false },
+        evidence_quote: label,
+        source_url: 'https://example.edu/a',
+        confidence: 'high' as const,
+        needs_human: false,
+        checked: true,
+      },
+    };
+  }
+
+  function cardKinds(events: RunEvent[]): string[] {
+    return events.filter((e) => e.t === 'card').map((e) => (e as { kind: string }).kind);
+  }
+
+  async function readOnce(extraction: Extraction): Promise<RunEvent[]> {
+    const h = makeHarness([
+      callResult('read_page', { url: 'https://example.edu/a' }, 'resp-1'),
+      textResult('Here is what they ask for.', 'resp-2'),
+    ]);
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'https://example.edu/a',
+      userId: 'user-1',
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+      fetchPage: async () => stubPage,
+      readPageText: async () => ({ extraction, costUsd: 0.002, model: 'muse-spark-1.3', inputTokens: 80, outputTokens: 40 }),
+    });
+    return h.events;
+  }
+
+  it('emits requirements and plan cards when checked ISO deadlines exist', async () => {
+    const events = await readOnce(jobExtraction([isoDeadline('Apply by', '2026-12-01T04:59:59Z')]));
+    const kinds = cardKinds(events);
+    expect(kinds).toContain('requirements');
+    expect(kinds).toContain('plan');
+    expect(kinds).not.toContain('rolling_notice');
+    const req = events.find((e) => e.t === 'card' && (e as { kind: string }).kind === 'requirements') as unknown as {
+      payload: { documents: Array<{ name: string; optional: boolean }>; eligibility: Array<{ rule: string }> };
+    };
+    expect(req.payload.documents.map((d) => d.name)).toEqual(['Resume', 'Portfolio']);
+    expect(req.payload.documents[1].optional).toBe(true);
+    expect(req.payload.eligibility.map((e) => e.rule)).toEqual(['US work authorization required']);
+    const plan = events.find((e) => e.t === 'card' && (e as { kind: string }).kind === 'plan') as unknown as {
+      payload: { title: string; deadlines: string[]; portalUrl: string | null };
+    };
+    expect(plan.payload.title).toBe('Software Engineer');
+    expect(plan.payload.deadlines).toEqual(['2026-12-01T04:59:59Z']);
+  });
+
+  it('emits a rolling notice and no plan card when no deadlines exist', async () => {
+    const events = await readOnce(jobExtraction([]));
+    const kinds = cardKinds(events);
+    expect(kinds).toContain('requirements');
+    expect(kinds).toContain('rolling_notice');
+    expect(kinds).not.toContain('plan');
+    const rolling = events.find((e) => e.t === 'card' && (e as { kind: string }).kind === 'rolling_notice') as unknown as {
+      payload: { text: string };
+    };
+    expect(rolling.payload.text).toBe(
+      'No fixed closing date found on this listing. Applications may be reviewed on a rolling basis.',
+    );
+  });
+
+  it('treats unchecked deadlines as rolling, not planned', async () => {
+    const unchecked = isoDeadline('Apply by', '2026-12-01T04:59:59Z');
+    unchecked.field.checked = false;
+    const events = await readOnce(jobExtraction([unchecked]));
+    const kinds = cardKinds(events);
+    expect(kinds).toContain('rolling_notice');
+    expect(kinds).not.toContain('plan');
+  });
+});
+
   it('a turn after a gate restarts the chain with a text recap', async () => {
     const gate = makeHarness([
       callResult('request_approval', { gate: 'G1', what: 'Is this the one?', card: { kind: 'program', name: 'Computer Science MS', source_url: 'https://example.edu/a' } }, 'resp-gate'),

@@ -36,6 +36,7 @@ import {
 } from '../extract/reconcile.js';
 import { buildCoveragePayload } from '../deepscan/coverage.js';
 import {
+  ROLLING_NOTICE_TEXT,
   SAY_GOT_IT,
   SAY_PAGE_WOULD_NOT_OPEN,
   formatFindingStatus,
@@ -358,6 +359,76 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     send({ t: 'card', id: `${run.id}-t${run.turnCount}-coverage`, kind: 'coverage', payload });
   };
 
+  /** Deadlines that passed the evidence post-check and carry a usable ISO instant. */
+  const validIsoDeadlines = (extraction: Extraction): string[] => {
+    const out: string[] = [];
+    for (const d of extraction.deadlines) {
+      const iso = d.field.value.iso_utc;
+      if (!d.field.checked || typeof iso !== 'string' || iso.length === 0) continue;
+      if (Number.isNaN(Date.parse(iso))) continue;
+      out.push(iso);
+    }
+    return out;
+  };
+
+  /**
+   * Card emission guards for a settled extraction. The requirements card
+   * always mirrors the checked extraction — documents and eligibility read
+   * from the page, so corporate jobs surface Resume/Work Authorization/
+   * Portfolio, academic programs surface Transcripts/SOP/LORs, and funding
+   * calls surface Proposal/Budget Deck with no hardcoded lists. The plan
+   * card goes out only when valid ISO deadlines exist; otherwise the UI
+   * gets a rolling notice instead of an empty plan.
+   */
+  const emitExtractionCards = (extraction: Extraction): void => {
+    const cardId = `conv-${run.id}-t${run.turnCount}`;
+    send({
+      t: 'card',
+      id: `${cardId}-requirements`,
+      kind: 'requirements',
+      payload: {
+        documents: extraction.documents.map((d) => ({
+          name: d.value.name,
+          limit: d.value.limit,
+          optional: d.value.optional,
+          confidence: d.confidence,
+          needs_human: d.needs_human,
+          evidence_quote: d.evidence_quote,
+          source_url: d.source_url,
+        })),
+        eligibility: extraction.eligibility.map((e) => ({
+          rule: e.value.rule,
+          hard: e.value.hard,
+          confidence: e.confidence,
+          needs_human: e.needs_human,
+          evidence_quote: e.evidence_quote,
+          source_url: e.source_url,
+        })),
+      },
+    });
+    const deadlines = validIsoDeadlines(extraction);
+    if (deadlines.length > 0) {
+      send({
+        t: 'card',
+        id: `${cardId}-plan`,
+        kind: 'plan',
+        payload: {
+          title: extraction.program.name.value,
+          deadlines,
+          items: [],
+          portalUrl: extraction.program.portal_url,
+        },
+      });
+    } else {
+      send({
+        t: 'card',
+        id: `${cardId}-rolling`,
+        kind: 'rolling_notice',
+        payload: { text: ROLLING_NOTICE_TEXT },
+      });
+    }
+  };
+
   /** Merge one extraction, reconcile, and G2-gate when conflicts stand. */
   const mergeAndReconcile = async (
     url: string,
@@ -377,17 +448,23 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     const rec = reconcileExtractions(mem.extractions, mem.programUrl);
     if (rec.conflicts.length === 0) {
       const deadlines = rec.merged?.deadlines.length ?? 0;
+      if (rec.merged) emitExtractionCards(rec.merged);
       return { gate: null, summary: `read ${title || url}; ${deadlines} deadline(s) extracted, no conflicts` };
     }
     let remaining = rec.conflicts;
+    let settled: Extraction | null = rec.merged;
     try {
       const res = await resolveConflictsWithJudge(rec.merged ?? extraction, rec.conflicts, judge, userId);
       logUsage({ kind: 'model', tool: null, role: 'judge', model: res.judgeUsage?.model ?? null, inputTokens: res.judgeUsage?.inputTokens ?? null, outputTokens: res.judgeUsage?.outputTokens ?? null, costUsd: res.costUsd });
       remaining = res.remaining;
+      settled = res.merged;
     } catch {
       // Judge unreachable: fall through with code-detected conflicts.
     }
-    if (remaining.length === 0) return { gate: null, summary: `read ${title || url}; conflicts resolved by judge` };
+    if (remaining.length === 0) {
+      if (settled) emitExtractionCards(settled);
+      return { gate: null, summary: `read ${title || url}; conflicts resolved by judge` };
+    }
     const coverage = buildCoveragePayload({ pagesRead: mem.pages, unreadable: mem.unreadable, languages: mem.languages });
     return {
       gate: {

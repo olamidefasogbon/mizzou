@@ -7,6 +7,7 @@ import { formatG1Prompt } from '@mizzou/core/voice';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { ensureChatAction } from '@/lib/actions';
+import { useStore } from '@/components/store-context';
 import { isTightGroup, messageBubble, statusRun, statusRunHead } from './feed';
 import styles from './conversation.module.css';
 
@@ -178,6 +179,7 @@ function ChatContent(): React.JSX.Element {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const { refreshChats } = useStore();
   const feedRef = useRef<HTMLDivElement>(null);
   // Cards streamed with the run stay hidden until the G1 "Yes" —
   // the deep scan still waits for approval.
@@ -478,6 +480,12 @@ function ChatContent(): React.JSX.Element {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await pump(res);
+      try {
+        // Pull the server-generated title (and any list changes) into the panel.
+        await refreshChats();
+      } catch {
+        // The panel keeps its optimistic row; titles refresh on next visit.
+      }
     } catch {
       setFeed((prev) => [
         ...prev,
@@ -488,7 +496,7 @@ function ChatContent(): React.JSX.Element {
       feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight });
     }
     },
-    [busy, chatId, enterStream, leaveStream, pump],
+    [busy, chatId, enterStream, leaveStream, pump, refreshChats],
   );
 
   const send = useCallback((): void => {

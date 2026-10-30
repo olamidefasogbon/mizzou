@@ -3,6 +3,7 @@ import {
   BudgetGuard,
   budgetFriendlyMessage,
   encodeSseEvent,
+  generateChatTitle,
   limitsFromEnv,
   newRun,
   runConversationTurn,
@@ -111,6 +112,16 @@ export async function POST(req: Request): Promise<Response> {
           } catch (flushErr) {
             logServerError('chat-usage', flushErr);
           }
+        }
+        if (!existing && chatId) {
+          // First exchange: write a short model-generated title (falls
+          // back to the opening message) so the panel never shows one.
+          const assistantTexts = run.messages
+            .map((m) => m as { role?: unknown; text?: unknown })
+            .filter((m) => m.role === 'assistant' && typeof m.text === 'string' && m.text.length > 0)
+            .map((m) => m.text as string);
+          const title = await generateChatTitle(message, assistantTexts[assistantTexts.length - 1] ?? '');
+          await db.chats.rename(chatId, userId, title);
         }
         if (run.pendingGate) {
           const evidence = run.pendingGate.evidence as { card?: unknown } | Record<string, unknown> | null | undefined;

@@ -28,6 +28,11 @@ export async function ensureChatAction(id: string, title: string): Promise<ChatS
   return (await repo()).chats.ensure(id, userId, title.slice(0, 60));
 }
 
+export async function refreshChatsAction(): Promise<ChatSummary[]> {
+  const { userId } = await resolveUser();
+  return (await repo()).chats.list(userId);
+}
+
 export async function clearChatsAction(): Promise<ChatSummary[]> {
   const { userId } = await resolveUser();
   return (await repo()).chats.clear(userId);

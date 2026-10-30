@@ -4,6 +4,7 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import {
   clearChatsAction,
   ensureChatAction,
+  refreshChatsAction,
   restoreChatsAction,
   type AppData,
 } from '@/lib/actions';
@@ -19,6 +20,7 @@ interface StoreState {
   reminders: Reminder[];
   chats: ChatSummary[];
   ensureChat: (id: string, title: string) => Promise<void>;
+  refreshChats: () => Promise<void>;
   clearChats: () => Promise<void>;
   undoClearChats: () => Promise<void>;
   expireUndo: () => void;
@@ -38,6 +40,10 @@ export function StoreProvider({ initial, children }: { initial: AppData; childre
   const ensureChat = useCallback(async (id: string, title: string) => {
     const row = await ensureChatAction(id, title);
     setChats((prev) => (prev.some((c) => c.id === row.id) ? prev : [row, ...prev]));
+  }, []);
+
+  const refreshChats = useCallback(async () => {
+    setChats(await refreshChatsAction());
   }, []);
 
   const clearChats = useCallback(async () => {
@@ -61,7 +67,7 @@ export function StoreProvider({ initial, children }: { initial: AppData; childre
   }, []);
 
   return (
-    <StoreContext.Provider value={{ name, email, reminders, chats, ensureChat, clearChats, undoClearChats, expireUndo, undoArmed }}>
+    <StoreContext.Provider value={{ name, email, reminders, chats, ensureChat, refreshChats, clearChats, undoClearChats, expireUndo, undoArmed }}>
       {children}
     </StoreContext.Provider>
   );

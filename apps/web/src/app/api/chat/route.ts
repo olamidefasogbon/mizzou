@@ -1,14 +1,20 @@
 import {
   BudgetExceededError,
+  BudgetGuard,
+  budgetFriendlyMessage,
   encodeSseEvent,
+  limitsFromEnv,
   newRun,
   runConversationTurn,
   type RunEvent,
 } from '@mizzou/core';
-import { resolveUser } from '@/lib/auth';
-import { assertGuestRunAllowed, guestRunLimit } from '@/lib/caps';
+import { AuthRequiredError, resolveUser } from '@/lib/auth';
+import { logServerError, userErrorWithRef } from '@/lib/errors';
 import { repo } from '@/lib/repo';
+import { RequestUsageStore } from '@/lib/usage';
 
+// Vercel Hobby maximum is 60s (PROMPT.md 9.2 says platform maximum —
+// confirm against the Vercel plan at deploy; raise this when the plan grows).
 export const maxDuration = 60;
 
 // POST /api/chat — one model-driven conversation turn per message
@@ -49,7 +55,18 @@ export async function POST(req: Request): Promise<Response> {
           controller.close();
           return;
         }
-        const { userId, isGuest } = await resolveUser();
+        let userId: string;
+        try {
+          ({ userId } = await resolveUser());
+        } catch (err) {
+          if (err instanceof AuthRequiredError) {
+            send({ t: 'error', friendly: 'Sign in with Google to continue.' });
+            send({ t: 'done', runId: requestedRunId ?? '' });
+            controller.close();
+            return;
+          }
+          throw err;
+        }
         const db = await repo();
         const store = db.runs;
         const existing = requestedRunId ? await store.load(requestedRunId) : null;
@@ -61,22 +78,17 @@ export async function POST(req: Request): Promise<Response> {
           send({ t: 'done', runId });
           controller.close();
         };
-        if (!existing && isGuest) {
-          try {
-            assertGuestRunAllowed(await store.countStartedToday(userId), guestRunLimit());
-          } catch (err) {
-            fail(err instanceof Error ? err.message : 'I need a minute.');
-            return;
-          }
-        }
 
+        const snapshot = await db.usage.snapshot(userId);
+        const usageStore = new RequestUsageStore(snapshot.userSpend, snapshot.globalSpend);
+        const budgetGuard = new BudgetGuard(usageStore, limitsFromEnv());
         try {
           await runConversationTurn({
             run,
             save: (r) => store.save(r),
             userText: message,
             userId: run.userId ?? userId,
-            isGuest,
+            budgetGuard,
             send,
             listReminders: async () =>
               (await db.reminders.list(userId)).map((r) => ({
@@ -87,11 +99,18 @@ export async function POST(req: Request): Promise<Response> {
           });
         } catch (err) {
           if (err instanceof BudgetExceededError) {
-            fail('I need a minute.');
+            fail(budgetFriendlyMessage(err.scope));
           } else {
-            fail('Something went wrong on my side. Give it a minute and try again.');
+            const ref = logServerError('chat', err);
+            fail(userErrorWithRef('Something went wrong on my side. Give it a minute and try again.', ref));
           }
           return;
+        } finally {
+          try {
+            await db.usage.flush(usageStore.pending(), runId);
+          } catch (flushErr) {
+            logServerError('chat-usage', flushErr);
+          }
         }
         if (run.pendingGate) {
           const evidence = run.pendingGate.evidence as { card?: unknown } | Record<string, unknown> | null | undefined;
@@ -107,8 +126,12 @@ export async function POST(req: Request): Promise<Response> {
         }
         send({ t: 'done', runId });
         controller.close();
-      } catch {
-        send({ t: 'error', friendly: 'Something went wrong on my side. Give it a minute and try again.' });
+      } catch (err) {
+        const ref = logServerError('chat', err);
+        send({
+          t: 'error',
+          friendly: userErrorWithRef('Something went wrong on my side. Give it a minute and try again.', ref),
+        });
         send({ t: 'done', runId: requestedRunId ?? '' });
         controller.close();
       }

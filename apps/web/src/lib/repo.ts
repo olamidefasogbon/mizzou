@@ -26,6 +26,8 @@ export interface Repo {
   reminders: {
     list(userId: string): Promise<Reminder[]>;
     create(userId: string, input: ReminderInput): Promise<Reminder>;
+    /** Delete every reminder for a user. Returns the deleted count. */
+    clear(userId: string): Promise<number>;
   };
   chats: {
     list(userId: string): Promise<ChatSummary[]>;
@@ -66,6 +68,7 @@ export interface DbTable {
   insert(rows: unknown[]): DbQuery<Record<string, unknown>[]>;
   update(patch: unknown): DbQuery<Record<string, unknown>[]>;
   upsert(rows: unknown[], opts?: { onConflict?: string }): DbQuery<Record<string, unknown>[]>;
+  delete(): DbQuery<Record<string, unknown>[]>;
 }
 
 export interface DbClient {
@@ -207,6 +210,11 @@ export function supabaseRepo(db: DbClient): Repo {
         if (!res.data || res.error) throw new Error('Could not save the reminder.');
         return toReminder(res.data as RunRow, userId);
       },
+      clear: async (userId) => {
+        const res = await db.from('reminders').delete().eq('user_id', userId).select('id');
+        if (res.error) throw new Error('Could not delete reminders.');
+        return res.data?.length ?? 0;
+      },
     },
     chats: {
       list: async (userId) => {
@@ -310,6 +318,16 @@ export function memoryRepo(): Repo {
         };
         reminderRows.set(row.id, row);
         return row;
+      },
+      clear: async (userId) => {
+        let n = 0;
+        for (const [id, r] of reminderRows) {
+          if (r.userId === userId) {
+            reminderRows.delete(id);
+            n += 1;
+          }
+        }
+        return n;
       },
     },
     chats: {

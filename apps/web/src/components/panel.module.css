@@ -169,14 +169,97 @@
 .chatBase {
   display: flex;
   align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
   min-height: 44px;
   padding: 0 12px;
+  border: 0;
   border-radius: 14px;
+  background: transparent;
+  font-family: inherit;
   font-size: 15px;
   color: var(--mz-ink);
+  cursor: pointer;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.chatTitle {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chatArrow {
+  flex: none;
+  color: var(--mz-secondary);
+}
+
+.chatActive .chatArrow {
+  color: var(--mz-ink);
+}
+
+.groupLabelRow {
+  padding: 10px 12px 2px;
+}
+
+.newChatLabel {
+  flex: 1;
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 10px;
+  padding: 0 12px;
+  border: 1px solid var(--mz-border);
+  border-radius: 14px;
+  background: #fff;
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--mz-ink);
+  height: 42px;
+}
+
+.searchInput::placeholder {
+  color: var(--mz-secondary);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 4px 0;
+}
+
+.gearBtn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background: #fff;
+  border: 1px solid var(--mz-border);
+  box-shadow: var(--mz-shadow);
+  cursor: pointer;
+  color: var(--mz-ink);
 }
 
 .chatActive {

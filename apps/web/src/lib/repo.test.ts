@@ -26,14 +26,14 @@ class FakeQuery implements DbQuery<Row[]> {
   private wantSingle = false;
   private tables: Record<string, Row[]>;
   private table: string;
-  private kind: 'select' | 'insert' | 'update' | 'upsert';
+  private kind: 'select' | 'insert' | 'update' | 'upsert' | 'delete';
   private payload: unknown;
   private upsertConflict: string | undefined;
 
   constructor(
     tables: Record<string, Row[]>,
     table: string,
-    kind: 'select' | 'insert' | 'update' | 'upsert',
+    kind: 'select' | 'insert' | 'update' | 'upsert' | 'delete',
     payload?: unknown,
     upsertConflict?: string,
   ) {
@@ -85,6 +85,12 @@ class FakeQuery implements DbQuery<Row[]> {
 
   select(): DbQuery<Row[]> {
     return this.spawn();
+  }
+
+  delete(): DbQuery<Row[]> {
+    const q = this.spawn();
+    (q as { kind: string }).kind = 'delete';
+    return q;
   }
 
   async single(): Promise<DbResult<unknown>> {
@@ -161,6 +167,13 @@ class FakeQuery implements DbQuery<Row[]> {
       }
       return { data: out, error: null };
     }
+    if (this.kind === 'delete') {
+      const table = (this.tables[this.table] ??= []);
+      const condemned = new Set(this.rows());
+      const remaining = table.filter((r) => !condemned.has(r));
+      this.tables[this.table] = remaining;
+      return { data: [...condemned], error: null };
+    }
     return { data: this.rows(), error: null };
   }
 }
@@ -173,6 +186,7 @@ function fakeDb(seed: Record<string, Row[]> = {}): { client: DbClient; tables: R
       insert: (rows) => new FakeQuery(tables, table, 'insert', rows),
       update: (patch) => new FakeQuery(tables, table, 'update', patch),
       upsert: (rows, opts) => new FakeQuery(tables, table, 'upsert', rows, opts?.onConflict),
+      delete: () => new FakeQuery(tables, table, 'delete'),
     }),
   };
   return { client, tables };
@@ -259,6 +273,14 @@ describe('supabase repo behind the interface', () => {
     assert.equal((await repo.chats.list('user-b')).length, 1);
     await repo.chats.restore('user-a', removed);
     assert.equal((await repo.chats.list('user-a')).length, 1);
+  });
+
+  it('clears only the requesting user’s reminders', async () => {
+    const mk = (user: string, n: number) => ({ user_id: user, title: `t${n}`, status_line: 's', pill: 'p' });
+    const { repo, tables } = repoWithSeed({ reminders: [mk('user-a', 1), mk('user-a', 2), mk('user-b', 3)] });
+    assert.equal(await repo.reminders.clear('user-a'), 2);
+    assert.deepEqual((tables['reminders'] ?? []).map((r) => r['user_id']), ['user-b']);
+    assert.equal(await repo.reminders.clear('user-a'), 0);
   });
 
   it('the in-memory repo honors the same contract', async () => {

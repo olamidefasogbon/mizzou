@@ -33,6 +33,19 @@ export async function refreshChatsAction(): Promise<ChatSummary[]> {
   return (await repo()).chats.list(userId);
 }
 
+export interface DeletedData {
+  chats: number;
+  reminders: number;
+}
+
+export async function deleteMyDataAction(): Promise<DeletedData> {
+  const { userId } = await resolveUser();
+  const db = await repo();
+  const chats = await db.chats.clear(userId);
+  const reminders = await db.reminders.clear(userId);
+  return { chats: chats.length, reminders };
+}
+
 export async function clearChatsAction(): Promise<ChatSummary[]> {
   const { userId } = await resolveUser();
   return (await repo()).chats.clear(userId);

@@ -11,8 +11,7 @@ import {
   type RunEvent,
 } from '@mizzou/core';
 import { resolveUser } from '@/lib/auth';
-import { runsStore } from '@/lib/runs';
-import { remindersStore } from '@/lib/stores';
+import { repo } from '@/lib/repo';
 
 export const maxDuration = 60;
 
@@ -66,7 +65,8 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         controller.close();
       };
       try {
-        const store = runsStore();
+        const db = await repo();
+        const store = db.runs;
         const step = createDeepScanStep();
         const existing = await store.load(runId);
         const origin =
@@ -90,7 +90,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
               isGuest,
               send,
               listReminders: async () =>
-                (await remindersStore.list(userId)).map((r) => ({
+                (await db.reminders.list(userId)).map((r) => ({
                   id: r.id,
                   text: r.sub ? `${r.title} — ${r.sub}` : r.title,
                   dueAt: r.dueAt,

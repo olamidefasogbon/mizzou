@@ -7,8 +7,7 @@ import {
 } from '@mizzou/core';
 import { resolveUser } from '@/lib/auth';
 import { assertGuestRunAllowed, guestRunLimit } from '@/lib/caps';
-import { fileRunLedger } from '@/lib/repo';
-import { remindersStore } from '@/lib/stores';
+import { repo } from '@/lib/repo';
 
 export const maxDuration = 60;
 
@@ -51,7 +50,8 @@ export async function POST(req: Request): Promise<Response> {
           return;
         }
         const { userId, isGuest } = await resolveUser();
-        const store = fileRunLedger();
+        const db = await repo();
+        const store = db.runs;
         const existing = requestedRunId ? await store.load(requestedRunId) : null;
         const run = existing ?? newRun(requestedRunId ?? crypto.randomUUID(), userId, chatId);
         if (!run.userId) run.userId = userId;
@@ -79,7 +79,7 @@ export async function POST(req: Request): Promise<Response> {
             isGuest,
             send,
             listReminders: async () =>
-              (await remindersStore.list(userId)).map((r) => ({
+              (await db.reminders.list(userId)).map((r) => ({
                 id: r.id,
                 text: r.sub ? `${r.title} — ${r.sub}` : r.title,
                 dueAt: r.dueAt,

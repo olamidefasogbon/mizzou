@@ -2,8 +2,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileRunStore } from '@mizzou/core';
 
-// File-backed agent runs until Supabase is wired. Chat creates the run,
-// resume continues it; both resolve here so the directory never diverges.
+// Superseded by lib/repo.ts (Part A step 4): routes resolve runs through
+// the Repo now. Kept for reference; the file-backed era lives in repo's
+// fileRunLedger.
 export function runsStore(): FileRunStore {
   return new FileRunStore(join(process.env.MIZZOU_DATA_DIR ?? join(tmpdir(), 'mizzou'), 'runs'));
 }

@@ -229,6 +229,9 @@ importers:
       react-dom:
         specifier: 19.3.0
         version: 19.3.0(react@19.3.0)
+      server-only:
+        specifier: workspace:*
+        version: link:../../packages/server-only
     devDependencies:
       '@tailwindcss/turbopack':
         specifier: ^4

@@ -339,6 +339,8 @@ Anything not confirmable from public pages is marked "check against the portal".
 
 ## 8. UI: Liquid Glass, grayscale, responsive
 
+> Precedence: colors, fonts and effects come from `docs/design/META_STYLE.md` and `docs/design/META_TOKENS.md`; layout, behavior, copy and gates still come from `PROMPT.md` and `docs/design/UI_CORRECTIONS.md`. (`META_TOKENS.md` is not in the repo yet — until it lands, `META_STYLE.md` and the provisional values in `styles/tokens.css` govern.)
+
 Build the screens to match the reference screenshots in `docs/design/` (copy the nine PNG exports and the reference HTML files there; the HTML files hold the exact CSS values). Ship this single light look. No dark mode.
 
 ### 8.1 Tokens (`styles/tokens.css`)

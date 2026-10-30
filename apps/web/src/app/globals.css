@@ -18,3 +18,14 @@ input::placeholder {
   color: var(--mz-secondary);
   opacity: 1;
 }
+
+/* Shared composer pill (components/chrome.tsx, P2-15): the pill takes a 1px
+   Meta Blue border on focus-within; the input itself never draws the global
+   focus-visible ring inside the pill. */
+.mz-composer-pill:focus-within {
+  border-color: var(--mz-blue);
+}
+
+.mz-composer-input:focus-visible {
+  box-shadow: none;
+}

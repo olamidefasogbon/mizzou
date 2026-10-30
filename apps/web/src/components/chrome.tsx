@@ -162,6 +162,7 @@ export function Composer({
         </svg>
       </button>
       <div
+        className="mz-composer-pill"
         style={{
           flex: 1,
           minWidth: 0,
@@ -178,6 +179,7 @@ export function Composer({
         }}
       >
         <input
+          className="mz-composer-input"
           aria-label="Message Mizzou"
           placeholder="Message Mizzou"
           value={value}

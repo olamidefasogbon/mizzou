@@ -386,7 +386,9 @@
   font-size: 14px;
 }
 
-/* Composer: large rounded pill with a round blue send button. */
+/* Composer: large rounded pill with a round blue send button. The pill takes
+   a 1px Meta Blue border on focus-within; the input itself never draws an
+   inner ring (P2-15). */
 .composer {
   display: flex;
   align-items: center;
@@ -398,6 +400,10 @@
   box-shadow: var(--mz-shadow);
 }
 
+.composer:focus-within {
+  border-color: var(--mz-blue);
+}
+
 .composerInput {
   flex: 1;
   min-width: 0;
@@ -407,6 +413,10 @@
   font-family: inherit;
   font-size: 15px;
   color: var(--mz-ink);
+}
+
+.composerInput:focus-visible {
+  box-shadow: none;
 }
 
 .composerInput::placeholder {

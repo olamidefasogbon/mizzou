@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-// GET /auth/callback — finishes Google OAuth and anonymous→Google linking.
-// Both flows land here with a code; exchanging it sets the session cookies,
-// then the user continues into the app with the same user id.
+// GET /auth/callback — finishes Google OAuth (the only sign-in flow).
+// Google redirects here with a code; exchanging it sets the session cookies,
+// then the user continues into /app.
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const url = new URL(request.url);

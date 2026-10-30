@@ -1,6 +1,6 @@
 # Mizzou Build Status
 
-## Current milestone: P0 done uncommitted→committed Oct 30 — Supabase-only stores, stateless turns, Google-only auth, error refs + /api/health, DB-backed budgets (commits d2c44bf, 9a97592, 2c9edc5, 869854c + budgets). Human checks now: Supabase/Google/Vercel live wiring, /api/health on Vercel, sign-in flow, acceptance pass. P1 next.
+## Current milestone: FIXLIST P0 + P1 + P2 all done and committed Oct 30 (head e235333; P2-16 next). P0: Supabase-only stores, stateless turns, Google-only auth, error refs + /api/health, DB-backed budgets. P1: bubbles/tool rows (bba7ac2), card order rule (d024cdf), voice rewrite (2ab1649), plan/AOE/ICS (9d88ccd), chat titles (f65e6c1). P2: top bar (54165ff), panel + settings + delete-my-data (46a7d1d), composer (e235333). Human checks now, all on the live Vercel URL then localhost: /api/health lists every env var present; Google sign-up → /app → refresh stays signed in → log out → log in; Harvard-CS-masters question gets bubbles + tool row + titled chat; EPFL link flow yields a local-time plan card + working ICS; wordmark/composer/panel/settings eyeball pass. Live wiring still human-side: Supabase project, Google OAuth, migrations, Vercel env values.
 
 - [x] M0: Monorepo scaffolded (`apps/web`, `packages/core`)
 - [x] M0: TypeScript setup (`tsconfig.base.json`, per-package configs) + workspace deps

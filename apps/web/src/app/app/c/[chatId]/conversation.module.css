@@ -26,13 +26,18 @@
   justify-content: flex-end;
 }
 
+/* muse.ai chat pattern: the user's bubble is Meta Blue with white text on the
+   right; Mizzou's reply is a light gray bubble on the left. */
 .userBubble {
-  max-width: 80%;
+  max-width: min(80%, 520px);
   border-radius: var(--mz-radius-bubble);
-  background: var(--mz-muted);
+  border-bottom-right-radius: 6px;
+  background: var(--mz-blue);
+  color: #fff;
   padding: 10px 16px;
   font-size: 15px;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .assistantRow {
@@ -41,9 +46,16 @@
 }
 
 .assistantText {
-  max-width: 100%;
+  box-sizing: border-box;
+  max-width: min(85%, 560px);
+  margin: 0;
+  border-radius: var(--mz-radius-bubble);
+  border-bottom-left-radius: 6px;
+  background: var(--mz-muted);
+  padding: 10px 16px;
   font-size: 15px;
-  line-height: 1.65;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .statusRow {
@@ -85,6 +97,7 @@
 
 /* Cards: program match, conflicts, coverage, requirements, plan. */
 .card {
+  box-sizing: border-box;
   border-radius: var(--mz-radius-card);
   border: 1px solid var(--mz-border);
   background: #fff;

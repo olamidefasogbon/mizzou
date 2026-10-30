@@ -119,13 +119,8 @@ function ChatContent(): React.JSX.Element {
   // Handoff from the home composer (?q=). Consumed once, then stripped.
   const initialQ = searchParams.get('q');
   const sentInitial = useRef(false);
-  const [feed, setFeed] = useState<FeedItem[]>([
-    {
-      id: 'hello',
-      kind: 'message',
-      text: 'Send me a link to the opportunity and I\u2019ll read what they ask for.',
-    },
-  ]);
+  // No canned opener: every assistant line comes from the model (AGENT_BRAIN).
+  const [feed, setFeed] = useState<FeedItem[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const feedRef = useRef<HTMLDivElement>(null);

@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { newRun } from '@mizzou/core';
 import { assertGuestRunAllowed, guestRunLimit, guestRunsExhaustedMessage } from './caps.ts';
-import { memoryRunLedger } from './repo.ts';
+import { memoryRepo } from './repo.ts';
 
 function runAt(userId: string, updatedAt: string) {
   const run = newRun(`run-${userId}-${updatedAt}`, userId, null);
@@ -31,14 +31,14 @@ describe('guest run cap', () => {
   });
 
   it('counts only this user and only today', async () => {
-    const ledger = memoryRunLedger();
+    const ledger = memoryRepo().runs;
     const today = new Date().toISOString().slice(0, 10);
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    ledger.seed(runAt('guest-1', `${today}T10:00:00.000Z`));
-    ledger.seed(runAt('guest-1', `${today}T11:00:00.000Z`));
-    ledger.seed(runAt('guest-1', `${today}T12:00:00.000Z`));
-    ledger.seed(runAt('guest-1', `${yesterday}T10:00:00.000Z`));
-    ledger.seed(runAt('guest-2', `${today}T10:00:00.000Z`));
+    await ledger.save(runAt('guest-1', `${today}T10:00:00.000Z`));
+    await ledger.save(runAt('guest-1', `${today}T11:00:00.000Z`));
+    await ledger.save(runAt('guest-1', `${today}T12:00:00.000Z`));
+    await ledger.save(runAt('guest-1', `${yesterday}T10:00:00.000Z`));
+    await ledger.save(runAt('guest-2', `${today}T10:00:00.000Z`));
     assert.equal(await ledger.countStartedToday('guest-1'), 3);
     assert.equal(await ledger.countStartedToday('guest-2'), 1);
     assert.equal(await ledger.countStartedToday('nobody'), 0);

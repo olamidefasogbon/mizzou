@@ -10,9 +10,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileRunStore, newRun, type GateDecision, type RunRecord } from '@mizzou/core';
-import { resolveUser } from './auth';
-import { chatsStore, remindersStore, type ChatSummary, type Reminder } from './stores';
-import { supabaseServer } from './supabase/server';
+import { chatsStore, remindersStore, type ChatSummary, type Reminder } from './stores.ts';
 
 export interface RunLedger {
   load(id: string): Promise<RunRecord | null>;
@@ -200,6 +198,7 @@ export function supabaseRepo(db: DbClient): Repo {
               pill: input.pill,
               due_at: input.dueAt ?? null,
               kind: input.kind ?? 'custom',
+              done: false,
             },
           ])
           .select('*')
@@ -365,11 +364,15 @@ export function memoryRepo(): Repo {
 
 /**
  * The repo for this request. A Supabase session means RLS rows;
- * cookie-only visitors keep the file-backed stores.
+ * cookie-only visitors keep the file-backed stores. The Next-dependent
+ * modules load lazily so this file's static graph stays runnable under
+ * plain node:test (only repo(), never called by tests, touches them).
  */
 export async function repo(): Promise<Repo> {
+  const { resolveUser } = await import('./auth.ts');
   const session = await resolveUser();
   if (session.uid) {
+    const { supabaseServer } = await import('./supabase/server.ts');
     return supabaseRepo(adaptDb(await supabaseServer()));
   }
   return fileRepo();

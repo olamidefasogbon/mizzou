@@ -5,8 +5,8 @@
 
 import 'server-only';
 
-import { supabaseServer } from './supabase/server';
-import { anonId } from './session';
+import { supabaseServer } from './supabase/server.ts';
+import { anonId } from './session.ts';
 
 export interface SessionUser {
   userId: string;

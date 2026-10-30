@@ -3,7 +3,7 @@
 
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
-import { requiredEnv } from './env';
+import { requiredEnv } from './env.ts';
 
 export async function supabaseServer(): Promise<ReturnType<typeof createServerClient>> {
   const jar = await cookies();

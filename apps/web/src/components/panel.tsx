@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from './store-context';
+import { supabaseBrowser } from '@/lib/supabase/client';
 import styles from './panel.module.css';
 
 // Left panel drawer + log-out modal. Matched files: docs/design/html/Panel.html
@@ -29,7 +30,10 @@ export function Panel({
   const remindersRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setMounted(true);
+    // Next frame, so the portal only renders after hydration (setState in a
+    // callback, not synchronously in the effect body).
+    const frame = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(frame);
   }, []);
 
   useEffect(
@@ -215,7 +219,9 @@ export function Panel({
               onClick={() => {
                 setLogoutOpen(false);
                 onNavigate();
-                router.push('/');
+                void supabaseBrowser()
+                  .auth.signOut()
+                  .finally(() => router.push('/'));
               }}
             >
               Log out

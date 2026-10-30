@@ -23,11 +23,26 @@ function TopBar({
   panelOpen: boolean;
 }) {
   // One wordmark per screen: while the panel (which carries its own
-  // wordmark) is open, the bar's menu button and wordmark hide. They stay
-  // mounted so focus returns to the menu button on close.
+  // wordmark) is open, the bar controls hide. They stay mounted so focus
+  // returns to the menu button on close.
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = (e: Event): void => {
+      const target = e.target as (EventTarget & { scrollTop?: unknown }) | null;
+      const y =
+        target && typeof target.scrollTop === 'number' ? (target.scrollTop as number) : window.scrollY;
+      setScrolled(y > 8);
+    };
+    setScrolled(window.scrollY > 8);
+    window.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    return () => window.removeEventListener('scroll', onScroll, { capture: true });
+  }, []);
   const hidden = panelOpen ? shell.barHidden : '';
   return (
-    <div className={shell.topbar}>
+    <div className={`${shell.topbar} ${scrolled ? shell.scrolled : ''}`}>
+      <div className={`mz-wordmark ${shell.wordmark} ${hidden}`} aria-hidden="true">
+        Mizzou
+      </div>
       <button
         ref={menuRef}
         type="button"
@@ -35,20 +50,17 @@ function TopBar({
         aria-label="Open menu"
         aria-hidden={panelOpen}
         tabIndex={panelOpen ? -1 : undefined}
-        className={`mz-icon-btn ${shell.topLeft} ${hidden}`}
+        className={`mz-icon-btn ${shell.menuBtn} ${shell.solidBtn} ${hidden}`}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
           <path d="M4 8h16M4 16h10" />
         </svg>
       </button>
-      <div className={`mz-wordmark ${shell.wordmark} ${hidden}`} aria-hidden="true">
-        Mizzou
-      </div>
       <button
         type="button"
         onClick={onNewChat}
         aria-label="New chat"
-        className={`mz-icon-btn ${shell.topRight} ${shell.solidBtn}`}
+        className={`mz-icon-btn ${shell.newBtn} ${shell.solidBtn}`}
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M12 5H8.5A3.5 3.5 0 005 8.5v7A3.5 3.5 0 008.5 19h7a3.5 3.5 0 003.5-3.5V12M17.5 4.5a1.8 1.8 0 012.5 2.5L12 15l-3.5.5L9 12z" />

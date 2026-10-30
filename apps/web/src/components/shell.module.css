@@ -6,8 +6,9 @@
   min-height: 100dvh;
 }
 
-/* Fixed top bar: 56px plus safe-area, z-index 30, spans the viewport.
-   Buttons clear the notch via the safe-area offset. */
+/* Fixed top bar: 56px plus safe-area, solid white, z-index 30. Nothing
+   centered: wordmark left, icon buttons right. The 1px bottom border
+   appears once scrolled. */
 .topbar {
   position: fixed;
   top: 0;
@@ -15,23 +16,30 @@
   right: 0;
   height: calc(56px + env(safe-area-inset-top, 0px));
   z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  padding-top: env(safe-area-inset-top, 0px);
+  background: #fff;
+  border-bottom: 1px solid transparent;
+}
+
+.topbar.scrolled {
+  border-bottom-color: var(--mz-border);
+}
+
+/* 40px type with 8px of clearance top and bottom (step-2 fix). */
+.wordmark {
+  margin-right: auto;
+  font-size: 40px;
+  color: var(--mz-wordmark-color);
   pointer-events: none;
+  line-height: 1;
 }
 
-.topbar > button {
-  pointer-events: auto;
-}
-
-.topLeft {
-  position: absolute;
-  left: 16px;
-  top: calc(env(safe-area-inset-top, 0px) + 6px);
-}
-
-.topRight {
-  position: absolute;
-  right: 16px;
-  top: calc(env(safe-area-inset-top, 0px) + 6px);
+.newBtn {
+  flex: none;
 }
 
 /* While the panel is open it carries the only wordmark: the bar's menu
@@ -118,12 +126,16 @@
     max-width: 680px;
   }
 
-  .topLeft {
-    left: 24px;
+  .topbar {
+    padding-left: 24px;
+    padding-right: 24px;
   }
 
-  .topRight {
-    right: 24px;
+  /* Panel icon beneath the wordmark, floating over the left gutter. */
+  .menuBtn {
+    position: absolute;
+    top: calc(56px + env(safe-area-inset-top, 0px) + 12px);
+    left: 24px;
   }
 
   /* Step-2 fix: the panel starts 16px from the top edge on tablet and
@@ -146,12 +158,16 @@
     max-width: 760px;
   }
 
-  .topLeft {
-    left: 24px;
+  .topbar {
+    padding-left: 24px;
+    padding-right: 24px;
   }
 
-  .topRight {
-    right: 24px;
+  /* Panel icon beneath the wordmark, floating over the left gutter. */
+  .menuBtn {
+    position: absolute;
+    top: calc(56px + env(safe-area-inset-top, 0px) + 12px);
+    left: 24px;
   }
 
   .overlay {

@@ -4,10 +4,8 @@ import styles from "./signup.module.css";
 import { SignupActions } from "./signup-actions";
 
 // Sign-up. muse.ai pattern on Meta style: one centered card on white, the
-// wordmark centered above the heading, blue primary, gray secondary.
-// Same tree at every width. Both buttons sign in through Supabase: Google
-// OAuth (or an in-place upgrade for anonymous guests) and anonymous guest
-// sign-in.
+// wordmark centered above the heading, blue primary. Same tree at every
+// width. The single button signs in through Supabase Google OAuth.
 
 export default function SignupPage() {
   return (
@@ -26,7 +24,6 @@ export default function SignupPage() {
           <Suspense>
             <SignupActions
               googleClass={`mz-btn mz-btn-primary ${styles.googleButton}`}
-              guestClass={`mz-btn mz-btn-secondary ${styles.guestButton}`}
             />
           </Suspense>
         </div>

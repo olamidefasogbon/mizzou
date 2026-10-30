@@ -7,7 +7,6 @@ function freshGuard(): BudgetGuard {
   return new BudgetGuard(new InMemoryUsageStore(), {
     perUserDailyUsd: 1.0,
     globalDailyUsd: 15,
-    guestRunsPerDay: 3,
   });
 }
 
@@ -66,16 +65,18 @@ describe('responsesCall budget accounting', () => {
     expect(guard.spendToday('u1')).toBeCloseTo(a.costUsd + b.costUsd, 10);
   });
 
-  it('caps anonymous guests at GUEST_RUNS_PER_DAY model calls', async () => {
-    const guard = freshGuard();
-    for (let i = 0; i < 3; i += 1) {
-      guard.recordCall({ userId: 'guest-1', model: 'muse-spark-1.3', promptTokens: 10, completionTokens: 5 });
-    }
+  it('refuses an over-budget user without fetching', async () => {
+    const guard = new BudgetGuard(new InMemoryUsageStore(), { perUserDailyUsd: 0.000001, globalDailyUsd: 15 });
     const fetchSpy = cannedFetch({ id: 'resp_g', output: [], usage: {} });
     vi.stubGlobal('fetch', fetchSpy);
-    await expect(
-      responsesCall({ model: 'muse-spark-1.3', input: 'one more', budgetGuard: guard, userId: 'guest-1', isGuest: true }),
-    ).rejects.toBeInstanceOf(BudgetExceededError);
+    const err = await responsesCall({
+      model: 'muse-spark-1.3',
+      input: 'one more',
+      budgetGuard: guard,
+      userId: 'u1',
+    }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BudgetExceededError);
+    expect((err as BudgetExceededError).scope).toBe('user');
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

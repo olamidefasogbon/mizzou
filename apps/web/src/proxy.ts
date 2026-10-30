@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
-import { ANON_COOKIE } from './lib/session';
 
 // Next 16 convention: proxy.ts (was middleware.ts).
 // Refreshes the Supabase session on every pass so server clients see a
-// live user; keeps minting the legacy anon cookie until auth (step 2)
-// replaces it with the Supabase user id.
+// live user. Google sign-in only: unauthenticated visits to /app redirect
+// to /signup. The legacy anon cookie is gone.
 
 export default async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -23,14 +22,9 @@ export default async function proxy(request: NextRequest) {
       },
     },
   );
-  await supabase.auth.getUser();
-  if (!request.cookies.get(ANON_COOKIE)) {
-    response.cookies.set(ANON_COOKIE, crypto.randomUUID(), {
-      path: '/',
-      maxAge: 60 * 60 * 24 * 365,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-    });
+  const { data } = await supabase.auth.getUser();
+  if (!data.user && request.nextUrl.pathname.startsWith('/app')) {
+    return NextResponse.redirect(new URL('/signup', request.url));
   }
   return response;
 }

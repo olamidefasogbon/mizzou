@@ -5,21 +5,22 @@ import { repo } from './repo';
 import type { ChatSummary, Reminder } from './stores';
 
 // Server actions for app chrome state. No secrets; identity comes from
-// resolveUser (Supabase session when signed in, anon cookie otherwise) and
-// rows come from the repo (Supabase under RLS, file-backed for visitors).
+// resolveUser (Supabase Google session, throws when signed out) and rows
+// come from the repo (Supabase under RLS).
 
 export interface AppData {
   userId: string;
-  name: string | null; // null until auth/profile lands (M7) — guests see "Howdy"
+  name: string | null;
+  email: string | null;
   reminders: Reminder[];
   chats: ChatSummary[];
 }
 
 export async function getAppData(): Promise<AppData> {
-  const { userId } = await resolveUser();
+  const { userId, name, email } = await resolveUser();
   const db = await repo();
   const [reminders, chats] = await Promise.all([db.reminders.list(userId), db.chats.list(userId)]);
-  return { userId, name: null, reminders, chats };
+  return { userId, name, email, reminders, chats };
 }
 
 export async function ensureChatAction(id: string, title: string): Promise<ChatSummary> {

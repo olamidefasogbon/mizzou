@@ -1,31 +1,40 @@
-// Who is making this request. The Supabase user id (Google or anonymous
-// sign-in) replaces the mizzou anon cookie everywhere it exists; visitors
-// who never signed in keep the cookie id and count as guests.
+// Who is making this request. Google sign-in only: every app surface
+// requires a Supabase session (no guests, no anon cookie). Callers that
+// serve signed-out visitors (the /app gate, API routes) catch
+// AuthRequiredError and redirect or answer accordingly.
 // Server-only: route handlers, server components and server actions.
 
 import 'server-only';
 
 import { supabaseServer } from './supabase/server.ts';
-import { anonId } from './session.ts';
 
 export interface SessionUser {
   userId: string;
-  /** True for cookie-only visitors and anonymous sign-ins. */
-  isGuest: boolean;
-  /** The Supabase auth id, or null when there is no session. Only a real
-   * session can satisfy RLS, so only a non-null uid may use Supabase rows. */
-  uid: string | null;
+  /** The Supabase auth id. Only a real session can satisfy RLS. */
+  uid: string;
+  name: string | null;
+  email: string | null;
 }
 
-export async function resolveUser(): Promise<SessionUser> {
-  try {
-    const supabase = await supabaseServer();
-    const { data } = await supabase.auth.getUser();
-    if (data.user) {
-      return { userId: data.user.id, isGuest: data.user.is_anonymous === true, uid: data.user.id };
-    }
-  } catch {
-    // Supabase unconfigured or unreachable: fall through to the cookie.
+export class AuthRequiredError extends Error {
+  constructor() {
+    super('AUTH_REQUIRED');
+    this.name = 'AuthRequiredError';
   }
-  return { userId: await anonId(), isGuest: true, uid: null };
+}
+
+/** The signed-in user. Throws AuthRequiredError when there is no session. */
+export async function resolveUser(): Promise<SessionUser> {
+  const supabase = await supabaseServer();
+  const { data } = await supabase.auth.getUser();
+  const user = data.user;
+  if (!user) throw new AuthRequiredError();
+  const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+  const rawName = meta['full_name'] ?? meta['name'] ?? null;
+  return {
+    userId: user.id,
+    uid: user.id,
+    name: typeof rawName === 'string' && rawName.length > 0 ? rawName : null,
+    email: typeof user.email === 'string' ? user.email : null,
+  };
 }

@@ -15,6 +15,7 @@ import type { ChatSummary, Reminder } from '@/lib/stores';
 
 interface StoreState {
   name: string | null;
+  email: string | null;
   reminders: Reminder[];
   chats: ChatSummary[];
   ensureChat: (id: string, title: string) => Promise<void>;
@@ -28,6 +29,7 @@ const StoreContext = createContext<StoreState | null>(null);
 
 export function StoreProvider({ initial, children }: { initial: AppData; children: ReactNode }) {
   const [name] = useState<string | null>(initial.name);
+  const [email] = useState<string | null>(initial.email);
   const [reminders] = useState<Reminder[]>(initial.reminders);
   const [chats, setChats] = useState<ChatSummary[]>(initial.chats);
   const [snapshot, setSnapshot] = useState<ChatSummary[] | null>(null);
@@ -59,7 +61,7 @@ export function StoreProvider({ initial, children }: { initial: AppData; childre
   }, []);
 
   return (
-    <StoreContext.Provider value={{ name, reminders, chats, ensureChat, clearChats, undoClearChats, expireUndo, undoArmed }}>
+    <StoreContext.Provider value={{ name, email, reminders, chats, ensureChat, clearChats, undoClearChats, expireUndo, undoArmed }}>
       {children}
     </StoreContext.Provider>
   );

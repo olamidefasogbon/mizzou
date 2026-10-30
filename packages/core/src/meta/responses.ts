@@ -40,8 +40,6 @@ export interface ResponsesCallOptions {
   tools?: ResponsesTool[];
   previousResponseId?: string | null;
   userId?: string;
-  /** Guests are additionally capped by GUEST_RUNS_PER_DAY. */
-  isGuest?: boolean;
   budgetGuard?: BudgetGuard;
   timeoutMs?: number;
 }
@@ -59,7 +57,7 @@ export async function responsesCall(opts: ResponsesCallOptions): Promise<Respons
   const guard = opts.budgetGuard ?? defaultBudgetGuard;
   const userId = opts.userId ?? 'dev';
   const promptText = typeof opts.input === 'string' ? opts.input : JSON.stringify(opts.input).slice(0, 4000);
-  guard.checkBeforeCall({ userId, model: opts.model, promptText, isGuest: opts.isGuest === true });
+  guard.checkBeforeCall({ userId, model: opts.model, promptText });
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 120_000);
@@ -129,7 +127,7 @@ export async function streamResponsesCall(opts: StreamCallOptions): Promise<Resp
   const guard = opts.budgetGuard ?? defaultBudgetGuard;
   const userId = opts.userId ?? 'dev';
   const promptText = typeof opts.input === 'string' ? opts.input : JSON.stringify(opts.input).slice(0, 4000);
-  guard.checkBeforeCall({ userId, model: opts.model, promptText, isGuest: opts.isGuest === true });
+  guard.checkBeforeCall({ userId, model: opts.model, promptText });
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 180_000);

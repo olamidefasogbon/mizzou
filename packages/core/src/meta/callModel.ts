@@ -14,8 +14,6 @@ interface CallModelOptions<T extends z.ZodTypeAny> {
   temperature?: number;
   /** Owning user for budget accounting. Defaults to 'dev'. */
   userId?: string;
-  /** Guests are additionally capped by GUEST_RUNS_PER_DAY. */
-  isGuest?: boolean;
   /** Inject a guard in tests; defaults to the shared process guard. */
   budgetGuard?: BudgetGuard;
 }
@@ -44,14 +42,13 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
   schema,
   temperature = 0.2,
   userId = 'dev',
-  isGuest = false,
   budgetGuard = defaultBudgetGuard,
 }: CallModelOptions<T>): Promise<CallModelResult<z.infer<T>>> {
   const model = ROLE_MODEL_MAP[role];
 
   // Budget guard (section 9.3): check BEFORE sending. A hit throws
   // BudgetExceededError with the friendly message; never retried.
-  budgetGuard.checkBeforeCall({ userId, model, promptText: systemPrompt ? `${systemPrompt}\n${prompt}` : prompt, isGuest });
+  budgetGuard.checkBeforeCall({ userId, model, promptText: systemPrompt ? `${systemPrompt}\n${prompt}` : prompt });
 
   const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
   if (systemPrompt) {

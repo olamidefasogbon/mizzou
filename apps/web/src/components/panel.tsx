@@ -22,7 +22,7 @@ export function Panel({
   section?: string | null;
 }) {
   const router = useRouter();
-  const { name, reminders, chats, clearChats, undoClearChats, undoArmed, expireUndo } = useStore();
+  const { name, email, reminders, chats, clearChats, undoClearChats, undoArmed, expireUndo } = useStore();
   const [logoutOpen, setLogoutOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -198,8 +198,8 @@ export function Panel({
             </span>
           )}
           <span className={styles.userText}>
-            <span className={styles.userName}>{name ?? 'Guest'}</span>
-            <span className={styles.userSub}>{name ? 'Signed in with Google' : 'Browsing as a guest'}</span>
+            <span className={styles.userName}>{name ?? email ?? 'Signed in'}</span>
+            <span className={styles.userSub}>{email ?? 'Signed in with Google'}</span>
           </span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#48484A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M7 14l5 5 5-5M7 10l5-5 5-5" />

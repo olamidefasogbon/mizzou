@@ -165,9 +165,10 @@ describe('model-driven orchestrator', () => {
     expect(run.usageUsd).toBeCloseTo(3 * 0.001 + 2 * 0.01, 10);
     // The finish total includes every model call, not just the reader ones.
     expect(finished.usageUsd).toBeCloseTo(run.usageUsd, 10);
-    // Chained server-side history across turns.
-    expect(model.previousIds[0]).toBeNull();
-    expect(model.previousIds[1]).toBe('r1');
+    // Stateless replay: no chaining, and later turns resend earlier context.
+    expect(model.previousIds.every((id) => id === null)).toBe(true);
+    const laterInputs = model.inputs.slice(1).map((i) => JSON.stringify(i));
+    expect(laterInputs.some((s) => s.includes(`${SITE}/`))).toBe(true);
   });
 
   it('halts for a human on request_approval', async () => {
@@ -529,7 +530,6 @@ describe('model-driven orchestrator', () => {
     const guard = new BudgetGuard(new InMemoryUsageStore(), {
       perUserDailyUsd: 10,
       globalDailyUsd: 100,
-      guestRunsPerDay: 3,
     });
     const record = (userId: string, promptTokens: number, outputTokens: number): number =>
       guard.recordCall({ userId, model: 'muse-spark-1.3', promptTokens, completionTokens: outputTokens });

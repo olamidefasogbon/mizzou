@@ -16,7 +16,7 @@ import {
   type ResponsesItem,
   type StreamCallOptions,
 } from '../meta/responses.js';
-import { BudgetExceededError } from '../meta/budget.js';
+import { BudgetExceededError, type BudgetGuard } from '../meta/budget.js';
 import { ROLE_MODEL_MAP } from '../meta/registry.js';
 import { fetchBytes, fetchPageText, type FetchPageResult } from '../deepscan/fetch.js';
 import { rankLinks } from '../deepscan/rank.js';
@@ -166,7 +166,6 @@ export const CONVERSATION_TOOL_DEFS: ResponsesFunctionTool[] = [
 ];
 
 export interface ConversationMemory {
-  responseId: string | null;
   programUrl: string | null;
   programHint: string | null;
   pages: Array<{ url: string; title: string }>;
@@ -181,7 +180,7 @@ export interface ConversationMemory {
 }
 
 function blankMemory(): ConversationMemory {
-  return { responseId: null, programUrl: null, programHint: null, pages: [], unreadable: [], languages: [], extractions: [], usage: [], lastReply: null, gateContext: null };
+  return { programUrl: null, programHint: null, pages: [], unreadable: [], languages: [], extractions: [], usage: [], lastReply: null, gateContext: null };
 }
 
 function readMemory(run: RunRecord): ConversationMemory {
@@ -189,7 +188,6 @@ function readMemory(run: RunRecord): ConversationMemory {
   if (!mem || typeof mem !== 'object') return blankMemory();
   const m = mem as Partial<ConversationMemory>;
   return {
-    responseId: typeof m.responseId === 'string' ? m.responseId : null,
     programUrl: typeof m.programUrl === 'string' ? m.programUrl : null,
     programHint: typeof m.programHint === 'string' ? m.programHint : null,
     pages: Array.isArray(m.pages) ? m.pages : [],
@@ -234,8 +232,8 @@ export interface ConversationTurnOptions extends ConversationTurnDeps {
   save: (run: RunRecord) => Promise<void>;
   userText: string;
   userId?: string;
-  /** Guests are additionally capped by GUEST_RUNS_PER_DAY on every model call. */
-  isGuest?: boolean;
+  /** Usage-backed budget guard (routes build one per request). Defaults to the shared process guard. */
+  budgetGuard?: BudgetGuard;
   send: (event: RunEvent) => void;
   maxRounds?: number;
   /** Observability hook (tests, probes). Routes leave it unset. */
@@ -258,6 +256,16 @@ function messageText(items: ResponsesItem[]): string {
     }
   }
   return parts.join('').trim();
+}
+
+/** Map one persisted run message to a Responses input item for stateless replay. */
+function historyItem(message: unknown): unknown {
+  const m = (message ?? {}) as { role?: unknown; text?: unknown };
+  const text = typeof m.text === 'string' ? m.text : '';
+  if (m.role === 'assistant') {
+    return { type: 'message', role: 'assistant', content: [{ type: 'output_text', text }] };
+  }
+  return { type: 'message', role: 'user', content: [{ type: 'input_text', text }] };
 }
 
 function functionCalls(items: ResponsesItem[]): Array<{ name: string; callId: string; argsText: string }> {
@@ -284,12 +292,12 @@ const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
 export async function runConversationTurn(opts: ConversationTurnOptions): Promise<ConversationTurnResult> {
   const userId = opts.userId ?? 'dev';
-  const isGuest = opts.isGuest === true;
+  const budgetGuard = opts.budgetGuard;
   const maxRounds = opts.maxRounds ?? CONVERSATION_MAX_ROUNDS;
   const sleepMs = opts.sleepMs ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   const streamCall = opts.streamCall ?? streamResponsesCall;
   const fetchPage = opts.fetchPage ?? fetchPageText;
-  const judge: JudgeTransport = opts.judge ?? ((args) => defaultJudge({ ...args, isGuest }));
+  const judge: JudgeTransport = opts.judge ?? ((args) => defaultJudge(args, budgetGuard));
   const listReminders = opts.listReminders;
   const readPageText: NonNullable<ConversationTurnDeps['readPageText']> =
     opts.readPageText ?? ((page) => readAndExtract(page.url, page.title, page.text));
@@ -317,30 +325,19 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     send({ t: 'message', id: messageId, text: delta });
   };
 
-  async function callWithRetry(callOpts: StreamCallOptions, allowFreshRetry = false): Promise<ResponsesCallResult> {
-    let attempt = 0;
-    let freshTried = false;
-    for (;;) {
+  // Stateless transport: previous_response_id is never used, so a missing
+  // or expired response id can never fail a turn. Plain retries only.
+  async function callWithRetry(callOpts: StreamCallOptions): Promise<ResponsesCallResult> {
+    for (let attempt = 0; ; attempt += 1) {
       try {
         return await streamCall(callOpts);
       } catch (err) {
         if (err instanceof BudgetExceededError) throw err;
-        const notFound = err instanceof Error && err.message.includes('referenced response not found or expired');
-        if (notFound && allowFreshRetry && !freshTried) {
-          // The provider intermittently refuses to chain onto a
-          // seconds-old response (observed nondeterministically across
-          // identical turns). The round-0 input is standalone-safe text,
-          // so restart the chain instead of failing the turn.
-          freshTried = true;
-          callOpts = { ...callOpts, previousResponseId: null };
-          continue;
-        }
         if (attempt >= 2) {
           const last = err instanceof Error ? err.message : 'transport error';
           throw new Error(`orchestrator transport failed after 3 attempts (last: ${last})`);
         }
-        await sleepMs(notFound ? ([2000, 5000][attempt] ?? 5000) : (RETRY_BACKOFF_MS[attempt] ?? 1000));
-        attempt += 1;
+        await sleepMs(RETRY_BACKOFF_MS[attempt] ?? 1000);
       }
     }
   }
@@ -413,7 +410,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       schema: ExtractionSchema,
       temperature: 0,
       userId,
-      isGuest,
+      budgetGuard,
     });
     return {
       extraction: verifyExtractionEvidence(sliced, result.data as Extraction),
@@ -503,7 +500,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         tools: [{ type: 'web_search' }],
         previousResponseId: null,
         userId,
-        isGuest,
+        budgetGuard,
       });
       logUsage({ kind: 'model', tool: 'web_search', role: 'orchestrator', model: res.model, inputTokens: res.inputTokens, outputTokens: res.outputTokens, costUsd: res.costUsd });
       return { output: { answer: messageText(res.items), model: res.model } };
@@ -553,7 +550,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   // flow; after a gate the provider will not retain the gate-ended response
   // (chaining 400s), so the next turn restarts the chain with a short text
   // recap instead. Within-turn rounds always chain.
-  let input: unknown = opts.userText;
+  let firstInput = opts.userText;
   if (mem.gateContext) {
     const parts: string[] = [];
     if (mem.lastReply) parts.push(`Earlier in this conversation you said: "${mem.lastReply.slice(0, 500)}"`);
@@ -563,26 +560,31 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     if (known.length > 0) parts.push(`Other pages already read this run: ${known.join(', ')}`);
     if (mem.unreadable.length > 0) parts.push(`Pages that would not open: ${mem.unreadable.map((u) => u.url).slice(0, 5).join(', ')}`);
     parts.push(`New message: ${opts.userText}`);
-    input = parts.join('\n');
+    firstInput = parts.join('\n');
   }
   mem.gateContext = null;
+  // Stateless replay: every round sends the persisted message history plus
+  // this turn's thread so far. previous_response_id is never used, so turns
+  // survive serverless with no chained responses.
+  const thread: unknown[] = [
+    ...run.messages.map(historyItem),
+    { type: 'message', role: 'user', content: [{ type: 'input_text', text: firstInput }] },
+  ];
   for (let round = 0; round < maxRounds; round += 1) {
     const result = await callWithRetry(
       {
         model: ROLE_MODEL_MAP.orchestrator,
         effort: 'medium',
         systemPrompt: loadConversationPrompt(),
-        input,
+        input: thread,
         tools,
-        previousResponseId: mem.responseId,
+        previousResponseId: null,
         userId,
-        isGuest,
+        budgetGuard,
         onText: emitText,
       },
-      round === 0,
     );
     logUsage({ kind: 'model', tool: null, role: 'orchestrator', model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, costUsd: result.costUsd });
-    mem.responseId = result.responseId || mem.responseId;
     await persist();
 
     const calls = functionCalls(result.items);
@@ -613,8 +615,6 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
           if (hint) mem.programHint = hint.slice(0, 120);
         }
       }
-      // Fresh chain next turn: the gate-ended response is not chainable.
-      mem.responseId = null;
       mem.lastReply = fullText || null;
       mem.gateContext = { gate: gateHit.gate, what: gateHit.what };
       run.pendingGate = { gate: gateHit.gate, what: gateHit.what, evidence: gateHit.evidence, options: gateHit.options };
@@ -622,7 +622,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       await persist();
       return { gated: true, gate: gateHit.gate, text: fullText, usageUsd: run.usageUsd };
     }
-    input = outputs;
+    thread.push(...result.items, ...outputs);
   }
   mem.lastReply = fullText || mem.lastReply;
 
@@ -635,7 +635,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   return { gated: false, text: fullText, usageUsd: run.usageUsd };
 }
 
-async function defaultJudge({ conflicts, userId, isGuest }: { conflicts: Conflict[]; userId?: string; isGuest?: boolean }): Promise<JudgeCall> {
+async function defaultJudge({ conflicts, userId }: { conflicts: Conflict[]; userId?: string }, budgetGuard?: BudgetGuard): Promise<JudgeCall> {
   const result = await callModel({
     role: 'judge',
     systemPrompt: JUDGE_SYSTEM_PROMPT,
@@ -643,7 +643,7 @@ async function defaultJudge({ conflicts, userId, isGuest }: { conflicts: Conflic
     schema: JudgeVerdictSchema,
     temperature: 0,
     userId: userId ?? 'dev',
-    isGuest,
+    budgetGuard,
   });
   const verdict = JudgeVerdictSchema.parse(result.data);
   return {

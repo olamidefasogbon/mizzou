@@ -155,18 +155,22 @@ describe('conversation turn usage', () => {
     expect(usage[0]?.role).toBe('orchestrator');
   });
 
-  it('forwards isGuest to every model call', async () => {
-    const h = makeHarness([textResult('Hi.', 'resp-1')]);
+  it('sends stored history on every call without chaining', async () => {
+    const h = makeHarness([textResult('Second answer.', 'resp-2')]);
+    h.run.messages.push({ role: 'user', text: 'first question' }, { role: 'assistant', text: 'First answer.' });
     await runConversationTurn({
       run: h.run,
       save: async () => {},
-      userText: 'hello',
-      userId: 'guest-9',
-      isGuest: true,
+      userText: 'second question',
+      userId: 'user-1',
       send: (e) => h.events.push(e),
       streamCall: h.streamCall,
     });
-    expect(h.seen[0]?.isGuest).toBe(true);
+    expect(h.seen[0]?.previousResponseId).toBeNull();
+    const flat = JSON.stringify(h.seen[0]?.input);
+    expect(flat).toContain('first question');
+    expect(flat).toContain('First answer.');
+    expect(flat).toContain('second question');
   });
 
   it('a link message drives a read_page and emits a coverage card', async () => {
@@ -191,7 +195,7 @@ describe('conversation turn usage', () => {
     expect(mem.programUrl).toBe('https://example.edu/a');
   });
 
-  it('a follow-up question chains the stored response id', async () => {
+  it('a follow-up question replays stored history instead of chaining', async () => {
     const first = makeHarness([textResult('First answer.', 'resp-1')]);
     await runConversationTurn({
       run: first.run,
@@ -211,7 +215,11 @@ describe('conversation turn usage', () => {
       send: () => {},
       streamCall: second.streamCall,
     });
-    expect(second.seen[0]?.previousResponseId).toBe('resp-1');
+    // No chaining: the follow-up replays the persisted exchange instead.
+    expect(second.seen[0]?.previousResponseId).toBeNull();
+    const flat = JSON.stringify(second.seen[0]?.input);
+    expect(flat).toContain('First answer.');
+    expect(flat).toContain('what about fees?');
   });
 
   it('request_approval persists a chat-origin G1 gate', async () => {
@@ -231,36 +239,30 @@ describe('conversation turn usage', () => {
     expect(h.run.status).toBe('needs_approval');
     expect(h.run.pendingGate?.gate).toBe('G1');
     expect((h.run.pendingGate?.evidence as { origin?: string }).origin).toBe('chat');
-    const mem = (h.run.state as Record<string, unknown>)['conversation'] as { responseId: string | null; gateContext: { gate: string; what: string } | null };
-    expect(mem.responseId).toBeNull();
+    const mem = (h.run.state as Record<string, unknown>)['conversation'] as { gateContext: { gate: string; what: string } | null };
+    expect('responseId' in mem).toBe(false);
     expect(mem.gateContext).toEqual({ gate: 'G1', what: 'Is this the one?' });
   });
 
-  it('round 0 restarts the chain when the provider drops the stored response', async () => {
-    const h = makeHarness([textResult('Recovered.', 'resp-fresh')]);
+  it('fails loudly after three transport attempts', async () => {
+    const h = makeHarness([]);
     let calls = 0;
     const flaky: typeof h.streamCall = async (opts) => {
       calls += 1;
-      if (calls === 1) {
-        h.seen.push(opts);
-        throw new Error('responses stream HTTP 400 {"error":{"message":"referenced response not found or expired"}}');
-      }
-      return h.streamCall(opts);
+      h.seen.push(opts);
+      throw new Error('responses stream HTTP 500');
     };
-    h.run.state = { conversation: { ...((h.run.state as Record<string, unknown>)['conversation'] as object ?? {}), responseId: 'resp-stale' } };
-    const result = await runConversationTurn({
+    await expect(runConversationTurn({
       run: h.run,
       save: async () => {},
       userText: 'hello again',
       userId: 'user-1',
       send: (e) => h.events.push(e),
       streamCall: flaky,
-    });
-    expect(result.gated).toBe(false);
-    expect(result.text).toContain('Recovered');
-    // First attempt chained, retry went fresh.
-    expect(h.seen[0]?.previousResponseId).toBe('resp-stale');
-    expect(h.seen[1]?.previousResponseId).toBeNull();
+      sleepMs: async () => {},
+    })).rejects.toThrow('after 3 attempts');
+    expect(calls).toBe(3);
+    expect(h.seen.every((o) => o.previousResponseId === null)).toBe(true);
   });
 
   it('a turn after a gate restarts the chain with a text recap', async () => {
@@ -289,9 +291,9 @@ describe('conversation turn usage', () => {
     // Fresh chain: the gate-ended response is not chainable, so the turn
     // sends plain text with a recap instead of previous_response_id.
     expect(next.seen[0]?.previousResponseId).toBeNull();
-    const firstInput = next.seen[0]?.input as unknown;
-    expect(typeof firstInput).toBe('string');
-    expect(firstInput as string).toContain('Is this the one?');
-    expect(firstInput as string).toContain('Yes, that is the one');
+    const thread = JSON.stringify(next.seen[0]?.input);
+    expect(Array.isArray(next.seen[0]?.input)).toBe(true);
+    expect(thread).toContain('Is this the one?');
+    expect(thread).toContain('Yes, that is the one');
   });
 });

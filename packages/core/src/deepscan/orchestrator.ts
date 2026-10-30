@@ -9,7 +9,7 @@ import { z } from 'zod';
 import type { StepFn, StepOutcome } from '../agent/advance.js';
 import { DEFAULT_MAX_TURNS } from '../agent/advance.js';
 import type { PendingGate, RunRecord } from '../agent/types.js';
-import { BudgetExceededError } from '../meta/budget.js';
+import { BudgetExceededError, type BudgetGuard } from '../meta/budget.js';
 import { ROLE_MODEL_MAP } from '../meta/registry.js';
 import { callModel } from '../meta/callModel.js';
 import { responsesCall, type ResponsesFunctionTool } from '../meta/responses.js';
@@ -99,7 +99,8 @@ export interface DeepScanMemory {
   g2Asked: boolean;
   usageUsd: number;
   calls: UsageEntry[];
-  responseId: string | null;
+  /** Last orchestrator prose, replayed into the next turn (stateless: no previous_response_id). */
+  lastText: string | null;
   pending: Array<{ callId: string; output: string }>;
   summary: string | null;
   errors: number;
@@ -136,6 +137,8 @@ export type ModelTransport = (args: {
   previousResponseId: string | null;
   userId?: string;
   turn: number;
+  /** Usage-backed budget guard (routes build one per request). */
+  budgetGuard?: BudgetGuard;
 }) => Promise<ModelTransportResult>;
 
 /** Model-call retries per turn: initial attempt plus this many retries. */
@@ -156,6 +159,8 @@ export interface DeepScanTools {
   maxDepth?: number;
   /** Injectable for tests; production waits real time between retries. */
   sleepMs?: (ms: number) => Promise<void>;
+  /** Usage-backed budget guard (routes build one per request). */
+  budgetGuard?: BudgetGuard;
 }
 
 const TOOL_DEFS: ResponsesFunctionTool[] = [
@@ -212,6 +217,7 @@ async function defaultTransport(args: {
   tools: ResponsesFunctionTool[];
   previousResponseId: string | null;
   userId?: string;
+  budgetGuard?: BudgetGuard;
 }): Promise<ModelTransportResult> {
   const result = await responsesCall({
     model: ROLE_MODEL_MAP.orchestrator,
@@ -221,6 +227,7 @@ async function defaultTransport(args: {
     tools: args.tools,
     previousResponseId: args.previousResponseId,
     userId: args.userId,
+    budgetGuard: args.budgetGuard,
   });
   return {
     responseId: result.responseId,
@@ -243,6 +250,7 @@ async function defaultTransport(args: {
 async function defaultReadPage(
   page: { url: string; title: string; text: string },
   ctx: { programHint: string | null; opportunityType?: string; userId?: string },
+  budgetGuard?: BudgetGuard,
 ): Promise<ReadPageResult> {
   const text = page.text.slice(0, 60_000);
   const result = await callModel({
@@ -252,6 +260,7 @@ async function defaultReadPage(
     schema: ExtractionSchema,
     temperature: 0,
     userId: ctx.userId ?? 'dev',
+    budgetGuard,
   });
   return {
     extraction: verifyExtractionEvidence(text, result.data as Extraction),
@@ -267,7 +276,7 @@ async function defaultReadPdf(url: string) {
   return readPdfText(bytes);
 }
 
-async function defaultJudge({ conflicts, userId }: { conflicts: Conflict[]; userId?: string }): Promise<JudgeCall> {
+async function defaultJudge({ conflicts, userId }: { conflicts: Conflict[]; userId?: string }, budgetGuard?: BudgetGuard): Promise<JudgeCall> {
   const result = await callModel({
     role: 'judge',
     systemPrompt: JUDGE_SYSTEM_PROMPT,
@@ -275,6 +284,7 @@ async function defaultJudge({ conflicts, userId }: { conflicts: Conflict[]; user
     schema: JudgeVerdictSchema,
     temperature: 0,
     userId: userId ?? 'dev',
+    budgetGuard,
   });
   const verdict = JudgeVerdictSchema.parse(result.data);
   return {
@@ -328,11 +338,12 @@ function parseArgs(raw: string): { ok: true; value: Record<string, unknown> } | 
 }
 
 export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/advance.js').StepFn {
+  const budgetGuard = tools.budgetGuard;
   const fetchPage = tools.fetchPage ?? fetchPageText;
   const readPdf = tools.readPdf ?? defaultReadPdf;
-  const readPage = tools.readPage ?? defaultReadPage;
-  const model = tools.model ?? defaultTransport;
-  const judge = tools.judge ?? defaultJudge;
+  const readPage = tools.readPage ?? ((page, ctx) => defaultReadPage(page, ctx, budgetGuard));
+  const model = tools.model ?? ((args) => defaultTransport({ ...args, budgetGuard }));
+  const judge = tools.judge ?? ((args) => defaultJudge({ conflicts: args.conflicts, userId: args.userId }, budgetGuard));
   const maxPages = tools.maxPages ?? MAX_SCAN_PAGES;
   const maxDepth = tools.maxDepth ?? MAX_SCAN_DEPTH;
   const sleepMs = tools.sleepMs ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
@@ -375,7 +386,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
         g2Asked: false,
         usageUsd: 0,
         calls: [],
-        responseId: null,
+        lastText: null,
         pending: [],
         summary: null,
         errors: 0,
@@ -592,18 +603,24 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
     // One model decision per turn.
     let transport: Awaited<ReturnType<ModelTransport>>;
     try {
-      const input =
-        mem.pending.length > 0
-          ? mem.pending.map((p) => ({ type: 'function_call_output', call_id: p.callId, output: p.output }))
-          : buildOrchestratorContext({
-              programUrl: mem.programUrl,
-              programHint: mem.programHint,
-              pagesRead: mem.pages,
-              unreadable: mem.unreadable,
-              maxPages,
-              maxDepth,
-              turnsLeft: Math.max(0, DEFAULT_MAX_TURNS - turn),
-            });
+      // Stateless replay: every turn resends the scan context, the last
+      // orchestrator prose, and the pending tool outputs. No chaining.
+      const contextInput = buildOrchestratorContext({
+        programUrl: mem.programUrl,
+        programHint: mem.programHint,
+        pagesRead: mem.pages,
+        unreadable: mem.unreadable,
+        maxPages,
+        maxDepth,
+        turnsLeft: Math.max(0, DEFAULT_MAX_TURNS - turn),
+      });
+      const input: unknown[] = [
+        contextInput,
+        ...(typeof mem.lastText === 'string' && mem.lastText.length > 0
+          ? [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: mem.lastText }] }]
+          : []),
+        ...mem.pending.map((p) => ({ type: 'function_call_output', call_id: p.callId, output: p.output })),
+      ];
       mem.pending = [];
       let attempt = 0;
       for (;;) {
@@ -612,7 +629,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
             systemPrompt: ORCHESTRATOR_SYSTEM_PROMPT,
             input,
             tools: TOOL_DEFS,
-            previousResponseId: mem.responseId,
+            previousResponseId: null,
             userId,
             turn,
           });
@@ -640,7 +657,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
     }
     mem.errors = 0;
     mem.lastError = null;
-    mem.responseId = transport.responseId || null;
+    mem.lastText = transport.text.length > 0 ? transport.text.slice(0, 2000) : null;
     mem.usageUsd += transport.costUsd;
     mem.calls.push({
       turn,

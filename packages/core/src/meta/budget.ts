@@ -12,13 +12,21 @@ import { costForCall, estimateCostForPrompt } from './pricing.js';
 
 export const FRIENDLY_BUDGET_MESSAGE = 'I need a minute.';
 
+/** Shown when the signed-in user hits their own daily cap. */
+export const DAILY_LIMIT_MESSAGE = "You've reached your daily limit. Try again tomorrow.";
+
 export class BudgetExceededError extends Error {
-  readonly scope: 'user' | 'global' | 'guest';
-  constructor(scope: 'user' | 'global' | 'guest', message = FRIENDLY_BUDGET_MESSAGE) {
+  readonly scope: 'user' | 'global';
+  constructor(scope: 'user' | 'global', message = FRIENDLY_BUDGET_MESSAGE) {
     super(message);
     this.name = 'BudgetExceededError';
     this.scope = scope;
   }
+}
+
+/** User-facing text per budget scope: daily cap versus global minute. */
+export function budgetFriendlyMessage(scope: 'user' | 'global'): string {
+  return scope === 'user' ? DAILY_LIMIT_MESSAGE : FRIENDLY_BUDGET_MESSAGE;
 }
 
 export interface UsageRecord {
@@ -53,10 +61,6 @@ export class InMemoryUsageStore implements UsageStore {
       .reduce((sum, r) => sum + r.costUsd, 0);
   }
 
-  countSince(userId: string, sinceIso: string): number {
-    return this.rows.filter((r) => r.userId === userId && r.at >= sinceIso).length;
-  }
-
   get size(): number {
     return this.rows.length;
   }
@@ -65,7 +69,6 @@ export class InMemoryUsageStore implements UsageStore {
 export interface BudgetLimits {
   perUserDailyUsd: number;
   globalDailyUsd: number;
-  guestRunsPerDay: number;
 }
 
 export function limitsFromEnv(env: NodeJS.ProcessEnv = process.env): BudgetLimits {
@@ -74,10 +77,9 @@ export function limitsFromEnv(env: NodeJS.ProcessEnv = process.env): BudgetLimit
     return Number.isFinite(n) && n >= 0 ? n : fallback;
   };
   return {
-    // Spec defaults from section 9.3; .env.example pins dev values (0.50 / 5).
+    // Spec defaults from section 9.3; .env.example pins dev values (5 / 25).
     perUserDailyUsd: num(env.PER_USER_DAILY_USD, 1.0),
     globalDailyUsd: num(env.GLOBAL_DAILY_USD, 15),
-    guestRunsPerDay: Math.floor(num(env.GUEST_RUNS_PER_DAY, 3)),
   };
 }
 
@@ -92,7 +94,7 @@ export class BudgetGuard {
   }
 
   /** Pre-call check. Throws BudgetExceededError when any budget is hit. */
-  checkBeforeCall(opts: { userId: string; model: string; promptText: string; isGuest?: boolean }): number {
+  checkBeforeCall(opts: { userId: string; model: string; promptText: string }): number {
     const dayStart = `${todayUtc()}T00:00:00.000Z`;
     const estimated = estimateCostForPrompt(opts.model, opts.promptText);
     if (this.store.spendSince(null, dayStart) + estimated > this.limits.globalDailyUsd) {
@@ -100,14 +102,6 @@ export class BudgetGuard {
     }
     if (this.store.spendSince(opts.userId, dayStart) + estimated > this.limits.perUserDailyUsd) {
       throw new BudgetExceededError('user');
-    }
-    if (opts.isGuest === true && this.limits.guestRunsPerDay > 0) {
-      const runs = this.store instanceof InMemoryUsageStore
-        ? this.store.countSince(opts.userId, dayStart)
-        : 0;
-      if (runs >= this.limits.guestRunsPerDay) {
-        throw new BudgetExceededError('guest');
-      }
     }
     return estimated;
   }

@@ -1,6 +1,6 @@
 # Mizzou Build Status
 
-## Current milestone: Shell rewrite done (corrections step 2) — STOPPED for host screenshots, then home zero state (step 3)
+## Current milestone: P0 done uncommitted→committed Oct 30 — Supabase-only stores, stateless turns, Google-only auth, error refs + /api/health, DB-backed budgets (commits d2c44bf, 9a97592, 2c9edc5, 869854c + budgets). Human checks now: Supabase/Google/Vercel live wiring, /api/health on Vercel, sign-in flow, acceptance pass. P1 next.
 
 - [x] M0: Monorepo scaffolded (`apps/web`, `packages/core`)
 - [x] M0: TypeScript setup (`tsconfig.base.json`, per-package configs) + workspace deps

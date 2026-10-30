@@ -65,4 +65,17 @@ describe('responsesCall budget accounting', () => {
     const b = await responsesCall(opts);
     expect(guard.spendToday('u1')).toBeCloseTo(a.costUsd + b.costUsd, 10);
   });
+
+  it('caps anonymous guests at GUEST_RUNS_PER_DAY model calls', async () => {
+    const guard = freshGuard();
+    for (let i = 0; i < 3; i += 1) {
+      guard.recordCall({ userId: 'guest-1', model: 'muse-spark-1.3', promptTokens: 10, completionTokens: 5 });
+    }
+    const fetchSpy = cannedFetch({ id: 'resp_g', output: [], usage: {} });
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(
+      responsesCall({ model: 'muse-spark-1.3', input: 'one more', budgetGuard: guard, userId: 'guest-1', isGuest: true }),
+    ).rejects.toBeInstanceOf(BudgetExceededError);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

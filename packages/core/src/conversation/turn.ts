@@ -234,6 +234,8 @@ export interface ConversationTurnOptions extends ConversationTurnDeps {
   save: (run: RunRecord) => Promise<void>;
   userText: string;
   userId?: string;
+  /** Guests are additionally capped by GUEST_RUNS_PER_DAY on every model call. */
+  isGuest?: boolean;
   send: (event: RunEvent) => void;
   maxRounds?: number;
   /** Observability hook (tests, probes). Routes leave it unset. */
@@ -282,11 +284,12 @@ const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
 export async function runConversationTurn(opts: ConversationTurnOptions): Promise<ConversationTurnResult> {
   const userId = opts.userId ?? 'dev';
+  const isGuest = opts.isGuest === true;
   const maxRounds = opts.maxRounds ?? CONVERSATION_MAX_ROUNDS;
   const sleepMs = opts.sleepMs ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
   const streamCall = opts.streamCall ?? streamResponsesCall;
   const fetchPage = opts.fetchPage ?? fetchPageText;
-  const judge: JudgeTransport = opts.judge ?? defaultJudge;
+  const judge: JudgeTransport = opts.judge ?? ((args) => defaultJudge({ ...args, isGuest }));
   const listReminders = opts.listReminders;
   const readPageText: NonNullable<ConversationTurnDeps['readPageText']> =
     opts.readPageText ?? ((page) => readAndExtract(page.url, page.title, page.text));
@@ -410,6 +413,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       schema: ExtractionSchema,
       temperature: 0,
       userId,
+      isGuest,
     });
     return {
       extraction: verifyExtractionEvidence(sliced, result.data as Extraction),
@@ -499,6 +503,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         tools: [{ type: 'web_search' }],
         previousResponseId: null,
         userId,
+        isGuest,
       });
       logUsage({ kind: 'model', tool: 'web_search', role: 'orchestrator', model: res.model, inputTokens: res.inputTokens, outputTokens: res.outputTokens, costUsd: res.costUsd });
       return { output: { answer: messageText(res.items), model: res.model } };
@@ -571,6 +576,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         tools,
         previousResponseId: mem.responseId,
         userId,
+        isGuest,
         onText: emitText,
       },
       round === 0,
@@ -629,7 +635,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   return { gated: false, text: fullText, usageUsd: run.usageUsd };
 }
 
-async function defaultJudge({ conflicts, userId }: { conflicts: Conflict[]; userId?: string }): Promise<JudgeCall> {
+async function defaultJudge({ conflicts, userId, isGuest }: { conflicts: Conflict[]; userId?: string; isGuest?: boolean }): Promise<JudgeCall> {
   const result = await callModel({
     role: 'judge',
     systemPrompt: JUDGE_SYSTEM_PROMPT,
@@ -637,6 +643,7 @@ async function defaultJudge({ conflicts, userId }: { conflicts: Conflict[]; user
     schema: JudgeVerdictSchema,
     temperature: 0,
     userId: userId ?? 'dev',
+    isGuest,
   });
   const verdict = JudgeVerdictSchema.parse(result.data);
   return {

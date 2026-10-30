@@ -10,7 +10,7 @@ import {
   type Gate,
   type RunEvent,
 } from '@mizzou/core';
-import { anonId } from '@/lib/session';
+import { resolveUser } from '@/lib/auth';
 import { runsStore } from '@/lib/runs';
 import { remindersStore } from '@/lib/stores';
 
@@ -78,7 +78,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           // Conversation-run gate (AGENT_BRAIN.md): record the decision,
           // then continue with a model turn — the pendingGate (if any) is
           // set by the orchestrator, not by the deep-scan loop.
-          const userId = await anonId();
+          const { userId, isGuest } = await resolveUser();
           const recorded = await recordDecision(runId, store, { gate: gate as Gate, decision, opId });
           run = recorded.run;
           if (!recorded.duplicate) {
@@ -87,6 +87,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
               save: (r) => store.save(r),
               userText: `The user answered ${String(gate)}: ${JSON.stringify(decision)}`,
               userId: run.userId ?? userId,
+              isGuest,
               send,
               listReminders: async () =>
                 (await remindersStore.list(userId)).map((r) => ({

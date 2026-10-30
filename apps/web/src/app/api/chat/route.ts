@@ -5,8 +5,9 @@ import {
   runConversationTurn,
   type RunEvent,
 } from '@mizzou/core';
-import { anonId } from '@/lib/session';
-import { runsStore } from '@/lib/runs';
+import { resolveUser } from '@/lib/auth';
+import { assertGuestRunAllowed, guestRunLimit } from '@/lib/caps';
+import { fileRunLedger } from '@/lib/repo';
 import { remindersStore } from '@/lib/stores';
 
 export const maxDuration = 60;
@@ -49,8 +50,8 @@ export async function POST(req: Request): Promise<Response> {
           controller.close();
           return;
         }
-        const userId = await anonId();
-        const store = runsStore();
+        const { userId, isGuest } = await resolveUser();
+        const store = fileRunLedger();
         const existing = requestedRunId ? await store.load(requestedRunId) : null;
         const run = existing ?? newRun(requestedRunId ?? crypto.randomUUID(), userId, chatId);
         if (!run.userId) run.userId = userId;
@@ -60,6 +61,14 @@ export async function POST(req: Request): Promise<Response> {
           send({ t: 'done', runId });
           controller.close();
         };
+        if (!existing && isGuest) {
+          try {
+            assertGuestRunAllowed(await store.countStartedToday(userId), guestRunLimit());
+          } catch (err) {
+            fail(err instanceof Error ? err.message : 'I need a minute.');
+            return;
+          }
+        }
 
         try {
           await runConversationTurn({
@@ -67,6 +76,7 @@ export async function POST(req: Request): Promise<Response> {
             save: (r) => store.save(r),
             userText: message,
             userId: run.userId ?? userId,
+            isGuest,
             send,
             listReminders: async () =>
               (await remindersStore.list(userId)).map((r) => ({

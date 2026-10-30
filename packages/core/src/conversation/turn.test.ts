@@ -155,6 +155,20 @@ describe('conversation turn usage', () => {
     expect(usage[0]?.role).toBe('orchestrator');
   });
 
+  it('forwards isGuest to every model call', async () => {
+    const h = makeHarness([textResult('Hi.', 'resp-1')]);
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'hello',
+      userId: 'guest-9',
+      isGuest: true,
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+    });
+    expect(h.seen[0]?.isGuest).toBe(true);
+  });
+
   it('a link message drives a read_page and emits a coverage card', async () => {
     const h = makeHarness([
       callResult('read_page', { url: 'https://example.edu/a' }, 'resp-1'),

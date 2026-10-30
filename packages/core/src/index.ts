@@ -7,6 +7,7 @@ export * from './meta/callModel.js';
 export * from './meta/responses.js';
 export * from './extract/evidence.js';
 export * from './extract/reconcile.js';
+export * from './extract/dates.js';
 export * from './schemas/events.js';
 export * from './voice/index.js';
 export * from './agent/types.js';

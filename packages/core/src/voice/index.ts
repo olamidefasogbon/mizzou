@@ -15,6 +15,10 @@ export const SAY_BUDGET_HIT = 'I need a minute.';
 export const SAY_STUCK = 'I ran out of steps on this one. Send the link again and I\u2019ll pick up where I left off.';
 export const sayLanguageRead = (language: string): string => `I read this page in ${language}.`;
 
+/** Rolling-review notice for listings with no fixed closing date. */
+export const ROLLING_NOTICE_TEXT =
+  'No fixed closing date found on this listing. Applications may be reviewed on a rolling basis.';
+
 export function formatFindingStatus(url: string): string {
   try {
     const domain = new URL(url).hostname.replace('www.', '');

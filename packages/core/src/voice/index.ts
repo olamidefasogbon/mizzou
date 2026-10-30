@@ -15,6 +15,15 @@ export const SAY_BUDGET_HIT = 'I need a minute.';
 export const SAY_STUCK = 'I ran out of steps on this one. Send the link again and I\u2019ll pick up where I left off.';
 export const sayLanguageRead = (language: string): string => `I read this page in ${language}.`;
 
+/**
+ * Layout words the model must never use to describe cards. Cards always
+ * render directly after the bubble that introduces them, so "above" and
+ * "below" can only confuse. Case-insensitive whole-word match.
+ */
+export function hasLayoutReference(text: string): boolean {
+  return /\b(above|below)\b/i.test(text);
+}
+
 /** Rolling-review notice for listings with no fixed closing date. */
 export const ROLLING_NOTICE_TEXT =
   'No fixed closing date found on this listing. Applications may be reviewed on a rolling basis.';

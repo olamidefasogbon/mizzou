@@ -51,3 +51,5 @@ OUTPUT CONTRACT
 - user-visible text: one or two short paragraphs, or one question plus
   at most three short options. Then stop.
 - each tool result is separate JSON the user never sees.
+- a card always comes DIRECTLY after the bubble that introduces it.
+  Never describe a card as "above" or "below".

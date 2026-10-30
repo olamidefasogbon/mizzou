@@ -8,6 +8,12 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 // Supabase: a visitor with no session gets signInWithOAuth, an anonymous
 // guest upgrades in place with linkIdentity so their runs carry over.
 
+// In development the real reason is appended so setup problems are visible;
+// production shows only the friendly line.
+function devDetail(friendly: string, detail: string): string {
+  return process.env.NODE_ENV === 'production' ? friendly : `${friendly} (${detail})`;
+}
+
 export function SignupActions({ googleClass, guestClass }: { googleClass: string; guestClass: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -26,15 +32,17 @@ export function SignupActions({ googleClass, guestClass }: { googleClass: string
         ? await supabase.auth.linkIdentity({ provider: 'google', options: { redirectTo } })
         : await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
       if (res.error) {
-        setError('Google sign-in did not start. Try again.');
+        console.error('[signup] google sign-in error:', res.error);
+        setError(devDetail('Google sign-in did not start. Try again.', res.error.message));
         setBusy(null);
         return;
       }
       const url = (res.data as { url?: string } | null)?.url;
       if (url) window.location.assign(url);
       // Otherwise the client is already redirecting; stay busy.
-    } catch {
-      setError('Google sign-in did not start. Try again.');
+    } catch (err) {
+      console.error('[signup] google sign-in threw:', err);
+      setError(devDetail('Google sign-in did not start. Try again.', err instanceof Error ? err.message : String(err)));
       setBusy(null);
     }
   }
@@ -46,13 +54,15 @@ export function SignupActions({ googleClass, guestClass }: { googleClass: string
       const supabase = supabaseBrowser();
       const { error: signInError } = await supabase.auth.signInAnonymously();
       if (signInError) {
-        setError('Guest sign-in did not start. Try again.');
+        console.error('[signup] guest sign-in error:', signInError);
+        setError(devDetail('Guest sign-in did not start. Try again.', signInError.message));
         setBusy(null);
         return;
       }
       router.push('/app');
-    } catch {
-      setError('Guest sign-in did not start. Try again.');
+    } catch (err) {
+      console.error('[signup] guest sign-in threw:', err);
+      setError(devDetail('Guest sign-in did not start. Try again.', err instanceof Error ? err.message : String(err)));
       setBusy(null);
     }
   }

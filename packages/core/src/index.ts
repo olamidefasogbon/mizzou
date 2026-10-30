@@ -20,3 +20,4 @@ export * from './deepscan/coverage.js';
 export * from './prompts/reader.js';
 export * from './prompts/orchestrator.js';
 export * from './prompts/judge.js';
+export * from './conversation/turn.js';

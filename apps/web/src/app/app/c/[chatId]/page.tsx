@@ -388,7 +388,7 @@ function ChatContent(): React.JSX.Element {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, chatId }),
+        body: JSON.stringify({ message: text, chatId, runId: runIdRef.current ?? undefined }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await pump(res);

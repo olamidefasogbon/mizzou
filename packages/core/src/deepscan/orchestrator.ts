@@ -566,7 +566,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
           gate: {
             gate: 'G2',
             what: formatG2Conflict(remaining.map((c) => c.field)),
-            evidence: { conflicts: remaining, coverage },
+            evidence: { origin: 'scan', conflicts: remaining, coverage },
             options: null,
           },
         };

@@ -18,7 +18,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node -e \"require('node:fs').copyFileSync('src/prompts/orchestrator.md','dist/prompts/orchestrator.md')\"",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

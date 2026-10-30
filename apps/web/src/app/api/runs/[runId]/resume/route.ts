@@ -4,11 +4,15 @@ import {
   continueRun,
   createDeepScanStep,
   encodeSseEvent,
+  recordDecision,
   resumeRun,
+  runConversationTurn,
   type Gate,
   type RunEvent,
 } from '@mizzou/core';
+import { anonId } from '@/lib/session';
 import { runsStore } from '@/lib/runs';
+import { remindersStore } from '@/lib/stores';
 
 export const maxDuration = 60;
 
@@ -64,16 +68,54 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
       try {
         const store = runsStore();
         const step = createDeepScanStep();
-        const outcome = answering
-          ? await resumeRun(
-              runId,
-              store,
-              { gate: gate as Gate, decision, opId },
-              step,
-              { maxTurns: DEFAULT_MAX_TURNS, onEvent: send },
-            )
-          : await continueRun(runId, store, opId, step, { maxTurns: DEFAULT_MAX_TURNS, onEvent: send });
-        const run = outcome.run;
+        const existing = await store.load(runId);
+        const origin =
+          existing && existing.pendingGate && typeof existing.pendingGate.evidence === 'object' && existing.pendingGate.evidence !== null
+            ? (existing.pendingGate.evidence as { origin?: unknown }).origin
+            : undefined;
+        let run;
+        if (answering && origin === 'chat') {
+          // Conversation-run gate (AGENT_BRAIN.md): record the decision,
+          // then continue with a model turn — the pendingGate (if any) is
+          // set by the orchestrator, not by the deep-scan loop.
+          const userId = await anonId();
+          const recorded = await recordDecision(runId, store, { gate: gate as Gate, decision, opId });
+          run = recorded.run;
+          if (!recorded.duplicate) {
+            await runConversationTurn({
+              run,
+              save: (r) => store.save(r),
+              userText: `The user answered ${String(gate)}: ${JSON.stringify(decision)}`,
+              userId: run.userId ?? userId,
+              send,
+              listReminders: async () =>
+                (await remindersStore.list(userId)).map((r) => ({
+                  id: r.id,
+                  text: r.sub ? `${r.title} — ${r.sub}` : r.title,
+                  dueAt: r.dueAt,
+                })),
+            });
+          }
+        } else {
+          const outcome = answering
+            ? await resumeRun(
+                runId,
+                store,
+                { gate: gate as Gate, decision, opId },
+                step,
+                { maxTurns: DEFAULT_MAX_TURNS, onEvent: send },
+              )
+            : await continueRun(runId, store, opId, step, { maxTurns: DEFAULT_MAX_TURNS, onEvent: send });
+          run = outcome.run;
+          if (outcome.needsResume && run.status === 'running') {
+            if (run.turnCount < DEFAULT_MAX_TURNS) {
+              send({ t: 'continue', runId });
+            } else {
+              fail(SAY_STUCK);
+              return;
+            }
+          }
+        }
         if (run.pendingGate) {
           const evidence = run.pendingGate.evidence as { card?: unknown } | Record<string, unknown> | null | undefined;
           const base =
@@ -85,13 +127,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
             gate: run.pendingGate.gate,
             card: { ...base, what: run.pendingGate.what },
           });
-        } else if (outcome.needsResume && run.status === 'running') {
-          if (run.turnCount < DEFAULT_MAX_TURNS) {
-            send({ t: 'continue', runId });
-          } else {
-            fail(SAY_STUCK);
-            return;
-          }
         }
         send({ t: 'done', runId });
         controller.close();

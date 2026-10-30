@@ -16,7 +16,7 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-  gap: 12px;
+  gap: 4px;
   overflow-y: auto;
   padding-bottom: 16px;
 }
@@ -429,6 +429,116 @@
 
 @media (prefers-reduced-motion: reduce) {
   .spin {
+    animation: none;
+  }
+}
+
+/* New group after a same-sender run: 4px feed gap + 8px = 12px. */
+.gapGroup {
+  margin-top: 8px;
+}
+
+/* Compact tool-progress row: one line per run of status events. */
+.toolSteps {
+  border-radius: var(--mz-radius-bubble);
+  background: #fff;
+  border: 1px solid var(--mz-border);
+  padding: 6px 12px;
+}
+
+.toolHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--mz-secondary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.toolSummary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolCount {
+  flex: none;
+  font-size: 13px;
+}
+
+.toolChevron {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.toolChevronOpen {
+  transform: rotate(180deg);
+}
+
+.toolList {
+  margin: 6px 0 2px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toolStep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--mz-secondary);
+}
+
+/* Typing indicator: three dots while the model works. */
+.typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--mz-radius-bubble);
+  background: var(--mz-muted);
+  padding: 12px 16px;
+}
+
+.typingDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--mz-secondary);
+  animation: mz-typing 1.2s ease-in-out infinite;
+}
+
+.typingDot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typingDot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes mz-typing {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .typingDot {
     animation: none;
   }
 }

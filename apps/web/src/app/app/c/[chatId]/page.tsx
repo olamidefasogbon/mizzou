@@ -2,11 +2,12 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowUp, Check, Download, Loader2, X } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, Download, Loader2, X } from 'lucide-react';
 import { formatG1Prompt } from '@mizzou/core/voice';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { ensureChatAction } from '@/lib/actions';
+import { isTightGroup, messageBubble, statusRun, statusRunHead } from './feed';
 import styles from './conversation.module.css';
 
 function g1Title(program: { name: string; unit: string; institution: string }, opportunityType?: string): {
@@ -111,6 +112,52 @@ function needsLook(confidence: string, needsHuman: boolean): boolean {
   return needsHuman || confidence === 'low';
 }
 
+// One compact row for a run of consecutive tool-status events: a spinner
+// while any step is active, then a one-line summary that expands on tap
+// into the per-step list. Each status id renders once — never repeated.
+function ToolSteps({ items, grouped }: { items: Array<{ id: string; label?: string; state?: StatusState }>; grouped: boolean }): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const activeItem = items.find((entry) => entry.state === 'active');
+  const doneCount = items.filter((entry) => entry.state === 'done').length;
+  const summary = activeItem
+    ? (activeItem.label ?? 'Working')
+    : `Finished ${items.length} step${items.length === 1 ? '' : 's'}`;
+  return (
+    <div className={grouped ? `${styles.toolSteps} ${styles.gapGroup}` : styles.toolSteps}>
+      <button
+        type="button"
+        className={styles.toolHead}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {activeItem ? (
+          <Loader2 className={styles.spin} aria-label="working" />
+        ) : (
+          <Check className={styles.checkIcon} aria-label="done" />
+        )}
+        <span className={styles.toolSummary}>{summary}</span>
+        {doneCount > 0 && activeItem ? <span className={styles.toolCount}>{doneCount} done</span> : null}
+        <ChevronDown
+          className={open ? `${styles.toolChevron} ${styles.toolChevronOpen}` : styles.toolChevron}
+          aria-hidden="true"
+        />
+      </button>
+      {open ? (
+        <ul className={styles.toolList}>
+          {items.map((entry) => (
+            <li key={entry.id} className={styles.toolStep}>
+              {entry.state === 'active' && <Loader2 className={styles.spin} aria-label="working" />}
+              {entry.state === 'done' && <Check className={styles.checkIcon} aria-label="done" />}
+              {entry.state === 'failed' && <X className={styles.failIcon} aria-label="failed" />}
+              <span>{entry.label}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function ChatContent(): React.JSX.Element {
   const params = useParams<{ chatId: string }>();
   const router = useRouter();
@@ -212,14 +259,15 @@ function ChatContent(): React.JSX.Element {
 
   handleEventRef.current = (event: ClientEvent): void => {
     if (event.t === 'message') {
+      // One bubble per assistant message, in arrival order (see feed.ts).
       setFeed((prev) => {
-        const existing = prev.find((item) => item.id === event.id);
-        if (existing) {
-          return prev.map((item) =>
-            item.id === event.id ? { ...item, text: `${item.text ?? ''}${event.text}` } : item,
+        const { id, append } = messageBubble(prev, event.id);
+        if (append) {
+          return prev.map((item, index) =>
+            index === prev.length - 1 ? { ...item, text: `${item.text ?? ''}${event.text}` } : item,
           );
         }
-        return [...prev, { id: event.id, kind: 'message', text: event.text }];
+        return [...prev, { id, kind: 'message', text: event.text }];
       });
     } else if (event.t === 'status') {
       setFeed((prev) => {
@@ -421,38 +469,38 @@ function ChatContent(): React.JSX.Element {
     clear();
   }, [chatId, clear]);
 
+  // Same-sender bubbles sit 4px apart (the feed gap); a new group gets
+  // 12px (see feed.ts isTightGroup).
+  const tight = (index: number): boolean => isTightGroup(feed, index);
+
   return (
     <div className={styles.screen}>
         <div ref={feedRef} className={styles.feed}>
-          {feed.map((item) => {
+          {feed.map((item, i) => {
             if (item.kind === 'user') {
               return (
-                <div key={item.id} className={styles.userRow}>
+                <div key={item.id} className={tight(i) ? styles.userRow : `${styles.userRow} ${styles.gapGroup}`}>
                   <div className={styles.userBubble}>{item.text}</div>
                 </div>
               );
             }
             if (item.kind === 'message') {
               return (
-                <div key={item.id} className={styles.assistantRow}>
+                <div key={item.id} className={tight(i) ? styles.assistantRow : `${styles.assistantRow} ${styles.gapGroup}`}>
                   <p className={styles.assistantText}>{item.text}</p>
                 </div>
               );
             }
             if (item.kind === 'status') {
-              return (
-                <div key={item.id} className={styles.statusRow}>
-                  {item.state === 'active' && <Loader2 className={styles.spin} aria-label="working" />}
-                  {item.state === 'done' && <Check className={styles.checkIcon} aria-label="done" />}
-                  {item.state === 'failed' && <X className={styles.failIcon} aria-label="failed" />}
-                  <span>{item.label}</span>
-                </div>
-              );
+              // Only the head of a consecutive run renders; the run
+              // collapses into one compact row (see feed.ts).
+              if (!statusRunHead(feed, i)) return null;
+              return <ToolSteps key={`tools-${item.id}`} items={statusRun(feed, i)} grouped={i > 0} />;
             }
             if (item.kind === 'g1' && item.program) {
               const heading = g1Title(item.program, item.opportunity_type);
               return (
-                <div key={item.id} className={styles.card}>
+                <div key={item.id} className={`${styles.card} ${styles.gapGroup}`}>
                   <p className={styles.cardPrompt}>{formatG1Prompt(item.opportunity_type ?? 'generic_opportunity')}</p>
                   <p className={styles.cardTitle}>{heading.title}</p>
                   {heading.subtitle.length > 0 && (
@@ -517,7 +565,7 @@ function ChatContent(): React.JSX.Element {
             }
             if (item.kind === 'g2' && item.conflicts) {
               return (
-                <div key={item.id} className={styles.card}>
+                <div key={item.id} className={`${styles.card} ${styles.gapGroup}`}>
                   <p className={styles.cardPrompt}>{item.what ?? 'Two official pages disagree. Which one looks right to you?'}</p>
                   <ul className={styles.conflictValues}>
                     {item.conflicts.map((c, i) => (
@@ -554,7 +602,7 @@ function ChatContent(): React.JSX.Element {
             }
             if (item.kind === 'coverage' && item.lines) {
               return (
-                <div key={item.id} className={styles.card}>
+                <div key={item.id} className={`${styles.card} ${styles.gapGroup}`}>
                   {item.lines.map((line, i) => (
                     <p key={i} className={styles.coverageLine}>
                       {line}
@@ -573,7 +621,7 @@ function ChatContent(): React.JSX.Element {
                 needsLook(f.confidence, f.needs_human),
               ).length;
               return (
-                <div key={item.id} className={styles.card}>
+                <div key={item.id} className={`${styles.card} ${styles.gapGroup}`}>
                   <p className={styles.cardPrompt}>What they ask for</p>
                   {item.requirements.documents.length > 0 && (
                     <div className={styles.mt2}>
@@ -664,7 +712,7 @@ function ChatContent(): React.JSX.Element {
             if (item.kind === 'plan' && item.plan && (item.plan.deadlines.length > 0 || item.plan.items.length > 0)) {
               const plan = item.plan;
               return (
-                <div key={item.id} className={styles.card}>
+                <div key={item.id} className={`${styles.card} ${styles.gapGroup}`}>
                   <p className={styles.cardPrompt}>Here&apos;s the plan. Nothing goes on your calendar until you say so.</p>
                   {plan.deadlines.length > 0 && (
                     <ul className={`${styles.reqList} ${styles.mt2}`}>
@@ -707,7 +755,7 @@ function ChatContent(): React.JSX.Element {
             }
             if (item.kind === 'rolling' && item.text) {
               return (
-                <div key={item.id} className={styles.assistantRow}>
+                <div key={item.id} className={`${styles.assistantRow} ${styles.gapGroup}`}>
                   <div>
                     <span className={styles.rollingPill}>
                       Rolling / Unspecified Deadline
@@ -718,7 +766,7 @@ function ChatContent(): React.JSX.Element {
               );
             }
             return (
-              <div key={item.id} className={styles.card}>
+              <div key={item.id} className={`${styles.card} ${styles.gapGroup}`}>
                 <p className={styles.assistantText}>{item.text}</p>
                 {item.link && (
                   <a href={item.link} target="_blank" rel="noreferrer" className={`${styles.link} ${styles.coverageOpen}`}>
@@ -728,6 +776,15 @@ function ChatContent(): React.JSX.Element {
               </div>
             );
           })}
+          {busy && !feed.some((entry) => entry.kind === 'status' && entry.state === 'active') ? (
+            <div className={`${styles.assistantRow} ${styles.gapGroup}`} aria-label="Mizzou is typing">
+              <span className={styles.typing}>
+                <span className={styles.typingDot} />
+                <span className={styles.typingDot} />
+                <span className={styles.typingDot} />
+              </span>
+            </div>
+          ) : null}
         </div>
 
         <div className={styles.composer}>

@@ -208,15 +208,30 @@ describe('supabase repo behind the interface', () => {
     assert.equal(await repo.runs.load('22222222-2222-4222-8222-222222222222'), null);
   });
 
-  it('counts only today’s runs for the guest cap', async () => {
+  it('snapshots today’s usage spend per user and globally', async () => {
     const today = new Date().toISOString().slice(0, 10);
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const mk = (id: string, user: string, day: string) => ({ id, user_id: user, created_at: `${day}T10:00:00.000Z` });
+    const mk = (user: string, cost: number, day: string) => ({ user_id: user, cost_usd: cost, created_at: `${day}T10:00:00.000Z` });
     const { repo } = repoWithSeed({
-      runs: [mk('r1', 'guest-1', today), mk('r2', 'guest-1', today), mk('r3', 'guest-1', today), mk('r4', 'guest-1', yesterday), mk('r5', 'guest-2', today)],
+      usage: [mk('user-a', 2, today), mk('user-a', 3, today), mk('user-a', 50, yesterday), mk('user-b', 1, today)],
     });
-    assert.equal(await repo.runs.countStartedToday('guest-1'), 3);
-    assert.equal(await repo.runs.countStartedToday('guest-2'), 1);
+    assert.deepEqual(await repo.usage.snapshot('user-a'), { userSpend: 5, globalSpend: 6 });
+    assert.deepEqual(await repo.usage.snapshot('user-b'), { userSpend: 1, globalSpend: 6 });
+  });
+
+  it('flushes completed calls into the usage table', async () => {
+    const { repo, tables } = repoWithSeed();
+    await repo.usage.flush(
+      [{ userId: 'user-a', model: 'muse-spark-1.3', promptTokens: 100, completionTokens: 10, costUsd: 0.004, at: new Date().toISOString() }],
+      'run-1',
+    );
+    assert.equal(tables['usage'].length, 1);
+    assert.equal(tables['usage'][0]?.['user_id'], 'user-a');
+    assert.equal(tables['usage'][0]?.['run_id'], 'run-1');
+    assert.equal(tables['usage'][0]?.['cost_usd'], 0.004);
+    // Empty flush writes nothing.
+    await repo.usage.flush([]);
+    assert.equal(tables['usage'].length, 1);
   });
 
   it('keeps reminders per user and maps sub to status_line', async () => {
@@ -251,8 +266,12 @@ describe('supabase repo behind the interface', () => {
     const run = newRun('33333333-3333-4333-8333-333333333333', 'user-c', null);
     await mem.runs.save(run);
     assert.ok(await mem.runs.load(run.id));
-    assert.equal(await mem.runs.countStartedToday('user-c'), 1);
     await mem.chats.ensure('c1', 'user-c', 't');
     assert.equal((await mem.chats.list('user-c')).length, 1);
+    await mem.usage.flush(
+      [{ userId: 'user-c', model: 'm', promptTokens: 10, completionTokens: 1, costUsd: 0.001, at: new Date().toISOString() }],
+      '33333333-3333-4333-8333-333333333333',
+    );
+    assert.deepEqual(await mem.usage.snapshot('user-c'), { userSpend: 0.001, globalSpend: 0.001 });
   });
 });

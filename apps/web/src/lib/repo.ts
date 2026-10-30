@@ -1,26 +1,25 @@
-// Persistence behind one interface (Part A steps 3-4). Routes and actions
-// talk to a Repo; tests use the in-memory repo, signed-in users get
-// Supabase (RLS through their session), cookie-only visitors keep the
-// file-backed stores (no session means no RLS identity for uuid columns).
-// Server-only: route handlers, server actions and scripts with a key.
+// Persistence behind one repository interface. Supabase-only: every caller
+// is signed in (Google), so RLS rows through the user's session. Tests use
+// the in-memory repo. Server-only: route handlers, server actions and
+// scripts with a key.
 
 import 'server-only';
 
-import { readdir, readFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { FileRunStore, newRun, type GateDecision, type RunRecord } from '@mizzou/core';
-import { chatsStore, remindersStore, type ChatSummary, type Reminder } from './stores.ts';
+import { newRun, type GateDecision, type RunRecord, type UsageRecord } from '@mizzou/core';
+import type { ChatSummary, Reminder } from './stores.ts';
 
 export interface RunLedger {
   load(id: string): Promise<RunRecord | null>;
   save(run: RunRecord): Promise<void>;
-  /** Runs this user started today (UTC). Guests are capped on this number. */
-  countStartedToday(userId: string): Promise<number>;
 }
 
 export type ReminderInput = Pick<Reminder, 'title' | 'sub' | 'pill'> &
   Partial<Pick<Reminder, 'dueAt' | 'kind'>>;
+
+export interface UsageSnapshot {
+  userSpend: number;
+  globalSpend: number;
+}
 
 export interface Repo {
   runs: RunLedger;
@@ -34,6 +33,12 @@ export interface Repo {
     rename(id: string, userId: string, title: string): Promise<void>;
     clear(userId: string): Promise<ChatSummary[]>;
     restore(userId: string, snapshot: ChatSummary[]): Promise<void>;
+  };
+  usage: {
+    /** Spend since UTC midnight for one user and for everyone. */
+    snapshot(userId: string): Promise<UsageSnapshot>;
+    /** Persist completed model calls (usage table, PROMPT 9.3). */
+    flush(rows: UsageRecord[], runId?: string): Promise<void>;
   };
 }
 
@@ -169,10 +174,6 @@ export function supabaseRepo(db: DbClient): Repo {
         );
       }
     },
-    countStartedToday: async (userId) => {
-      const res = await db.from('runs').select('id').eq('user_id', userId).gte('created_at', dayStartUtc());
-      return res.data?.length ?? 0;
-    },
   };
 
   return {
@@ -240,6 +241,35 @@ export function supabaseRepo(db: DbClient): Repo {
         }
       },
     },
+    usage: {
+      snapshot: async (userId) => {
+        const res = await db.from('usage').select('user_id,cost_usd').gte('created_at', dayStartUtc());
+        let userSpend = 0;
+        let globalSpend = 0;
+        for (const r of res.data ?? []) {
+          const cost = typeof r['cost_usd'] === 'number' ? r['cost_usd'] : Number(r['cost_usd'] ?? 0);
+          if (!Number.isFinite(cost)) continue;
+          globalSpend += cost;
+          if (r['user_id'] === userId) userSpend += cost;
+        }
+        return { userSpend, globalSpend };
+      },
+      flush: async (rows, runId) => {
+        if (rows.length === 0) return;
+        await db.from('usage').insert(
+          rows.map((r) => ({
+            user_id: r.userId,
+            run_id: runId ?? null,
+            model: r.model,
+            prompt_tokens: r.promptTokens,
+            completion_tokens: r.completionTokens,
+            total_tokens: r.promptTokens + r.completionTokens,
+            latency_ms: 0,
+            cost_usd: r.costUsd,
+          })),
+        );
+      },
+    },
   };
 }
 
@@ -248,57 +278,8 @@ export function adaptDb(client: { from(table: string): unknown }): DbClient {
   return { from: (table) => client.from(table) as unknown as DbTable };
 }
 
-// ---------------------------------------------------------------------------
-// File-backed repo (cookie-only visitors) and in-memory repo (tests).
-
 function todayStamp(): string {
   return new Date().toISOString().slice(0, 10);
-}
-
-function fileRunsDir(): string {
-  return process.env.MIZZOU_DATA_DIR ?? join(tmpdir(), 'mizzou', 'runs');
-}
-
-export function fileRunLedger(dir: string = fileRunsDir()): RunLedger {
-  const store = new FileRunStore(dir);
-  return {
-    load: (id) => store.load(id),
-    save: (run) => store.save(run),
-    countStartedToday: async (userId) => {
-      let files: string[] = [];
-      try {
-        files = await readdir(dir);
-      } catch {
-        return 0;
-      }
-      let count = 0;
-      for (const file of files) {
-        try {
-          const parsed: unknown = JSON.parse(await readFile(join(dir, file), 'utf-8'));
-          if (
-            typeof parsed === 'object' &&
-            parsed !== null &&
-            (parsed as { userId?: unknown }).userId === userId &&
-            typeof (parsed as { updatedAt?: unknown }).updatedAt === 'string' &&
-            (parsed as { updatedAt: string }).updatedAt.slice(0, 10) === todayStamp()
-          ) {
-            count += 1;
-          }
-        } catch {
-          // A half-written row must not break the cap check.
-        }
-      }
-      return count;
-    },
-  };
-}
-
-export function fileRepo(): Repo {
-  return {
-    runs: fileRunLedger(),
-    reminders: remindersStore,
-    chats: chatsStore,
-  };
 }
 
 /** In-memory repo for tests. Same shapes and counting rule throughout. */
@@ -306,16 +287,13 @@ export function memoryRepo(): Repo {
   const runRows = new Map<string, RunRecord>();
   const reminderRows = new Map<string, Reminder>();
   const chatRows = new Map<string, ChatSummary>();
+  const usageRows: UsageRecord[] = [];
   return {
     runs: {
       load: async (id) => runRows.get(id) ?? null,
       save: async (run) => {
         runRows.set(run.id, JSON.parse(JSON.stringify(run)) as RunRecord);
       },
-      countStartedToday: async (userId) =>
-        [...runRows.values()].filter(
-          (r) => r.userId === userId && typeof r.updatedAt === 'string' && r.updatedAt.slice(0, 10) === todayStamp(),
-        ).length,
     },
     reminders: {
       list: async (userId) => [...reminderRows.values()].filter((r) => r.userId === userId && !r.done),
@@ -359,23 +337,36 @@ export function memoryRepo(): Repo {
         for (const r of snapshot) chatRows.set(`${userId}:${r.id}`, { ...r, userId });
       },
     },
+    usage: {
+      snapshot: async (userId) => {
+        const day = todayStamp();
+        let userSpend = 0;
+        let globalSpend = 0;
+        for (const r of usageRows) {
+          if (r.at.slice(0, 10) !== day) continue;
+          globalSpend += r.costUsd;
+          if (r.userId === userId) userSpend += r.costUsd;
+        }
+        return { userSpend, globalSpend };
+      },
+      flush: async (rows) => {
+        usageRows.push(...rows.map((r) => ({ ...r })));
+      },
+    },
   };
 }
 
 /**
- * The repo for this request. A Supabase session means RLS rows;
- * cookie-only visitors keep the file-backed stores. The Next-dependent
- * modules load lazily so this file's static graph stays runnable under
- * plain node:test (only repo(), never called by tests, touches them).
+ * The repo for this request: Supabase under the user's session (RLS rows).
+ * Throws AuthRequiredError when signed out. The Next-dependent modules load
+ * lazily so this file's static graph stays runnable under plain node:test
+ * (only repo(), never called by tests, touches them).
  */
 export async function repo(): Promise<Repo> {
   const { resolveUser } = await import('./auth.ts');
-  const session = await resolveUser();
-  if (session.uid) {
-    const { supabaseServer } = await import('./supabase/server.ts');
-    return supabaseRepo(adaptDb(await supabaseServer()));
-  }
-  return fileRepo();
+  await resolveUser();
+  const { supabaseServer } = await import('./supabase/server.ts');
+  return supabaseRepo(adaptDb(await supabaseServer()));
 }
 
 export { newRun };

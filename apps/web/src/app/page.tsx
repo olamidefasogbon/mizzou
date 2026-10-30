@@ -1,9 +1,9 @@
 import Link from "next/link";
 import styles from "./landing.module.css";
 
-// Landing. Meta.ai style: white canvas, blue primary, black text.
-// Tablet and desktop per docs/design/UI_CORRECTIONS.md section 5:
-// one responsive tree, no per-device copies.
+// Landing. muse.ai pattern on Meta style: white canvas, everything centered,
+// blue primary, black text. One wordmark, one primary button, one blue
+// "Log in" pill top right. One responsive tree (UI_CORRECTIONS.md section 5).
 
 const CARDS: Array<[string, string]> = [
   [
@@ -24,22 +24,26 @@ export default function LandingPage() {
   return (
     <div className="mz-shell">
       <div className={`mz-fg ${styles.screen}`}>
+        <header className={styles.topbar}>
+          <Link href="/signup" className={`mz-btn mz-btn-primary ${styles.loginPill}`}>
+            Log in
+          </Link>
+        </header>
+
         <div className={styles.lead}>
           <div className={styles.hero}>
             <div className={`mz-wordmark ${styles.wordmark}`}>Mizzou</div>
-            <p className={styles.headline}>From link to executed application.</p>
+            <h1 className={styles.headline}>From link to executed application.</h1>
+            <p className={styles.sub}>
+              Your opportunity buddy. Tell me what you are going for and I handle the reading,
+              the dates and the prep.
+            </p>
           </div>
 
           <div className={styles.cta}>
             <Link href="/signup" className={`mz-btn mz-btn-primary ${styles.tryButton}`}>
               Try it for free
             </Link>
-            <p className={styles.loginLine}>
-              <span>Already have an account? </span>
-              <Link href="/signup" className={styles.loginLink}>
-                Log in
-              </Link>
-            </p>
           </div>
         </div>
 

@@ -21,5 +21,6 @@ export * from './deepscan/coverage.js';
 export * from './prompts/reader.js';
 export * from './prompts/orchestrator.js';
 export * from './prompts/judge.js';
+export * from './prompts/fit.js';
 export * from './conversation/turn.js';
 export * from './conversation/title.js';

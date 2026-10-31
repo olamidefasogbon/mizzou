@@ -24,6 +24,7 @@ import { rankLinks } from '../deepscan/rank.js';
 import { readPdfText } from '../deepscan/pdf.js';
 import { READER_SYSTEM_PROMPT, buildReaderPrompt } from '../prompts/reader.js';
 import { JUDGE_SYSTEM_PROMPT, buildJudgePrompt } from '../prompts/judge.js';
+import { FIT_JUDGE_SYSTEM_PROMPT, FitAssessmentSchema, buildFitPrompt, type FitAssessment, type FitAssessmentInput } from '../prompts/fit.js';
 import { verifyExtractionEvidence } from '../extract/evidence.js';
 import { ExtractionSchema, type Extraction } from '../schemas/extraction.js';
 import {
@@ -36,6 +37,7 @@ import {
   type ReconcilePage,
 } from '../extract/reconcile.js';
 import { buildCoveragePayload } from '../deepscan/coverage.js';
+import { FIT_APPLY_LABEL, FIT_CARD_TITLE, FIT_PARK_LABEL, FIT_QUESTION } from '../voice/index.js';
 import {
   ROLLING_NOTICE_TEXT,
   SAY_GOT_IT,
@@ -179,10 +181,17 @@ export interface ConversationMemory {
   lastReply: string | null;
   /** The gate the previous turn stopped at, if any. */
   gateContext: { gate: Gate; what: string } | null;
+  /** Stored profile facts: each answered profile question. */
+  profile: Array<{ question: string; answer: string }>;
+  /** Question asked by ask_profile_question, awaiting the user's answer. */
+  pendingProfileQuestion: string | null;
+  /** Fit read asked at most once per run; the answer is recorded once in decisions. */
+  fitAsked: boolean;
+  fitDecision: 'apply' | 'not_now' | null;
 }
 
 function blankMemory(): ConversationMemory {
-  return { programUrl: null, programHint: null, pages: [], unreadable: [], languages: [], extractions: [], usage: [], lastReply: null, gateContext: null };
+  return { programUrl: null, programHint: null, pages: [], unreadable: [], languages: [], extractions: [], usage: [], lastReply: null, gateContext: null, profile: [], pendingProfileQuestion: null, fitAsked: false, fitDecision: null };
 }
 
 function readMemory(run: RunRecord): ConversationMemory {
@@ -199,6 +208,14 @@ function readMemory(run: RunRecord): ConversationMemory {
     usage: Array.isArray(m.usage) ? m.usage : [],
     lastReply: typeof m.lastReply === 'string' ? m.lastReply : null,
     gateContext: m.gateContext && typeof m.gateContext === 'object' ? (m.gateContext as ConversationMemory['gateContext']) : null,
+    profile: Array.isArray(m.profile)
+      ? (m.profile as unknown[])
+          .filter((f): f is { question: string; answer: string } => !!f && typeof f === 'object' && typeof (f as { question?: unknown }).question === 'string' && typeof (f as { answer?: unknown }).answer === 'string')
+          .map((f) => ({ question: f.question, answer: f.answer }))
+      : [],
+    pendingProfileQuestion: typeof m.pendingProfileQuestion === 'string' ? m.pendingProfileQuestion : null,
+    fitAsked: m.fitAsked === true,
+    fitDecision: m.fitDecision === 'apply' || m.fitDecision === 'not_now' ? m.fitDecision : null,
   };
 }
 
@@ -224,6 +241,8 @@ export interface ConversationTurnDeps {
   fetchPage?: (url: string) => Promise<FetchPageResult>;
   readPageText?: (page: { url: string; title: string; text: string }, ctx: { programHint: string | null; userId: string }) => Promise<ReadPageTextResult>;
   judge?: JudgeTransport;
+  /** Judge-role fit read. Defaults to a callModel judge call; tests inject a mock (no paid runs). */
+  assessFit?: (input: FitAssessmentInput) => Promise<FitAssessment>;
   listReminders?: () => Promise<ReminderRow[]>;
   streamCall?: (opts: StreamCallOptions) => Promise<ResponsesCallResult>;
   sleepMs?: (ms: number) => Promise<void>;
@@ -324,6 +343,19 @@ function parseArgs(raw: string): Record<string, unknown> {
 
 const str = (v: unknown): string | null => (typeof v === 'string' ? v : null);
 
+/**
+ * Decode a fit-card button press. The buttons post their exact labels as
+ * chat messages, so this is exact label matching on a structured UI reply —
+ * not branching on free text. The typographic apostrophe variant matches
+ * smart-quote renderings of the apply label.
+ */
+function fitChoiceFromText(text: string): 'apply' | 'not_now' | null {
+  const norm = text.trim().toLowerCase().split('’').join("'");
+  if (norm === FIT_APPLY_LABEL.toLowerCase()) return 'apply';
+  if (norm === FIT_PARK_LABEL.toLowerCase()) return 'not_now';
+  return null;
+}
+
 export async function runConversationTurn(opts: ConversationTurnOptions): Promise<ConversationTurnResult> {
   const userId = opts.userId ?? 'dev';
   const budgetGuard = opts.budgetGuard;
@@ -340,6 +372,26 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   const { run, save, send } = opts;
   const mem = readMemory(run);
   const pageCache = new Map<string, FetchPageResult>();
+  // Judge-role fit read (PROMPT.md 7.2). A throwing judge returns null so
+  // the turn skips the fit card; like any tool failure it never ends the run.
+  const runAssessFit = async (input: FitAssessmentInput): Promise<FitAssessment | null> => {
+    try {
+      if (opts.assessFit) return await opts.assessFit(input);
+      const result = await callModel({
+        role: 'judge',
+        systemPrompt: FIT_JUDGE_SYSTEM_PROMPT,
+        prompt: buildFitPrompt(input),
+        schema: FitAssessmentSchema,
+        temperature: 0,
+        userId,
+        budgetGuard,
+      });
+      logUsage({ kind: 'model', tool: null, role: 'judge', model: result.model, inputTokens: result.usage?.prompt_tokens ?? 0, outputTokens: result.usage?.completion_tokens ?? 0, costUsd: result.costUsd });
+      return FitAssessmentSchema.parse(result.data);
+    } catch {
+      return null;
+    }
+  };
   const logUsage = (entry: Omit<UsageEntry, 'turn'>): void => {
     mem.usage.push({ ...entry, turn: run.turnCount });
     run.usageUsd += entry.costUsd;
@@ -351,6 +403,36 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
 
   run.messages.push({ role: 'user', text: opts.userText });
   run.turnCount += 1;
+  // Durable fit decision (PROMPT.md 7.2: saved once in decisions, never
+  // asked again). A recorded answer survives restarts: the memory mirror is
+  // rebuilt here from the decisions row (upserted on op_id, so repeats
+  // replay instead of deciding twice).
+  const fitOpId = `fit-${run.id}`;
+  const recorded = run.decisions.find((d) => d.opId === fitOpId);
+  if (recorded && typeof recorded.decision === 'object' && recorded.decision !== null) {
+    const choice = (recorded.decision as { choice?: unknown }).choice;
+    if (choice === 'apply' || choice === 'not_now') {
+      mem.fitAsked = true;
+      mem.fitDecision = choice;
+    }
+  }
+  let fitDecidedThisTurn: 'apply' | 'not_now' | null = null;
+  if (!mem.fitDecision && mem.fitAsked) {
+    const choice = fitChoiceFromText(opts.userText);
+    if (choice) {
+      mem.fitDecision = choice;
+      fitDecidedThisTurn = choice;
+      if (!run.decisions.some((d) => d.opId === fitOpId)) {
+        // G3 carries the row: the fit read closes the profile exchange, and
+        // the decisions table only accepts gate values (see STATUS.md).
+        run.decisions.push({ gate: 'G3', decision: { choice, question: 'go-for-it-anyway' }, opId: fitOpId });
+      }
+    }
+  }
+  if (!fitDecidedThisTurn && mem.pendingProfileQuestion && opts.userText.trim().length > 0) {
+    mem.profile.push({ question: mem.pendingProfileQuestion, answer: opts.userText.slice(0, 2000) });
+    mem.pendingProfileQuestion = null;
+  }
 
   let fullText = '';
   const messageId = `conv-${run.id}-t${run.turnCount}`;
@@ -461,6 +543,38 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     }
   };
 
+  /**
+   * Plain-words fit card (PROMPT.md 7.2). Fires at most once per run, only
+   * when the user has stated profile facts (never invent them) and the fit
+   * question is still open. The payload carries words only — the internal
+   * judge object, and any numbers, never leave the server.
+   */
+  const emitFitCard = async (extraction: Extraction): Promise<void> => {
+    if (mem.profile.length === 0 || mem.fitAsked || mem.fitDecision) return;
+    const assessment = await runAssessFit({
+      program: extraction.program.name.value,
+      rules: extraction.eligibility.map((r) => ({ rule: r.value.rule, hard: r.value.hard })),
+      documents: extraction.documents.map((d) => ({ name: d.value.name, optional: d.value.optional })),
+      profile: mem.profile,
+    });
+    if (!assessment) return;
+    mem.fitAsked = true;
+    send({
+      t: 'card',
+      id: `conv-${run.id}-t${run.turnCount}-fit`,
+      kind: 'fit',
+      payload: {
+        title: FIT_CARD_TITLE,
+        program: extraction.program.name.value,
+        lines_up: assessment.matched,
+        stretch: assessment.competitive_gaps.map((g) => g.note),
+        missing: assessment.hard_gaps.map((g) => g.note),
+        biggest_risk: assessment.biggest_risk,
+        question: FIT_QUESTION,
+        options: [FIT_APPLY_LABEL, FIT_PARK_LABEL],
+      },
+    });
+  };
   /** Merge one extraction, reconcile, and G2-gate when conflicts stand. */
   const mergeAndReconcile = async (
     url: string,
@@ -481,6 +595,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     if (rec.conflicts.length === 0) {
       const deadlines = rec.merged?.deadlines.length ?? 0;
       if (rec.merged) emitExtractionCards(rec.merged);
+      if (rec.merged) await emitFitCard(rec.merged);
       return { gate: null, summary: `read ${title || url}; ${deadlines} deadline(s) extracted, no conflicts` };
     }
     let remaining = rec.conflicts;
@@ -495,6 +610,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     }
     if (remaining.length === 0) {
       if (settled) emitExtractionCards(settled);
+      if (settled) await emitFitCard(settled);
       return { gate: null, summary: `read ${title || url}; conflicts resolved by judge` };
     }
     const coverage = buildCoveragePayload({ pagesRead: mem.pages, unreadable: mem.unreadable, languages: mem.languages });
@@ -634,6 +750,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     }
     if (name === 'ask_profile_question') {
       const question = str(args['question']) ?? '';
+      mem.pendingProfileQuestion = question;
       send({ t: 'message', id: `conv-${run.id}-t${run.turnCount}-q`, text: question });
       return { output: { asked: true, note: 'the question is already shown to the user; do not repeat it verbatim in your reply' } };
     }
@@ -673,6 +790,11 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     if (mem.unreadable.length > 0) parts.push(`Pages that would not open: ${mem.unreadable.map((u) => u.url).slice(0, 5).join(', ')}`);
     parts.push(`New message: ${opts.userText}`);
     firstInput = parts.join('\n');
+  }
+  if (fitDecidedThisTurn === 'apply') {
+    firstInput = `The user answered "Want to go for it anyway?" with "Yes, let's apply" (recorded — never ask again). Carry on with the plan and drafts.\n${firstInput}`;
+  } else if (fitDecidedThisTurn === 'not_now') {
+    firstInput = `The user answered "Want to go for it anyway?" with "Not now" (recorded — never ask again). They parked this opportunity: acknowledge briefly, keep the existing reminders, do not propose new steps unless asked.\n${firstInput}`;
   }
   mem.gateContext = null;
   // Stateless replay: every round sends the persisted message history plus

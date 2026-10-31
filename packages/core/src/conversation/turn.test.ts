@@ -6,6 +6,7 @@ import { newRun, type RunRecord } from '../agent/types.js';
 import type { RunEvent } from '../schemas/events.js';
 import type { Extraction } from '../schemas/extraction.js';
 import type { ResponsesCallResult, StreamCallOptions } from '../meta/responses.js';
+import type { FitAssessment, FitAssessmentInput } from '../prompts/fit.js';
 import { runConversationTurn } from './turn.js';
 
 // AGENT_BRAIN.md section 2: the chat route and the conversation turn must
@@ -432,5 +433,216 @@ describe('settled extraction card guards', () => {
     expect(result.text).toContain('here is what I found');
     const secondInput = JSON.stringify(h.seen[1]?.input);
     expect(secondInput).toContain('reminders db down');
+  });
+
+});
+
+describe('fit read (M5, PROMPT.md 7.2)', () => {
+  const assessment: FitAssessment = {
+    matched: ['Your physics degree lines up with what they ask for.'],
+    hard_gaps: [{ field: 'eligibility: minimum GPA', note: 'They want a first-class mark and your profile does not state one.' }],
+    competitive_gaps: [{ field: 'documents: writing sample', note: 'Most admitted applicants submit a long writing sample.' }],
+    biggest_risk: 'The grades bar is the part most likely to stop this.',
+  };
+
+  function fitExtraction(): Extraction {
+    return {
+      ...stubExtraction(),
+      documents: [
+        {
+          value: { name: 'Transcript', limit: null, optional: false },
+          evidence_quote: 'Transcript',
+          source_url: 'https://example.edu/a',
+          confidence: 'high' as const,
+          needs_human: false,
+          checked: true,
+        },
+      ],
+      eligibility: [
+        {
+          value: { rule: 'A physics degree', hard: true },
+          evidence_quote: 'physics degree',
+          source_url: 'https://example.edu/a',
+          confidence: 'high' as const,
+          needs_human: false,
+          checked: true,
+        },
+      ],
+    };
+  }
+
+  function seedProfile(run: RunRecord): void {
+    (run.state as Record<string, unknown>)['conversation'] = {
+      profile: [{ question: 'What is your degree?', answer: 'A second-class degree in physics' }],
+      fitAsked: false,
+      fitDecision: null,
+      pendingProfileQuestion: null,
+    };
+  }
+
+  function memOf(run: RunRecord): { fitAsked: boolean; fitDecision: string | null; profile: Array<{ question: string; answer: string }>; pendingProfileQuestion: string | null } {
+    return (run.state as Record<string, unknown>)['conversation'] as {
+      fitAsked: boolean;
+      fitDecision: string | null;
+      profile: Array<{ question: string; answer: string }>;
+      pendingProfileQuestion: string | null;
+    };
+  }
+
+  interface FitPayload {
+    title: string;
+    program: string;
+    lines_up: string[];
+    stretch: string[];
+    missing: string[];
+    biggest_risk: string;
+    question: string;
+    options: string[];
+  }
+
+  function fitCards(events: RunEvent[]): FitPayload[] {
+    return events
+      .filter((e) => e.t === 'card' && (e as { kind: string }).kind === 'fit')
+      .map((e) => (e as unknown as { payload: FitPayload }).payload);
+  }
+
+  async function settleWithProfile(over: { run?: RunRecord; seed?: boolean; assessFit?: (input: FitAssessmentInput) => Promise<FitAssessment> } = {}): Promise<{ events: RunEvent[]; run: RunRecord }> {
+    const h = makeHarness([
+      callResult('read_page', { url: 'https://example.edu/a' }, 'resp-1'),
+      textResult('Here is my honest read.', 'resp-2'),
+    ]);
+    const run = over.run ?? h.run;
+    if (over.seed !== false) seedProfile(run);
+    const events: RunEvent[] = [];
+    await runConversationTurn({
+      run,
+      save: async () => {},
+      userText: 'https://example.edu/a',
+      userId: 'user-1',
+      send: (e) => events.push(e),
+      streamCall: h.streamCall,
+      fetchPage: async () => stubPage,
+      readPageText: async () => ({ extraction: fitExtraction(), costUsd: 0.002, model: 'muse-spark-1.3', inputTokens: 80, outputTokens: 40 }),
+      assessFit: over.assessFit ?? (async () => assessment),
+    });
+    return { events, run };
+  }
+
+  it('emits a plain-words fit card once extraction settles with profile facts', async () => {
+    const { events, run } = await settleWithProfile();
+    const cards = fitCards(events);
+    expect(cards).toHaveLength(1);
+    const payload = cards[0];
+    expect(payload.title).toBe('How you match up');
+    expect(payload.question).toBe('Want to go for it anyway?');
+    expect(payload.options).toEqual(["Yes, let's apply", 'Not now']);
+    expect(payload.lines_up).toEqual(assessment.matched);
+    expect(payload.stretch).toEqual(assessment.competitive_gaps.map((g) => g.note));
+    expect(payload.missing).toEqual(assessment.hard_gaps.map((g) => g.note));
+    expect(payload.biggest_risk).toBe(assessment.biggest_risk);
+    expect(JSON.stringify(payload)).not.toMatch(/[0-9]\s*%|\/100/);
+    expect(memOf(run).fitAsked).toBe(true);
+  });
+
+  it('emits no fit card when the user stated no profile facts', async () => {
+    const h = makeHarness([
+      callResult('read_page', { url: 'https://example.edu/a' }, 'resp-1'),
+      textResult('Here is what they ask for.', 'resp-2'),
+    ]);
+    let calls = 0;
+    const events: RunEvent[] = [];
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'https://example.edu/a',
+      userId: 'user-1',
+      send: (e) => events.push(e),
+      streamCall: h.streamCall,
+      fetchPage: async () => stubPage,
+      readPageText: async () => ({ extraction: fitExtraction(), costUsd: 0.002, model: 'muse-spark-1.3', inputTokens: 80, outputTokens: 40 }),
+      assessFit: async () => { calls += 1; return assessment; },
+    });
+    expect(calls).toBe(0);
+    expect(fitCards(events)).toHaveLength(0);
+  });
+
+  it('skips the fit card when the judge fails, without ending the turn', async () => {
+    const { events, run } = await settleWithProfile({
+      assessFit: async () => { throw new Error('judge down'); },
+    });
+    expect(fitCards(events)).toHaveLength(0);
+    expect(memOf(run).fitAsked).toBe(false);
+  });
+
+  it('records the fit decision once in decisions and never asks again', async () => {
+    const first = await settleWithProfile();
+    expect(first.run.decisions).toHaveLength(0);
+
+    const answer = makeHarness([textResult('Carrying on.', 'resp-3')]);
+    const res = await runConversationTurn({
+      run: first.run,
+      save: async () => {},
+      userText: "Yes, let's apply",
+      userId: 'user-1',
+      send: () => {},
+      streamCall: answer.streamCall,
+      assessFit: async () => assessment,
+    });
+    expect(res.gated).toBe(false);
+    expect(first.run.decisions).toHaveLength(1);
+    expect(first.run.decisions[0]).toMatchObject({ gate: 'G3', opId: 'fit-run-1' });
+    expect((first.run.decisions[0].decision as { choice: string }).choice).toBe('apply');
+    expect(JSON.stringify(answer.seen[0]?.input)).toContain('never ask again');
+
+    const repeat = makeHarness([textResult('Still carrying on.', 'resp-4')]);
+    await runConversationTurn({
+      run: first.run,
+      save: async () => {},
+      userText: "Yes, let's apply",
+      userId: 'user-1',
+      send: () => {},
+      streamCall: repeat.streamCall,
+      assessFit: async () => assessment,
+    });
+    expect(first.run.decisions).toHaveLength(1);
+
+    const settled = await settleWithProfile({ run: first.run, seed: false });
+    expect(fitCards(settled.events)).toHaveLength(0);
+  });
+
+  it('rebuilds a recorded decision from stored decisions after a restart', async () => {
+    const run = newRun('run-9', 'user-1', 'chat-9');
+    run.decisions.push({ gate: 'G3', decision: { choice: 'not_now', question: 'go-for-it-anyway' }, opId: 'fit-run-9' });
+    const { events } = await settleWithProfile({ run });
+    expect(fitCards(events)).toHaveLength(0);
+    expect(memOf(run).fitDecision).toBe('not_now');
+  });
+
+  it('stores answers to ask_profile_question as profile facts', async () => {
+    const h = makeHarness([
+      callResult('ask_profile_question', { question: 'What is your current degree?' }, 'resp-1'),
+      textResult('Noted.', 'resp-2'),
+    ]);
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'masters in physics',
+      userId: 'user-1',
+      send: () => {},
+      streamCall: h.streamCall,
+    });
+    expect(memOf(h.run).pendingProfileQuestion).toBe('What is your current degree?');
+
+    const h2 = makeHarness([textResult('Thanks.', 'resp-3')]);
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'A masters in physics',
+      userId: 'user-1',
+      send: () => {},
+      streamCall: h2.streamCall,
+    });
+    expect(memOf(h.run).profile).toEqual([{ question: 'What is your current degree?', answer: 'A masters in physics' }]);
+    expect(memOf(h.run).pendingProfileQuestion).toBeNull();
   });
 });

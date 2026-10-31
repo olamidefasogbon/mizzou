@@ -3,6 +3,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  FIT_APPLY_LABEL,
+  FIT_CARD_TITLE,
+  FIT_PARK_LABEL,
+  FIT_QUESTION,
   SAY_GOT_IT,
   SAY_ON_IT,
   SAY_PAGE_WOULD_NOT_OPEN,
@@ -50,5 +54,20 @@ describe('voice banned terms', () => {
     expect(prompt).toMatch(/sharp friend texting/i);
     expect(prompt).toMatch(/Three examples/);
     expect(prompt).not.toContain('never "AI"');
+  });
+});
+
+describe('fit card voice (PROMPT.md 7.2)', () => {
+  it('locks the card title, question and button labels the turn matches on', () => {
+    expect(FIT_CARD_TITLE).toBe('How you match up');
+    expect(FIT_QUESTION).toBe('Want to go for it anyway?');
+    expect(FIT_APPLY_LABEL).toBe("Yes, let's apply");
+    expect(FIT_PARK_LABEL).toBe('Not now');
+  });
+
+  it('keeps system words out of the fit strings', () => {
+    for (const reply of [FIT_CARD_TITLE, FIT_QUESTION, FIT_APPLY_LABEL, FIT_PARK_LABEL]) {
+      expect(hasBannedTerm(reply)).toBe(false);
+    }
   });
 });

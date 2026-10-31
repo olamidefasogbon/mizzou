@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowUp, Check, ChevronDown, Download, Loader2, X } from 'lucide-react';
-import { formatG1Prompt } from '@mizzou/core/voice';
+import { FIT_APPLY_LABEL, FIT_PARK_LABEL, formatG1Prompt } from '@mizzou/core/voice';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { ensureChatAction } from '@/lib/actions';
@@ -60,6 +60,17 @@ interface RequirementRule {
   sourceUrl?: string | null;
 }
 
+interface FitPayload {
+  title: string;
+  program: string;
+  lines_up: string[];
+  stretch: string[];
+  missing: string[];
+  biggest_risk: string;
+  question: string;
+  options: string[];
+}
+
 interface PlanPayload {
   title: string;
   deadlines: string[];
@@ -74,7 +85,7 @@ interface G2Conflict {
 
 interface FeedItem {
   id: string;
-  kind: 'user' | 'message' | 'status' | 'g1' | 'g2' | 'coverage' | 'requirements' | 'plan' | 'rolling' | 'error';
+  kind: 'user' | 'message' | 'status' | 'g1' | 'g2' | 'coverage' | 'requirements' | 'plan' | 'fit' | 'rolling' | 'error';
   text?: string;
   label?: string;
   state?: StatusState;
@@ -89,6 +100,8 @@ interface FeedItem {
   unreadable?: Array<{ url: string; reason: string }>;
   requirements?: { documents: RequirementDoc[]; eligibility: RequirementRule[] };
   plan?: PlanPayload;
+  fit?: FitPayload;
+  decided?: 'apply' | 'not_now';
   downloading?: boolean;
   approving?: boolean;
   approved?: boolean;
@@ -188,6 +201,7 @@ function ChatContent(): React.JSX.Element {
   const [pendingCards, setPendingCards] = useState<{
     requirements?: { documents: RequirementDoc[]; eligibility: RequirementRule[] };
     plan?: PlanPayload;
+    fit?: FitPayload;
     rolling?: { text: string };
   } | null>(null);
 
@@ -378,6 +392,13 @@ function ChatContent(): React.JSX.Element {
         deadlines?: string[];
         items?: string[];
         portalUrl?: string | null;
+        program?: string;
+        lines_up?: string[];
+        stretch?: string[];
+        missing?: string[];
+        biggest_risk?: string;
+        question?: string;
+        options?: string[];
         text?: string;
         lines?: string[];
         unreadable?: Array<{ url: string; reason: string }>;
@@ -420,6 +441,35 @@ function ChatContent(): React.JSX.Element {
           setFeed((prev) => [...prev, { id, kind: 'plan', plan: built }]);
         } else {
           setPendingCards((prev) => ({ ...(prev ?? {}), plan: built }));
+        }
+      } else if (
+        event.kind === 'fit' &&
+        typeof payload.title === 'string' &&
+        typeof payload.program === 'string' &&
+        Array.isArray(payload.lines_up) &&
+        Array.isArray(payload.stretch) &&
+        Array.isArray(payload.missing) &&
+        typeof payload.biggest_risk === 'string' &&
+        typeof payload.question === 'string' &&
+        Array.isArray(payload.options)
+      ) {
+        const strings = (v: unknown): string[] =>
+          Array.isArray(v) ? v.filter((s): s is string => typeof s === 'string') : [];
+        const built: FitPayload = {
+          title: payload.title as string,
+          program: payload.program as string,
+          lines_up: strings(payload.lines_up),
+          stretch: strings(payload.stretch),
+          missing: strings(payload.missing),
+          biggest_risk: payload.biggest_risk as string,
+          question: payload.question as string,
+          options: strings(payload.options),
+        };
+        if (g1YesRef.current) {
+          const id = `fit-${Date.now()}`;
+          setFeed((prev) => [...prev, { id, kind: 'fit', fit: built }]);
+        } else {
+          setPendingCards((prev) => ({ ...(prev ?? {}), fit: built }));
         }
       } else if (event.kind === 'rolling_notice' && typeof payload.text === 'string') {
         if (g1YesRef.current) {
@@ -577,6 +627,13 @@ function ChatContent(): React.JSX.Element {
                           void resumeRef.current({ gate: 'G1', decision: { confirmed: true }, opId: crypto.randomUUID() });
                           setFeed((prev) => {
                             const extra: FeedItem[] = [];
+                            if (pendingCards?.fit) {
+                              extra.push({
+                                id: `fit-${Date.now()}`,
+                                kind: 'fit',
+                                fit: pendingCards.fit,
+                              });
+                            }
                             if (pendingCards?.requirements) {
                               extra.push({
                                 id: `req-${Date.now()}`,
@@ -674,6 +731,80 @@ function ChatContent(): React.JSX.Element {
                       Open the page
                     </a>
                   ))}
+                </div>
+              );
+            }
+            if (item.kind === 'fit' && item.fit) {
+              const fit = item.fit;
+              const answerFit = (choice: 'apply' | 'not_now'): void => {
+                patch(item.id, { decided: choice });
+                void sendText(choice === 'apply' ? FIT_APPLY_LABEL : FIT_PARK_LABEL);
+              };
+              return (
+                <div key={item.id} className={`${styles.card} ${styles.gapGroup}`}>
+                  <p className={styles.cardPrompt}>{fit.title}</p>
+                  {fit.program.length > 0 && <p className={styles.cardSub}>{fit.program}</p>}
+                  {fit.lines_up.length > 0 && (
+                    <div className={styles.mt2}>
+                      <p className={styles.sectionTitle}>What lines up</p>
+                      <ul className={styles.reqList}>
+                        {fit.lines_up.map((line, i) => (
+                          <li key={i} className={styles.reqItem}>
+                            <Check className={styles.checkIcon} aria-label="lines up" />
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {fit.stretch.length > 0 && (
+                    <div className={styles.mt2}>
+                      <p className={styles.sectionTitle}>What looks like a stretch</p>
+                      <ul className={styles.reqList}>
+                        {fit.stretch.map((line, i) => (
+                          <li key={i} className={styles.reqItem}>
+                            <span aria-label="needs a look" className={styles.warnBadge}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+                                <path d="M12 5v10M12 19v0.5" />
+                              </svg>
+                            </span>
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {fit.missing.length > 0 && (
+                    <div className={styles.mt2}>
+                      <p className={styles.sectionTitle}>What&apos;s missing</p>
+                      <ul className={styles.reqList}>
+                        {fit.missing.map((line, i) => (
+                          <li key={i} className={styles.reqItem}>
+                            <span aria-label="needs a look" className={styles.warnBadge}>
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
+                                <path d="M12 5v10M12 19v0.5" />
+                              </svg>
+                            </span>
+                            <span>{line}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {fit.biggest_risk.length > 0 && <p className={styles.flagNote}>{fit.biggest_risk}</p>}
+                  <p className={styles.cardPrompt}>{fit.question}</p>
+                  {item.decided === undefined && (
+                    <div className={styles.btnRow}>
+                      <button type="button" onClick={() => answerFit('apply')} className={styles.btnPrimary}>
+                        {FIT_APPLY_LABEL}
+                      </button>
+                      <button type="button" onClick={() => answerFit('not_now')} className={styles.btnSecondary}>
+                        {FIT_PARK_LABEL}
+                      </button>
+                    </div>
+                  )}
+                  {item.decided === 'apply' && <p className={styles.g1DoneText}>You&apos;re going for it. Good — let&apos;s get you ready.</p>}
+                  {item.decided === 'not_now' && <p className={styles.g1DoneText}>Parked. Your reminders stay where they are.</p>}
                 </div>
               );
             }

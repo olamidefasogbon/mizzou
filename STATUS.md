@@ -1,5 +1,10 @@
 # Mizzou Build Status
 
+## Item A (M5 fit): DONE. Judge plain-words fit per contract 7.2.
+
+Ported profile memory + pending-question capture from `wip/fit-pack` (code paths only — no merge: the branch predates the PROMPT.md restore and would regress it plus delete `docs/AS_BUILT_BY_MUSE.md`). Dropped the branch's keyword score engine and numeric card. New: judge-role fit read (`prompts/fit.ts`, injected `assessFit`, callModel default), one `card:fit` with words only, "Want to go for it anyway?" with "Yes, let's apply" / "Not now" posting back as chat messages, answer saved once in `decisions` (op `fit-<runId>`). Decision: recorded under gate G3 (the fit read closes the G3 profile exchange; the decisions table check-constrains gate to G1–G5 — no migration for a non-gate value). "Not now" parks with reminders kept; no profile facts means no card (never invent). No paid runs in tests (all judge/stream calls mocked). Core 129/129 (was 118), web subset 40/40, both typechecks clean (web needed a core rebuild for dist types).
+Human retest on the live URL: run a link flow, answer a profile question, confirm G1, expect the "How you match up" card before "What they ask for", press each button, confirm the decision sticks and the card never re-asks; check the decisions row in Supabase.
+
 ## Nov 1: no signup required (replaces FIXLIST item 4) — DONE, 8 commits
 
 Anonymous Supabase sessions for everyone: landing Try opens `/app` directly (proxy mints silently, no redirect wall, `/signup` deleted), panel shows Guest with linkIdentity upgrade, Settings mirrors it, Approve & Sync writes idempotently then links back to the chat, server-side abuse caps in Supabase (message/rate/IP-runs/pages/uploads, friendly limit text), 7-day anonymous retention (migration 0004, docs/RETENTION.md), Turnstile token support. Human checks (live URL then localhost): Try → `/app` as Guest; refresh keeps the session; upgrade keeps all chats; guest Approve & Sync links and returns to the chat with "Synced to reminders"; `/api/health` lists env presence including turnstile.

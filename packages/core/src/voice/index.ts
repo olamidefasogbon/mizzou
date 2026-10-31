@@ -71,6 +71,12 @@ export function formatG2Conflict(fields: string[]): string {
   return `Two official pages disagree on ${fields.length} items (${fields.slice(0, 3).join('; ')}). Which ones look right to you?`;
 }
 
+/** "How you match up" fit card strings (PROMPT.md 7.2 + 8 screen 9). Code-emitted like the rolling notice: plain words only, never a number. */
+export const FIT_CARD_TITLE = 'How you match up';
+export const FIT_QUESTION = 'Want to go for it anyway?';
+export const FIT_APPLY_LABEL = "Yes, let's apply";
+export const FIT_PARK_LABEL = 'Not now';
+
 export function formatG1Prompt(opportunityType: string): string {
   switch (opportunityType) {
     case 'job':

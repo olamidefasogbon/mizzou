@@ -1,5 +1,9 @@
 # Mizzou Build Status
 
+## Now (main): A–C done, docs + limit logging done; D–H and live checks remain.
+
+Verified this pass: core 148/148 + `tsc` clean (includes the landed registry tests and 3 new title tests from a concurrent change, all green); web 120/120 + `tsc` clean across all 17 discoverable suites (`feed.test.ts` under `[chatId]` stays undiscoverable by `node --test`, pre-existing); $0 model spend (every suite mocked). Shipped on main: A judge plain-words fit with go-for-it decision, B writer drafts with versions/G5 plus Pack overlay, C Calendar write with 409-as-success plus check-again and talk-back chips, PROMPT tree/scopes + STATUS to the no-signup model, scope/amount/limit logging on every limit refusal. Still open, in your order: D flyer upload, E eval labels/A-B, F recorded runs, G voice/SAM/ARCHITECTURE, H README/DEMO/final eval — plus all live-URL retests and the `ui-unslop` QA that is blocked in this sandbox.
+
 ## Docs + limit logging (ui-unslop follow-up): DONE on main; the branch itself is unreachable from here.
 
 PROMPT tree no longer lists `/signup` (gone) and the stack table now reads anonymous sessions + optional Google link with Google scopes only at use. STATUS marks the old Google-only-auth lines superseded by the Nov 1 no-signup entry. Cap refusals and budget throws now carry scope/amount/limit and both routes log `[mizzou:caps]` / `[mizzou:budget]` lines with the triple when they fire. NOT done here: pulling/testing/building `ui-unslop` (remote fetch fails in this sandbox), the branch's orchestrator STATUS_START/DONE vitest, and any click-through (no browser tooling here) — all handed back with exact commands. PROMPT 8.2 screens still describe the old glass/signup UI and need the contract owner's rewrite.
@@ -7,12 +11,12 @@ PROMPT tree no longer lists `/signup` (gone) and the stack table now reads anony
 ## Item C (M7 sync + talk-back): DONE. Calendar write with 409-as-success, check-again rows, Done/Snooze/Help chips.
 
 Calendar: `POST /api/calendar/sync` spends the session's Google token (never stored) on deterministic all-day events — lowercase base32hex ids from the plan hash, so retries address the same events; 409 patches and counts as success, 401/403 reports blocked, ledger upserts on the hex id with the Google id in the payload. No token means incremental consent: guests link Google with the Calendar scope at Approve & Sync; blocked/declined falls back to .ics plus per-deadline Add-to-Google-Calendar links with a retry button. `.ics` still works for everyone. Check-again: unpublished opening date adds a 7-day `check_again` reminder (note: inside the current per-deadline scheme, not the brief's three-reminder scheme — flagging the difference). Talk-back: opening a chat with a due reminder leads with it plus Done / Snooze / Help me chips (`GET /api/reminders/due`, `PATCH /api/reminders` with done/snooze in both repo backends). Known limits: approved/sync card state is feed-local (a Google round-trip reloads the chat empty, as before); `feed.test.ts` under `[chatId]` is undiscoverable by node --test (pre-existing). No paid runs in tests (fetch mocked). Core 145/145, full web 118/118, both typechecks clean.
-Human retest on the live URL: approve a plan (signed-in) and check events land in Google Calendar once, re-approve and confirm no duplicates; decline/block the scope and use the .ics + template links; open a chat with a due reminder and press each chip; approve a plan with no opening date and confirm the 7-day check-again row in Coming up. Still open: the foreign `meta/registry.ts` + `registry.test.ts` (not mine, not committed).
+Human retest on the live URL: approve a plan (signed-in) and check events land in Google Calendar once, re-approve and confirm no duplicates; decline/block the scope and use the .ics + template links; open a chat with a due reminder and press each chip; approve a plan with no opening date and confirm the 7-day check-again row in Coming up. (The registry files landed as `6d7e300`, committed by their owner — nothing of mine mixed in.)
 
 ## Item B (M6 drafts + Pack): DONE. Writer drafts with chat edits, versions, G5; Pack overlay per UI_CORRECTIONS.
 
 Core: writer role writes `draft_document` (statement/email/answer only, `[PLACEHOLDER]` for gaps, versions per kind) and `edit_draft` rewrites the open draft in place keeping a new version; every draft halts at G5 with a chat-origin card, and Keep arrives via the resume control string marking that version kept (a pending profile question is never eaten by it). A throwing writer returns a structured error and never ends the turn. Web: draft cards show version, body, edit box ("Tell me what to change...") and Keep; "View Application Pack" appears on settled chats and opens a Pack overlay (same overlay system as evidence: sheet mobile, right sheet tablet/desktop, Esc/scrim close) with tick-off checklist, kept answers/emails with word counts and Copy, "check against the portal" marks on flagged rows, and the portal button. Contract note: the brief's "Pack screen" ships as an overlay per your redirect. No paid runs in tests (writer/stream mocked). Core 144/144, web contracts 11/11, both typechecks clean.
-Human retest on the live URL: ask for a statement, check v1 + G5 halt; edit it ("make it more academic"), check v2; Keep it; open the Pack, tick checklist rows, copy an answer, open the portal link; confirm flagged rows carry the portal mark. Open question: `packages/core/src/meta/registry.ts` + `registry.test.ts` changed outside this item (lazy env resolver + tests) — not mine, not committed; say whether to keep or revert.
+Human retest on the live URL: ask for a statement, check v1 + G5 halt; edit it ("make it more academic"), check v2; Keep it; open the Pack, tick checklist rows, copy an answer, open the portal link; confirm flagged rows carry the portal mark. (The registry files landed as `6d7e300` — resolved, nothing of mine mixed in.)
 
 ## Item A (M5 fit): DONE. Judge plain-words fit per contract 7.2.
 
@@ -79,7 +83,7 @@ entry above (anonymous sessions for everyone, optional Google link).
 - [x] M3: Conversation page (`app/app/c/[chatId]`) with streaming status lines, G1 confirm card, and sample .ics download; typechecks clean (browser render not yet eyeballed — no browser tooling here)
 - [x] M3 remainder: Requirements Card (document checklist + eligibility with ✓/needs-a-look flags) and Reminder Plan Card stream as `card` events, shown only after G1 Yes; plan Download button POSTs the extracted schedule to the new ICS route
 - [x] M3: `POST /api/calendar/ics` builds a valid `.ics` download (prep/push/deadline events, deterministic UIDs, friendly 400s); verified live: 9 events, correct headers
-- [ ] M3: anonymous guest session (needs Supabase wiring — human setup)
+- [x] M3: anonymous guest session — DONE Nov 1 (no-signup entry above; live Supabase/Google project setup stays human-side)
 - [x] Core: `schemas/events.ts` (RunEvent + SSE encoder, shared with client) and `voice/` microcopy modules added; `@mizzou/core` linked into web
 - [ ] M0: Supabase + Vercel wiring (needs human project setup)
 - [ ] M2: 9 more hand-labeled cases for the full 10-case set (human task)
@@ -116,6 +120,7 @@ entry above (anonymous sessions for everyone, optional Google link).
 - M4 step-6 estimate (stated BEFORE the run): fixture-only deep eval on case-01 + case-03 ≈ **< $0.15** (≈ $0.06 + ≈ $0.06). Actual per-turn-ledger sums: case-01 pass 1 **$0.0316**, case-03 **$0.0690**, case-01 confirm pass **$0.0427** = **≈ $0.143**. case-01 deep scan matches the single-page baseline (deadlineHit true = baseline 1/1; 6/6 deadlines checked, baseline was 14/15 over all fields so denominators differ; zero needs_human, zero conflicts, no judge call needed). case-03 (unlabeled, reported raw): 2 pages read, Nov 1 2026 deadline with exact quote, 6 documents, 6 hard eligibility rules, 0 conflicts; 3 unsaved subpages recorded unreadable with links. Pass 1 ended `done` with a transient `orchestrator unreachable` after 3 flaky transport calls (result itself was complete); the code now records the last transport error and the scalar `usageUsd` was fixed to include orchestrator turns (ledger sums are the true costs). Harness: `packages/eval/src/deep.ts` (`pnpm deep`, fixture-only). Cumulative paid-model spend now **≈ $0.424** (cap $10).
 - AGENT_BRAIN step-2 probe estimate (stated BEFORE the run): 3 live messages ≈ **< $0.10**. Actual billed **≈ $0.40** — the estimate covered one clean pass, but provider 400s forced 4 diagnostic re-runs plus a chain-shape experiment (all failed calls bill $0; only completed turns count). Findings: (1) chaining onto a gate-ended response 400s ("No tool output found" without outputs, "referenced response not found" with) — the turn now restarts the chain after a gate with a text recap (program URL, pages read, open gate); (2) cross-turn chains flake nondeterministically even onto seconds-old text responses — round 0 retries once without `previous_response_id`; (3) mixed `function_call_output` + message input arrays ARE accepted (proven by experiment), so the shape was never the bug. Final green pass (2 msgs): link → fetch_page + read_page + reader extraction ($0.0235) + coverage card ($0.0498); decision line → chained fine, fit question ($0.0155); total **$0.0653**. Per-turn usage printed by `.tmp-probe-step2.mjs` (scratch, removed after the run). Cumulative paid-model spend now **≈ $0.82** (cap $10).
 - Duplicate-id probe estimate (stated BEFORE the run): <$0.01 for two minimal-effort calls (forced function call, then continuation without the reasoning item). Actual ≈ **$0.0021** (547 in + 100 out, then 601 in + 55 out). Finding: reasoning-free continuation is HTTP 200, so reasoning items are never replayed (recorded in `docs/META_API_NOTES.md` §9). Cumulative paid-model spend now **≈ $0.822** (cap $10).
+- Items A-C, docs + limit logging, and this STATUS refresh: $0 (every suite mocked; no live model calls). Cumulative stays ~$0.822 (cap $10).
 
 ## Decisions
 
@@ -138,25 +143,19 @@ entry above (anonymous sessions for everyone, optional Google link).
 - `packages/core/packages/core/` nested duplicate is pre-existing scaffold junk;
   left untouched, cleanup candidate for later.
 
-## Next — single ordered list to a complete demo (submit by midday Lagos Nov 4; hard deadline Nov 4, 9:00 PM ET)
+## Next — current order (Nov milestones done as A-C; rest in your D-H order)
 
-Do these in order; each line lands as its own commit. Items marked YOU run in
-parallel with the agent lines — start them today.
+Done since this list was written: M5 fit (A), M6 drafts + Pack overlay (B), M7 sync + talk-back (C), no-signup, limit logging. Each landed as its own commit.
 
-1. YOU (today): Supabase project + Google OAuth + apply `supabase/migrations/` (SQL written + committed Oct 28, 14 tables + RLS + private bucket; see apply steps in chat); Vercel project linked. Unblocks 5, 8, 9.
-2. YOU (today–Oct 30): 9 more hand-labeled cases (or URLs to fixture). Unblocks 7.
-3. Agent (Oct 28–29): M4 agent loop — `advance()`, tools, gates G2/G3, search grounding, deep scan + budget, judge reconcile, coverage card, resume route. Depends on 1 for persistence (ship file-backed first, swap to Supabase when ready).
-4. Agent (Oct 29–30): `styles/tokens.css` + restyle landing/signup/home/conversation to the nine PNGs via `docs/design/html` values (Pinyon wordmark, glass, 44px targets). Host eyeballs each screen.
-5. Agent (Oct 30): M5 profile/G3 + fit card + "go for it anyway" + flyer upload/vision.
-6. Agent (Oct 31): M6 drafts/G5/versions + Application Pack screen.
-7. Agent (Nov 1): eval deep-scan config on all 10 cases + role A/B picks (needs 2).
-8. Agent (Nov 1): M7 Google sign-in/guest session, Calendar sync + `.ics` fallback, reminders/chats/upload APIs, Coming up + panel + talk-back.
-9. Agent (Nov 1–2): M8 panel/logout/Clear-all-Undo, budgets caps, recorded runs, "Where I found this" end to end.
-10. Agent (Nov 2): M9 voice + SAM 3.1 time-boxed — ship or cut, no carryover.
-11. Agent (Nov 3): M10 README, ARCHITECTURE.md + diagram, DEMO_SCRIPT.md, final eval run, demo video shots, submission + reopen-verify.
-12. Nov 4: buffer only.
-
-Dropped/merged: old "M3 leftovers" folded into 4 and 8; per-case raw JSON already shipped (`9a54a60`).
+1. YOU: live Supabase/Google/Vercel project wiring + migrations (human-side; code is committed).
+2. YOU: 9 more hand-labeled eval cases (E needs them for the 10-case set + Wonder/Spark A-B).
+3. Agent: D flyer/screenshot upload + vision extraction (route, 1600px, same schema).
+4. Agent: E eval (baseline vs deep scan, judge/writer A-B, docs/EVAL_REPORT.md, never an unmeasured number).
+5. Agent: F recorded runs (two, labeled, replayable, model-free) as landing fallback.
+6. Agent: G voice notes (60s, editable transcript) + SAM 3.1 time-box (90 min, 3-of-5 or cut) + ARCHITECTURE.md + diagram.
+7. Agent: H README per PROMPT 12 (shipped-only), DEMO_SCRIPT.md, final eval run.
+8. YOU + agent: live-URL retests for A-H + ui-unslop QA (blocked in sandbox: no remote fetch, no browser) + PROMPT 8.2 screens rewrite (contract owner).
+9. Nov 4: buffer; submit by midday Lagos, hard deadline 9:00 PM ET, reopen-verify after submit.
 
 ## Blockers / Questions
 

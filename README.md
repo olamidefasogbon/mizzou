@@ -6,6 +6,8 @@ Mizzou is an autonomous agent for students and early-career professionals who ch
 
 Mizzou is built on Meta's Muse models. The chat and the Liquid Glass interface are how you talk to the agent. They are not the product.
 
+**No signup required:** anyone can use Mizzou for free — opening the app mints an anonymous session silently. An optional Google account keeps your chats and syncs your calendar (linking preserves everything, including approvals made as a guest).
+
 ## The problem
 
 High-potential applicants lose opportunities to application fatigue, not lack of talent. Rules are scattered across program pages, FAQs and PDFs. Deadlines differ by track and timezone. Opening dates are often unpublished. Every application needs its own essay. Students without an advisor do this alone, for dozens of opportunities at once.

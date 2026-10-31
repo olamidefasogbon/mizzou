@@ -178,7 +178,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               </p>
               <p className={styles.legalTitle}>Privacy</p>
               <p className={styles.legalText}>
-                Google sign-in only tells us who you are. Your chats, reminders, saved runs, and daily spend live in
+                No signup required: guests are anonymous. An optional Google account only tells us who you are. Your chats, reminders, saved runs, and daily spend live in
                 your own Supabase project.
               </p>
               <p className={styles.legalTitle}>Delete my data</p>

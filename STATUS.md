@@ -1,5 +1,9 @@
 # Mizzou Build Status
 
+## Nov 1: no signup required (replaces FIXLIST item 4) — DONE, 8 commits
+
+Anonymous Supabase sessions for everyone: landing Try opens `/app` directly (proxy mints silently, no redirect wall, `/signup` deleted), panel shows Guest with linkIdentity upgrade, Settings mirrors it, Approve & Sync writes idempotently then links back to the chat, server-side abuse caps in Supabase (message/rate/IP-runs/pages/uploads, friendly limit text), 7-day anonymous retention (migration 0004, docs/RETENTION.md), Turnstile token support. Human checks (live URL then localhost): Try → `/app` as Guest; refresh keeps the session; upgrade keeps all chats; guest Approve & Sync links and returns to the chat with "Synced to reminders"; `/api/health` lists env presence including turnstile.
+
 ## Oct 31: duplicate-item 400 fix (Vercel ref emvw9313r7nmok) — DONE, 5 commits
 
 Root cause was client-side: the stream transport appended every

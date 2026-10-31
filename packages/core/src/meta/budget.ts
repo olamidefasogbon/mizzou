@@ -17,10 +17,18 @@ export const DAILY_LIMIT_MESSAGE = "You've reached your daily limit. Try again t
 
 export class BudgetExceededError extends Error {
   readonly scope: 'user' | 'global';
-  constructor(scope: 'user' | 'global', message = FRIENDLY_BUDGET_MESSAGE) {
+  readonly amount: number;
+  readonly limit: number;
+  constructor(
+    scope: 'user' | 'global',
+    message = FRIENDLY_BUDGET_MESSAGE,
+    detail: { amount: number; limit: number } = { amount: 0, limit: 0 },
+  ) {
     super(message);
     this.name = 'BudgetExceededError';
     this.scope = scope;
+    this.amount = detail.amount;
+    this.limit = detail.limit;
   }
 }
 
@@ -97,11 +105,19 @@ export class BudgetGuard {
   checkBeforeCall(opts: { userId: string; model: string; promptText: string }): number {
     const dayStart = `${todayUtc()}T00:00:00.000Z`;
     const estimated = estimateCostForPrompt(opts.model, opts.promptText);
-    if (this.store.spendSince(null, dayStart) + estimated > this.limits.globalDailyUsd) {
-      throw new BudgetExceededError('global');
+    const globalSpent = this.store.spendSince(null, dayStart);
+    if (globalSpent + estimated > this.limits.globalDailyUsd) {
+      throw new BudgetExceededError('global', FRIENDLY_BUDGET_MESSAGE, {
+        amount: globalSpent + estimated,
+        limit: this.limits.globalDailyUsd,
+      });
     }
-    if (this.store.spendSince(opts.userId, dayStart) + estimated > this.limits.perUserDailyUsd) {
-      throw new BudgetExceededError('user');
+    const userSpent = this.store.spendSince(opts.userId, dayStart);
+    if (userSpent + estimated > this.limits.perUserDailyUsd) {
+      throw new BudgetExceededError('user', FRIENDLY_BUDGET_MESSAGE, {
+        amount: userSpent + estimated,
+        limit: this.limits.perUserDailyUsd,
+      });
     }
     return estimated;
   }

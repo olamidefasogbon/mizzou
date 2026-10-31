@@ -1,5 +1,9 @@
 # Mizzou Build Status
 
+## Docs + limit logging (ui-unslop follow-up): DONE on main; the branch itself is unreachable from here.
+
+PROMPT tree no longer lists `/signup` (gone) and the stack table now reads anonymous sessions + optional Google link with Google scopes only at use. STATUS marks the old Google-only-auth lines superseded by the Nov 1 no-signup entry. Cap refusals and budget throws now carry scope/amount/limit and both routes log `[mizzou:caps]` / `[mizzou:budget]` lines with the triple when they fire. NOT done here: pulling/testing/building `ui-unslop` (remote fetch fails in this sandbox), the branch's orchestrator STATUS_START/DONE vitest, and any click-through (no browser tooling here) — all handed back with exact commands. PROMPT 8.2 screens still describe the old glass/signup UI and need the contract owner's rewrite.
+
 ## Item C (M7 sync + talk-back): DONE. Calendar write with 409-as-success, check-again rows, Done/Snooze/Help chips.
 
 Calendar: `POST /api/calendar/sync` spends the session's Google token (never stored) on deterministic all-day events — lowercase base32hex ids from the plan hash, so retries address the same events; 409 patches and counts as success, 401/403 reports blocked, ledger upserts on the hex id with the Google id in the payload. No token means incremental consent: guests link Google with the Calendar scope at Approve & Sync; blocked/declined falls back to .ics plus per-deadline Add-to-Google-Calendar links with a retry button. `.ics` still works for everyone. Check-again: unpublished opening date adds a 7-day `check_again` reminder (note: inside the current per-deadline scheme, not the brief's three-reminder scheme — flagging the difference). Talk-back: opening a chat with a due reminder leads with it plus Done / Snooze / Help me chips (`GET /api/reminders/due`, `PATCH /api/reminders` with done/snooze in both repo backends). Known limits: approved/sync card state is feed-local (a Google round-trip reloads the chat empty, as before); `feed.test.ts` under `[chatId]` is undiscoverable by node --test (pre-existing). No paid runs in tests (fetch mocked). Core 145/145, full web 118/118, both typechecks clean.
@@ -44,7 +48,8 @@ visible tool row and no 400 in the Vercel logs; `/api/health` lists every
 required env var as present; EPFL link flow still yields a local-time plan
 card with a working ICS download. P0 items 1-5 (FIXLIST) stand as
 committed: Supabase-only stores, stateless turns, error refs + `/api/health`,
-Google-only auth, DB-backed budgets.
+DB-backed budgets — with Google-only auth SUPERSEDED by the Nov 1 no-signup
+entry above (anonymous sessions for everyone, optional Google link).
 
 ## Current milestone: FIXLIST P0 + P1 + P2 all done and committed Oct 30 (head e235333; P2-16 next). P0: Supabase-only stores, stateless turns, Google-only auth, error refs + /api/health, DB-backed budgets. P1: bubbles/tool rows (bba7ac2), card order rule (d024cdf), voice rewrite (2ab1649), plan/AOE/ICS (9d88ccd), chat titles (f65e6c1). P2: top bar (54165ff), panel + settings + delete-my-data (46a7d1d), composer (e235333). Human checks now, all on the live Vercel URL then localhost: /api/health lists every env var present; Google sign-up → /app → refresh stays signed in → log out → log in; Harvard-CS-masters question gets bubbles + tool row + titled chat; EPFL link flow yields a local-time plan card + working ICS; wordmark/composer/panel/settings eyeball pass. Live wiring still human-side: Supabase project, Google OAuth, migrations, Vercel env values.
 

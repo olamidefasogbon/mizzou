@@ -12,7 +12,7 @@ import {
 import { AuthRequiredError, resolveUser } from '@/lib/auth';
 import { logServerError, userErrorWithRef } from '@/lib/errors';
 import { repo, adaptDb } from '@/lib/repo';
-import { abuseLimitsFromEnv, checkHitRate, checkMessageLength, checkNewRun, clientIp, supabaseCounterStore } from '@/lib/caps';
+import { abuseLimitsFromEnv, checkHitRate, checkMessageLength, checkNewRun, clientIp, logCapRefusal, supabaseCounterStore } from '@/lib/caps';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { RequestUsageStore } from '@/lib/usage';
 
@@ -87,6 +87,7 @@ export async function POST(req: Request): Promise<Response> {
         const limits = abuseLimitsFromEnv();
         const tooLong = checkMessageLength(message, limits);
         if (!tooLong.ok) {
+          logCapRefusal(tooLong.detail);
           fail(tooLong.message);
           return;
         }
@@ -94,6 +95,7 @@ export async function POST(req: Request): Promise<Response> {
         const ip = clientIp(req);
         const hit = await checkHitRate(counters, ip, limits);
         if (!hit.ok) {
+          logCapRefusal(hit.detail);
           try {
             await store.save(run);
           } catch (saveErr) {
@@ -105,6 +107,7 @@ export async function POST(req: Request): Promise<Response> {
         if (!existing) {
           const runs = await checkNewRun(counters, ip, limits);
           if (!runs.ok) {
+            logCapRefusal(runs.detail);
             try {
               await store.save(run);
             } catch (saveErr) {
@@ -135,6 +138,7 @@ export async function POST(req: Request): Promise<Response> {
           });
         } catch (err) {
           if (err instanceof BudgetExceededError) {
+            console.warn(`[mizzou:budget] refusal scope=${err.scope} amount=${err.amount} limit=${err.limit}`);
             fail(budgetFriendlyMessage(err.scope));
           } else {
             const ref = logServerError('chat', err);

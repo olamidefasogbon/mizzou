@@ -17,7 +17,7 @@ import {
 import { AuthRequiredError, resolveUser } from '@/lib/auth';
 import { logServerError, userErrorWithRef } from '@/lib/errors';
 import { adaptDb, repo } from '@/lib/repo';
-import { abuseLimitsFromEnv, checkHitRate, clientIp, supabaseCounterStore } from '@/lib/caps';
+import { abuseLimitsFromEnv, checkHitRate, clientIp, logCapRefusal, supabaseCounterStore } from '@/lib/caps';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { RequestUsageStore } from '@/lib/usage';
 
@@ -89,6 +89,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         const store = db.runs;
         const hit = await checkHitRate(supabaseCounterStore(adaptDb(supabaseAdmin())), clientIp(req));
         if (!hit.ok) {
+          logCapRefusal(hit.detail);
           fail(hit.message);
           return;
         }
@@ -168,6 +169,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         }
       } catch (err) {
         if (err instanceof BudgetExceededError) {
+          console.warn(`[mizzou:budget] refusal scope=${err.scope} amount=${err.amount} limit=${err.limit}`);
           fail(budgetFriendlyMessage(err.scope));
           return;
         }

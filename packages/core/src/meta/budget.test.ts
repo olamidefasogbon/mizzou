@@ -74,6 +74,8 @@ describe('BudgetGuard', () => {
       expect(err).toBeInstanceOf(BudgetExceededError);
       expect((err as Error).message).toBe(FRIENDLY_BUDGET_MESSAGE);
       expect((err as BudgetExceededError).scope).toBe('user');
+      expect((err as BudgetExceededError).limit).toBe(0.000001);
+      expect((err as BudgetExceededError).amount).toBeGreaterThan(0.000001);
     }
   });
 
@@ -85,6 +87,8 @@ describe('BudgetGuard', () => {
     } catch (err) {
       expect(err).toBeInstanceOf(BudgetExceededError);
       expect((err as BudgetExceededError).scope).toBe('global');
+      expect((err as BudgetExceededError).limit).toBe(0.000001);
+      expect((err as BudgetExceededError).amount).toBeGreaterThan(0.000001);
     }
   });
 });

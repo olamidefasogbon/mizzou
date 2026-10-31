@@ -70,7 +70,6 @@ mizzou/
     web/                         Next.js 15 (App Router), Tailwind, Framer Motion
       app/
         page.tsx                 Landing
-        signup/page.tsx          Sign-up (Google)
         app/layout.tsx           App shell: top bar, side panel, composer
         app/page.tsx             Home: greeting, Coming up card
         app/c/[chatId]/page.tsx  Conversation
@@ -110,7 +109,7 @@ mizzou/
 | Server | Next.js route handlers, Node runtime | SSE for live progress. Set `maxDuration` to the platform maximum. |
 | Agent core | `packages/core`, plain TypeScript | The only place that talks to Meta models. |
 | Models | Meta Model API through the `openai` npm package with `baseURL` set to `https://api.meta.ai/v1` | Documented as drop-in compatible with the OpenAI SDK. If a needed feature is not exposed by the SDK, call the REST endpoint with `fetch`. |
-| Database and auth | Supabase: Postgres, Google sign-in, row level security | Basic Google scopes only at sign-in. |
+| Database and auth | Supabase: Postgres, anonymous sessions with optional Google link, row level security | Google scopes only at use: sign-in for keeping chats, Calendar events at Approve & Sync. |
 | Validation | `zod` | Every model output is parsed. One repair retry, then a graceful fallback. |
 | Page reading | `cheerio` plus `@mozilla/readability`; `unpdf` for PDFs | No headless browser in the MVP. JavaScript-only pages fall back to "paste the text". |
 | Dates and calendar | `luxon`, `ics` | Always store UTC plus the original timezone. |

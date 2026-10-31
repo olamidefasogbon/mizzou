@@ -66,7 +66,10 @@ describe('message and upload verdicts', () => {
   it('refuses an over-long message with a friendly model-free line', () => {
     const v = checkMessageLength('x'.repeat(4001));
     assert.equal(v.ok, false);
-    if (!v.ok) assert.match(v.message, /too long/);
+    if (!v.ok) {
+      assert.match(v.message, /too long/);
+      assert.deepEqual(v.detail, { scope: 'message-chars', amount: 4001, limit: 4000 });
+    }
     assert.deepEqual(checkMessageLength('hello'), { ok: true });
   });
 
@@ -107,7 +110,10 @@ describe('hit and run verdicts', () => {
     assert.deepEqual(await checkHitRate(store, '1.2.3.4', limits), { ok: true });
     const blocked = await checkHitRate(store, '1.2.3.4', limits);
     assert.equal(blocked.ok, false);
-    if (!blocked.ok) assert.equal(blocked.message, 'I need a minute.');
+    if (!blocked.ok) {
+      assert.equal(blocked.message, 'I need a minute.');
+      assert.deepEqual(blocked.detail, { scope: 'hits-per-minute', amount: 3, limit: 2 });
+    }
   });
 
   it('names tomorrow when the per-IP daily run budget is hit', async () => {

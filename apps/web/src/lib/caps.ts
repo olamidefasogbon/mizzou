@@ -56,7 +56,18 @@ export function minuteStamp(d = new Date()): string {
   return d.toISOString().slice(0, 16);
 }
 
-export type CapVerdict = { ok: true } | { ok: false; message: string };
+export interface CapDetail {
+  scope: string;
+  amount: number;
+  limit: number;
+}
+
+export type CapVerdict = { ok: true } | { ok: false; message: string; detail: CapDetail };
+
+/** Server-side refusal line: scope, amount and limit, never user content. */
+export function logCapRefusal(detail: CapDetail): void {
+  console.warn(`[mizzou:caps] refusal scope=${detail.scope} amount=${detail.amount} limit=${detail.limit}`);
+}
 
 /** Model-free refusal for an over-long message. */
 export function checkMessageLength(text: string, limits: AbuseLimits = abuseLimitsFromEnv()): CapVerdict {
@@ -64,6 +75,7 @@ export function checkMessageLength(text: string, limits: AbuseLimits = abuseLimi
     return {
       ok: false,
       message: `Your message is too long (over ${limits.maxMessageChars} characters). Shorten it and try again.`,
+      detail: { scope: 'message-chars', amount: text.length, limit: limits.maxMessageChars },
     };
   }
   return { ok: true };
@@ -72,7 +84,11 @@ export function checkMessageLength(text: string, limits: AbuseLimits = abuseLimi
 /** Model-free refusal for an over-size upload (enforced when uploads ship). */
 export function checkUploadSize(bytes: number, limits: AbuseLimits = abuseLimitsFromEnv()): CapVerdict {
   if (bytes > limits.maxUploadBytes) {
-    return { ok: false, message: 'That file is too big. Try one under 8 MB.' };
+    return {
+      ok: false,
+      message: 'That file is too big. Try one under 8 MB.',
+      detail: { scope: 'upload-bytes', amount: bytes, limit: limits.maxUploadBytes },
+    };
   }
   return { ok: true };
 }
@@ -115,7 +131,7 @@ export function supabaseCounterStore(db: DbClient): CounterStore {
 export async function checkHitRate(store: CounterStore, ip: string, limits: AbuseLimits = abuseLimitsFromEnv()): Promise<CapVerdict> {
   const count = await store.increment(`ip:${hashIp(ip)}:hit`, minuteStamp());
   if (count > limits.maxHitsPerIpPerMinute) {
-    return { ok: false, message: 'I need a minute.' };
+    return { ok: false, message: 'I need a minute.', detail: { scope: 'hits-per-minute', amount: count, limit: limits.maxHitsPerIpPerMinute } };
   }
   return { ok: true };
 }
@@ -124,7 +140,11 @@ export async function checkHitRate(store: CounterStore, ip: string, limits: Abus
 export async function checkNewRun(store: CounterStore, ip: string, limits: AbuseLimits = abuseLimitsFromEnv()): Promise<CapVerdict> {
   const count = await store.increment(`ip:${hashIp(ip)}:run`, dayStamp());
   if (count > limits.maxRunsPerIpPerDay) {
-    return { ok: false, message: "You've reached today's run limit for your network. Try again tomorrow." };
+    return {
+      ok: false,
+      message: "You've reached today's run limit for your network. Try again tomorrow.",
+      detail: { scope: 'runs-per-day-per-ip', amount: count, limit: limits.maxRunsPerIpPerDay },
+    };
   }
   return { ok: true };
 }

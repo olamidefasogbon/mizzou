@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
-// GET /auth/callback — finishes Google OAuth (the only sign-in flow).
+// GET /auth/callback — finishes Google OAuth for returning users and the
+// anonymous linkIdentity upgrade for guests (same user id keeps all rows).
 // Google redirects here with a code; exchanging it sets the session cookies,
 // then the user continues into /app.
 
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   if (!code) {
-    return NextResponse.redirect(new URL('/signup?error=missing-code', request.url));
+    return NextResponse.redirect(new URL('/?error=missing-code', request.url));
   }
   const response = NextResponse.redirect(new URL('/app', request.url));
   const supabase = createServerClient(
@@ -26,7 +27,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   );
   const { error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
-    return NextResponse.redirect(new URL('/signup?error=oauth', request.url));
+    return NextResponse.redirect(new URL('/?error=oauth', request.url));
   }
   return response;
 }

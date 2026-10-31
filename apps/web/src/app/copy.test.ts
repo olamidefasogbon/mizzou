@@ -1,36 +1,40 @@
 // Run: node --test src/app/copy.test.ts (from apps/web).
-// P2-16: landing and sign-up copy — no guest entry point, Google is the only
-// action. Pages import next/* and CSS, so the contract is asserted in source.
+// No signup required: landing Try opens /app on an anonymous session,
+// Log in is Google-only for returning users (linking keeps their rows),
+// and no /signup page or forced-Google step remains. Pages import
+// next/*, so the contract is asserted in source.
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const landing = readFileSync(new URL('./page.tsx', import.meta.url), 'utf8');
-const signup = readFileSync(new URL('./signup/page.tsx', import.meta.url), 'utf8');
-const signupActions = readFileSync(new URL('./signup/signup-actions.tsx', import.meta.url), 'utf8');
-const callback = readFileSync(new URL('./auth/callback/route.ts', import.meta.url), 'utf8');
+const here = dirname(fileURLToPath(import.meta.url));
+const landing = readFileSync(join(here, 'page.tsx'), 'utf8');
+const actions = readFileSync(join(here, 'landing-actions.tsx'), 'utf8');
+const callback = readFileSync(join(here, 'auth/callback/route.ts'), 'utf8');
 
-describe('landing and sign-up copy (P2-16)', () => {
-  it('landing offers no guest entry point', () => {
+describe('landing and entry copy (no signup)', () => {
+  it('Try it for free opens /app on an anonymous session, never a signup page', () => {
+    assert.ok(!existsSync(join(here, 'signup')), 'signup page still exists');
+    assert.doesNotMatch(landing, /\/signup/);
+    assert.match(actions, /ensureAnonymousSession/);
+    assert.match(actions, /router\.push\('\/app'\)/);
+  });
+
+  it('Log in is Google for returning users, linking an existing session', () => {
+    assert.match(actions, /linkIdentity/);
+    assert.match(actions, /signInWithOAuth/);
+    assert.match(actions, /Log in/);
+  });
+
+  it('callback lands linked users in /app with no signup detour', () => {
+    assert.doesNotMatch(callback, /\/signup/);
+    assert.match(callback, /\/app/);
+  });
+
+  it('landing never mentions guests or anonymous sessions', () => {
     assert.doesNotMatch(landing, /[Gg]uest/);
     assert.doesNotMatch(landing, /[Aa]nonymous/);
-  });
-
-  it('landing Try-it and Log-in both go to /signup', () => {
-    const hrefs = [...landing.matchAll(/href="([^"]*)"/g)].map((m) => m[1]);
-    const ctas = hrefs.filter((h) => h !== '/');
-    assert.ok(ctas.length >= 2, `expected at least two CTAs, saw ${hrefs.join(', ')}`);
-    for (const href of ctas) assert.equal(href, '/signup');
-  });
-
-  it('sign-up has Google as the only action', () => {
-    assert.match(signupActions, /Continue with Google/);
-    assert.doesNotMatch(signupActions, /[Gg]uest/);
-    assert.doesNotMatch(signup, /[Gg]uest/);
-  });
-
-  it('callback documents the single Google flow (no linking flow)', () => {
-    assert.doesNotMatch(callback, /anonymous/i);
-    assert.match(callback, /Google OAuth \(the only sign-in flow\)/);
   });
 });

@@ -78,7 +78,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           ({ userId } = await resolveUser());
         } catch (err) {
           if (err instanceof AuthRequiredError) {
-            fail('Sign in with Google to continue.');
+            fail('Give it a minute and try again.');
             return;
           }
           throw err;
@@ -165,7 +165,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           return;
         }
         if (err instanceof AuthRequiredError) {
-          fail('Sign in with Google to continue.');
+          fail('Give it a minute and try again.');
           return;
         }
         if (err instanceof Error) {

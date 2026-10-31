@@ -3,8 +3,10 @@ import { createServerClient } from '@supabase/ssr';
 
 // Next 16 convention: proxy.ts (was middleware.ts).
 // Refreshes the Supabase session on every pass so server clients see a
-// live user. Google sign-in only: unauthenticated visits to /app redirect
-// to /signup. The legacy anon cookie is gone.
+// live user. No signup required: when there is no session yet, mint a
+// Supabase anonymous session silently so /app and the API routes always
+// have a user id. A mint failure is not fatal — the landing's Try button
+// ensures a session client-side, and server routes answer accordingly.
 
 export default async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -23,8 +25,14 @@ export default async function proxy(request: NextRequest) {
     },
   );
   const { data } = await supabase.auth.getUser();
-  if (!data.user && request.nextUrl.pathname.startsWith('/app')) {
-    return NextResponse.redirect(new URL('/signup', request.url));
+  if (!data.user) {
+    try {
+      await supabase.auth.signInAnonymously();
+    } catch {
+      // Supabase unreachable or anonymous sign-ins disabled: leave the
+      // request sessionless. Routes answer with a retryable friendly
+      // message instead of a login wall.
+    }
   }
   return response;
 }

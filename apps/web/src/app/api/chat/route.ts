@@ -61,7 +61,7 @@ export async function POST(req: Request): Promise<Response> {
           ({ userId } = await resolveUser());
         } catch (err) {
           if (err instanceof AuthRequiredError) {
-            send({ t: 'error', friendly: 'Sign in with Google to continue.' });
+            send({ t: 'error', friendly: 'Give it a minute and try again.' });
             send({ t: 'done', runId: requestedRunId ?? '' });
             controller.close();
             return;

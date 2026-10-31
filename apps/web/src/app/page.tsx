@@ -1,5 +1,5 @@
-import Link from "next/link";
 import styles from "./landing.module.css";
+import { LoginButton, TryButton } from "./landing-actions";
 
 // Landing. muse.ai pattern on Meta style: white canvas, everything centered,
 // blue primary, black text. One wordmark, one primary button, one blue
@@ -25,9 +25,7 @@ export default function LandingPage() {
     <div className="mz-shell">
       <div className={`mz-fg ${styles.screen}`}>
         <header className={styles.topbar}>
-          <Link href="/signup" className={`mz-btn mz-btn-primary ${styles.loginPill}`}>
-            Log in
-          </Link>
+          <LoginButton className={`mz-btn mz-btn-primary ${styles.loginPill}`} />
         </header>
 
         <div className={styles.lead}>
@@ -41,9 +39,7 @@ export default function LandingPage() {
           </div>
 
           <div className={styles.cta}>
-            <Link href="/signup" className={`mz-btn mz-btn-primary ${styles.tryButton}`}>
-              Try it for free
-            </Link>
+            <TryButton className={`mz-btn mz-btn-primary ${styles.tryButton}`} />
           </div>
         </div>
 

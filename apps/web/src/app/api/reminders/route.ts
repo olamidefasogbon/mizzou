@@ -22,7 +22,7 @@ export async function POST(req: Request): Promise<NextResponse> {
     ({ userId } = await resolveUser());
   } catch (err) {
     if (err instanceof AuthRequiredError) {
-      return NextResponse.json({ error: 'Sign in with Google to continue.' }, { status: 401 });
+      return NextResponse.json({ error: 'Give it a minute and try again.' }, { status: 503 });
     }
     throw err;
   }

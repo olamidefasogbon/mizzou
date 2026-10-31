@@ -6,7 +6,7 @@ import { advance } from '../agent/advance.js';
 import { FileRunStore } from '../agent/store.js';
 import { newRun, type RunRecord } from '../agent/types.js';
 import { BudgetExceededError } from '../meta/budget.js';
-import { SAY_BUDGET_HIT, SAY_GOT_IT, SAY_ON_IT } from '../voice/index.js';
+import { SAY_BUDGET_HIT, STATUS_DONE, STATUS_START } from '../voice/index.js';
 import type { Extraction } from '../schemas/extraction.js';
 import { FinishSchema, createDeepScanStep, type ModelTransport } from './orchestrator.js';
 import type { JudgeTransport } from '../extract/reconcile.js';
@@ -152,8 +152,8 @@ describe('model-driven orchestrator', () => {
     expect(finished.pagesRead.map((p) => p.url)).toEqual([`${SITE}/`, `${SITE}/faq/`]);
     expect(finished.deadlinesFound).toBe(2);
     expect(finished.summary).toBe('Found the key dates.');
-    expect(events[0]).toMatchObject({ label: SAY_ON_IT });
-    expect(events[events.length - 1]).toMatchObject({ label: SAY_GOT_IT });
+    expect(events[0]).toMatchObject({ label: STATUS_START });
+    expect(events[events.length - 1]).toMatchObject({ label: STATUS_DONE });
     // Per-turn usage ledger: orchestrator entries carry model + tokens.
     const orch = (run.state as { deepScan: { calls: Array<Record<string, unknown>> } }).deepScan.calls.filter((c) => c['role'] === 'orchestrator');
     expect(orch.length).toBeGreaterThan(0);
@@ -671,8 +671,8 @@ describe('model-driven orchestrator', () => {
       expect(needsResume).toBe(false);
       const done = await store.load('ds-adv');
       expect(done?.status).toBe('done');
-      expect(labels[0]).toBe(SAY_ON_IT);
-      expect(labels[labels.length - 1]).toBe(SAY_GOT_IT);
+      expect(labels[0]).toBe(STATUS_START);
+      expect(labels[labels.length - 1]).toBe(STATUS_DONE);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -8,6 +8,9 @@ export function formatCoverageRead(titles: string[]): string {
   return `I read ${titles.length} pages: ${titles.join('; ')}.`;
 }
 
+/** Short step labels for the progress line (nouns, not sentences). */
+export const STATUS_START = 'Finding the right page';
+export const STATUS_DONE = 'Finished reading';
 export const SAY_ON_IT = 'On it. Let me find the right page and see what they ask for.';
 export const SAY_GOT_IT = "Got everything. Here's my honest read.";
 export const SAY_PAGE_WOULD_NOT_OPEN = 'That page wouldn\u2019t open for me. Can you paste the text?';

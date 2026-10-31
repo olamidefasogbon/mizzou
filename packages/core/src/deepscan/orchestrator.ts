@@ -32,8 +32,8 @@ import { ORCHESTRATOR_SYSTEM_PROMPT, buildOrchestratorContext } from '../prompts
 import { JUDGE_SYSTEM_PROMPT, buildJudgePrompt } from '../prompts/judge.js';
 import {
   SAY_BUDGET_HIT,
-  SAY_GOT_IT,
-  SAY_ON_IT,
+  STATUS_DONE,
+  STATUS_START,
   SAY_PAGE_WOULD_NOT_OPEN,
   formatFindingStatus,
   formatG1Prompt,
@@ -397,7 +397,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
     }
 
     if (!mem.started) {
-      say(SAY_ON_IT);
+      say(STATUS_START);
       mem.started = true;
     }
 
@@ -416,7 +416,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
       mem.g2Asked = false;
       writeMemory(run, mem);
       pushCoverageCard();
-      say(SAY_GOT_IT, 'done');
+      say(STATUS_DONE, 'done');
       return { events, finished: buildFinish(mem) };
     }
 
@@ -582,7 +582,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
           },
         };
       }
-      say(SAY_GOT_IT, 'done');
+      say(STATUS_DONE, 'done');
       writeMemory(run, mem);
       return { events, finished: buildFinish(mem) };
     };

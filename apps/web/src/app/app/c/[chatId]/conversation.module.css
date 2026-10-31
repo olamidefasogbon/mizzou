@@ -175,17 +175,11 @@
   }
 }
 
-.g1Done {
-  margin-top: 12px;
-  border-radius: var(--mz-radius-bubble);
-  background: var(--mz-muted);
-  padding: 12px;
-}
-
 .g1DoneText {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin: 12px 0 0;
   font-size: 14px;
   font-weight: 500;
 }
@@ -226,14 +220,6 @@
   .link:hover {
     text-decoration: underline;
   }
-}
-
-.coverageLine {
-  margin: 0;
-}
-
-.coverageLine + .coverageLine {
-  margin-top: 4px;
 }
 
 .coverageOpen {
@@ -474,66 +460,81 @@
   margin-top: 8px;
 }
 
-/* Compact tool-progress row: one line per run of status events. */
-.toolSteps {
-  border-radius: var(--mz-radius-bubble);
-  background: var(--mz-surface);
-  border: 1px solid var(--mz-border);
-  padding: 8px 12px;
+/* Progress line: no box. A quiet row with an icon and the latest step; tap
+   to see every step. Used for tool progress and for the sources line. */
+.progress {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0 4px;
 }
 
-.toolHead {
+.progressHead {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  max-width: 100%;
+  min-height: 32px;
   border: 0;
   background: transparent;
   padding: 0;
   font-family: inherit;
   font-size: 14px;
+  line-height: 20px;
   color: var(--mz-secondary);
   cursor: pointer;
   text-align: left;
 }
 
-.toolSummary {
-  flex: 1;
+.progressHead:disabled {
+  cursor: default;
+}
+
+.progressLabel {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.toolCount {
-  flex: none;
-  font-size: 13px;
-}
-
 .toolChevron {
   width: 16px;
   height: 16px;
   flex: none;
+  stroke-width: 1.75;
+  transition: transform var(--mz-dur-fast) var(--mz-ease);
 }
 
 .toolChevronOpen {
   transform: rotate(180deg);
 }
 
-.toolList {
-  margin: 8px 0 4px;
-  padding: 0;
+.progressList {
+  margin: 0 0 4px 7px;
+  padding: 0 0 0 16px;
   list-style: none;
+  border-left: 1px solid var(--mz-border);
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.toolStep {
+.progressStep {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 14px;
+  line-height: 20px;
+  color: var(--mz-secondary);
+}
+
+.progressNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 20px;
   color: var(--mz-secondary);
 }
 

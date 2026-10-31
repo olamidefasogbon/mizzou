@@ -3,10 +3,9 @@ import { Check, Quote } from "lucide-react";
 import styles from "./landing.module.css";
 import { LoginButton, TryButton } from "./landing-actions";
 
-// Landing. No signup: "Try it for free" opens the app as a guest, "Log in" is
-// for returning Google users. White canvas, centered hero, one blue primary button. "Log in" is
-// a quiet text link. Under the hero sits a static example of what Mizzou
-// returns: requirements and a deadline, each with the quote it came from.
+// Landing. No signup: "Try it for free" opens the app straight away; "Log in" is
+// a quiet text link for returning Google users. White canvas, centered hero,
+// one blue primary button.
 // The example program is fictional and labelled as an example.
 
 const POINTS: Array<[string, string]> = [

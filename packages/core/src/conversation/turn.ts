@@ -9,6 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { callModel } from '../meta/callModel.js';
 import {
+  isRetryableTransportError,
   responsesCall,
   streamResponsesCall,
   type ResponsesCallResult,
@@ -366,6 +367,8 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         return await streamCall(callOpts);
       } catch (err) {
         if (err instanceof BudgetExceededError) throw err;
+        // 4xx (including 400 duplicate-item): fail fast with the full provider message, no retry.
+        if (!isRetryableTransportError(err)) throw err;
         if (attempt >= 2) {
           const last = err instanceof Error ? err.message : 'transport error';
           throw new Error(`orchestrator transport failed after 3 attempts (last: ${last})`);

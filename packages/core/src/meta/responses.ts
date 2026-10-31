@@ -53,6 +53,24 @@ export interface ResponsesCallResult {
   costUsd: number;
 }
 
+/**
+ * Retry policy for the orchestrator transport. Retryable: 429, any 5xx,
+ * or a failure with no HTTP status at all (network error, timeout).
+ * Every other 4xx (including the 400 duplicate-item rejection) fails fast
+ * so the full provider message surfaces instead of being retried away.
+ */
+export function isRetryableStatus(status: number | undefined): boolean {
+  if (status === undefined) return true;
+  return status === 429 || status >= 500;
+}
+
+export function isRetryableTransportError(err: unknown): boolean {
+  if (err instanceof BudgetExceededError) return false;
+  const status = (err as { status?: unknown })?.status;
+  if (status === undefined) return true;
+  return typeof status === 'number' && isRetryableStatus(status);
+}
+
 export async function responsesCall(opts: ResponsesCallOptions): Promise<ResponsesCallResult> {
   const guard = opts.budgetGuard ?? defaultBudgetGuard;
   const userId = opts.userId ?? 'dev';
@@ -76,7 +94,16 @@ export async function responsesCall(opts: ResponsesCallOptions): Promise<Respons
       signal: controller.signal,
     });
     if (!res.ok) {
-      const err = new Error(`responses API HTTP ${res.status}`) as Error & { status?: number };
+      // Fail-fast errors (4xx) must carry the FULL provider message: the
+      // route logs it server-side under an error ref, so truncation here
+      // would hide the cause (e.g. which item id was duplicated).
+      let detail = '';
+      try {
+        detail = await res.text();
+      } catch {
+        // Body unreadable; status alone must do.
+      }
+      const err = new Error(`responses API HTTP ${res.status}${detail ? `: ${detail}` : ''}`) as Error & { status?: number };
       err.status = res.status;
       throw err;
     }
@@ -149,7 +176,7 @@ export async function streamResponsesCall(opts: StreamCallOptions): Promise<Resp
     if (!res.ok || !res.body) {
       let detail = '';
       try {
-        detail = ` ${(await res.text()).slice(0, 500)}`;
+        detail = ` ${await res.text()}`;
       } catch {
         // Body unreadable; status alone must do.
       }

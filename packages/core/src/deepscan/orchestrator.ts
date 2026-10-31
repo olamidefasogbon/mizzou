@@ -12,7 +12,7 @@ import type { PendingGate, RunRecord } from '../agent/types.js';
 import { BudgetExceededError, type BudgetGuard } from '../meta/budget.js';
 import { ROLE_MODEL_MAP } from '../meta/registry.js';
 import { callModel } from '../meta/callModel.js';
-import { responsesCall, type ResponsesFunctionTool } from '../meta/responses.js';
+import { isRetryableTransportError, responsesCall, type ResponsesFunctionTool } from '../meta/responses.js';
 import { ExtractionSchema, type Extraction } from '../schemas/extraction.js';
 import type { RunEvent } from '../schemas/events.js';
 import { verifyExtractionEvidence } from '../extract/evidence.js';
@@ -637,6 +637,9 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
         } catch (err) {
           // Budgets are gates, not blips: never retry those.
           if (err instanceof BudgetExceededError) throw err;
+          // 4xx (including 400 duplicate-item): fail fast with the full
+          // provider message, no retry.
+          if (!isRetryableTransportError(err)) throw err;
           attempt += 1;
           mem.lastError = err instanceof Error ? err.message.slice(0, 280) : 'orchestrator call failed';
           if (attempt > MAX_MODEL_RETRIES) throw err;

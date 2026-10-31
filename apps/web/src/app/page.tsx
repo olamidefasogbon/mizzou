@@ -20,7 +20,13 @@ const EXAMPLE_REQUIREMENTS = [
   "Research statement · 1,000 words max",
 ];
 
-export default function LandingPage() {
+export default async function LandingPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  // The Google callback sends failures back here as ?error=...
+  const { error } = await searchParams;
   return (
     <div className="mz-shell">
       <div className={`mz-fg ${styles.screen}`}>
@@ -37,6 +43,12 @@ export default function LandingPage() {
               the dates and the prep.
             </p>
           </div>
+
+          {error ? (
+            <p className={styles.notice} role="alert">
+              Google sign-in did not finish. Try again
+            </p>
+          ) : null}
 
           <div className={styles.cta}>
             <TryButton className={`mz-btn mz-btn-primary ${styles.tryButton}`} />

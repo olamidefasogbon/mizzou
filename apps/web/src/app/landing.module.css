@@ -236,3 +236,10 @@
   color: var(--mz-secondary);
   text-underline-offset: 3px;
 }
+
+.notice {
+  margin: 24px 0 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mz-error);
+}

@@ -1027,11 +1027,7 @@ function ChatContent(): React.JSX.Element {
                       <ul className={styles.reqList}>
                         {fit.stretch.map((line, i) => (
                           <li key={i} className={styles.reqItem}>
-                            <span aria-label="needs a look" className={styles.warnBadge}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
-                                <path d="M12 5v10M12 19v0.5" />
-                              </svg>
-                            </span>
+                            <CircleAlert className={styles.warnIcon} aria-label="needs a look" />
                             <span>{line}</span>
                           </li>
                         ))}
@@ -1044,11 +1040,7 @@ function ChatContent(): React.JSX.Element {
                       <ul className={styles.reqList}>
                         {fit.missing.map((line, i) => (
                           <li key={i} className={styles.reqItem}>
-                            <span aria-label="needs a look" className={styles.warnBadge}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
-                                <path d="M12 5v10M12 19v0.5" />
-                              </svg>
-                            </span>
+                            <CircleAlert className={styles.warnIcon} aria-label="needs a look" />
                             <span>{line}</span>
                           </li>
                         ))}

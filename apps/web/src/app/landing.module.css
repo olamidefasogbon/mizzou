@@ -243,3 +243,7 @@
   line-height: 20px;
   color: var(--mz-error);
 }
+
+.point {
+  min-width: 0;
+}

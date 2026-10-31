@@ -16,7 +16,9 @@ import {
 } from '@mizzou/core';
 import { AuthRequiredError, resolveUser } from '@/lib/auth';
 import { logServerError, userErrorWithRef } from '@/lib/errors';
-import { repo } from '@/lib/repo';
+import { adaptDb, repo } from '@/lib/repo';
+import { abuseLimitsFromEnv, checkHitRate, clientIp, supabaseCounterStore } from '@/lib/caps';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { RequestUsageStore } from '@/lib/usage';
 
 // Vercel Hobby maximum is 60s (PROMPT.md 9.2 says platform maximum —
@@ -85,10 +87,15 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
         }
         const db = await repo();
         const store = db.runs;
+        const hit = await checkHitRate(supabaseCounterStore(adaptDb(supabaseAdmin())), clientIp(req));
+        if (!hit.ok) {
+          fail(hit.message);
+          return;
+        }
         const snapshot = await db.usage.snapshot(userId);
         const usageStore = new RequestUsageStore(snapshot.userSpend, snapshot.globalSpend);
         const budgetGuard = new BudgetGuard(usageStore, limitsFromEnv());
-        const step = createDeepScanStep({ budgetGuard });
+        const step = createDeepScanStep({ budgetGuard, maxPages: abuseLimitsFromEnv().maxPagesPerRun });
         try {
           const existing = await store.load(runId);
           const origin =

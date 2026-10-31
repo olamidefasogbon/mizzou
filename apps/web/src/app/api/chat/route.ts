@@ -11,7 +11,9 @@ import {
 } from '@mizzou/core';
 import { AuthRequiredError, resolveUser } from '@/lib/auth';
 import { logServerError, userErrorWithRef } from '@/lib/errors';
-import { repo } from '@/lib/repo';
+import { repo, adaptDb } from '@/lib/repo';
+import { abuseLimitsFromEnv, checkHitRate, checkMessageLength, checkNewRun, clientIp, supabaseCounterStore } from '@/lib/caps';
+import { supabaseAdmin } from '@/lib/supabase/admin';
 import { RequestUsageStore } from '@/lib/usage';
 
 // Vercel Hobby maximum is 60s (PROMPT.md 9.2 says platform maximum —
@@ -79,6 +81,39 @@ export async function POST(req: Request): Promise<Response> {
           send({ t: 'done', runId });
           controller.close();
         };
+
+        // Abuse caps (model-free friendly refusals, run still recorded):
+        // message length, per-minute rate, then per-IP daily runs for new runs.
+        const limits = abuseLimitsFromEnv();
+        const tooLong = checkMessageLength(message, limits);
+        if (!tooLong.ok) {
+          fail(tooLong.message);
+          return;
+        }
+        const counters = supabaseCounterStore(adaptDb(supabaseAdmin()));
+        const ip = clientIp(req);
+        const hit = await checkHitRate(counters, ip, limits);
+        if (!hit.ok) {
+          try {
+            await store.save(run);
+          } catch (saveErr) {
+            logServerError('chat-cap-save', saveErr);
+          }
+          fail(hit.message);
+          return;
+        }
+        if (!existing) {
+          const runs = await checkNewRun(counters, ip, limits);
+          if (!runs.ok) {
+            try {
+              await store.save(run);
+            } catch (saveErr) {
+              logServerError('chat-cap-save', saveErr);
+            }
+            fail(runs.message);
+            return;
+          }
+        }
 
         const snapshot = await db.usage.snapshot(userId);
         const usageStore = new RequestUsageStore(snapshot.userSpend, snapshot.globalSpend);

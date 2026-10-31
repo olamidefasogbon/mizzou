@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { ensureAnonymousSession } from '@/lib/anonymous';
+import { Turnstile } from './turnstile';
 
 // Landing entry points. No signup required: "Try it for free" ensures an
 // anonymous session silently and opens /app. "Log in" is only for
@@ -16,15 +17,21 @@ function oauthError(friendly: string, detail: string): string {
 
 export function TryButton({ className }: { className: string }) {
   const router = useRouter();
+  const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   async function start(): Promise<void> {
     if (busy) return;
+    if (siteKey && !token) {
+      setError('Complete the human check first, then try again.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await ensureAnonymousSession(supabaseBrowser().auth);
+      await ensureAnonymousSession(supabaseBrowser().auth, token ?? undefined);
       router.push('/app');
     } catch (err) {
       setError(oauthError('Could not start. Give it a minute and try again.', err instanceof Error ? err.message : String(err)));
@@ -34,6 +41,7 @@ export function TryButton({ className }: { className: string }) {
 
   return (
     <>
+      {siteKey ? <Turnstile onToken={setToken} /> : null}
       <button type="button" className={className} onClick={() => void start()} disabled={busy}>
         {busy ? 'Starting…' : 'Try it for free'}
       </button>

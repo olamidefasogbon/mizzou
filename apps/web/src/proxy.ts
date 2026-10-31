@@ -27,6 +27,9 @@ export default async function proxy(request: NextRequest) {
   const { data } = await supabase.auth.getUser();
   if (!data.user) {
     try {
+      // No captcha token server-side: when the project enforces captcha
+      // for anonymous sign-ins this mint fails and the landing's Turnstile
+      // widget handles first touch instead.
       await supabase.auth.signInAnonymously();
     } catch {
       // Supabase unreachable or anonymous sign-ins disabled: leave the

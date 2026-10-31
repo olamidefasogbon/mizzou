@@ -8,6 +8,7 @@ export async function GET(): Promise<NextResponse> {
     modelKey: Boolean(process.env.MODEL_API_KEY ?? process.env.META_API_KEY),
     supabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
     supabaseAnonKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+    turnstile: Boolean(process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY),
   };
   return NextResponse.json({ ok: Object.values(vars).every(Boolean), vars });
 }

@@ -91,6 +91,13 @@ describe('vision seed contract', () => {
   });
 });
 
+describe('voice note contract', () => {
+  it('renders the record button and appends the transcript editable', () => {
+    assert.match(src, /<VoiceButton/);
+    assert.match(src, /onTranscript=\{\(t\) => setInput\(\(v\) => \(v \? `\$\{v\} \$\{t\}` : t\)\)\}/);
+  });
+});
+
 describe('talk-back contract', () => {
   it('opens due reminders with done, snooze and help chips', () => {
     assert.match(src, /fetch\('\/api\/reminders\/due'\)/);

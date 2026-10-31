@@ -26,6 +26,14 @@ export function costForCall(model: string, promptTokens: number, completionToken
   return (promptTokens * p.inputPerMTok + completionTokens * p.outputPerMTok) / 1_000_000;
 }
 
+/** Voice transcription: $0.18 per hour of audio (PROMPT.md section 4). */
+export const VOICE_USD_PER_SECOND = 0.18 / 3600;
+
+/** Cost in USD for a voice note of the given length. */
+export function costForVoice(seconds: number): number {
+  return Math.max(0, seconds) * VOICE_USD_PER_SECOND;
+}
+
 /** Rough pre-call estimate from prompt text length (~4 chars per token). */
 export function estimateCostForPrompt(model: string, promptText: string): number {
   const guessedPromptTokens = Math.ceil(promptText.length / 4);

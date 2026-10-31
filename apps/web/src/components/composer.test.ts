@@ -34,6 +34,15 @@ describe('composer (P2-15)', () => {
     assert.match(chromeSrc, /background:\s*canSend \? "var\(--mz-blue\)"/);
   });
 
+  it('voice button is quiet: tokens only, mic icon at 1.75 stroke, editable transcript', () => {
+    const voiceSrc = readFileSync(new URL('./voice-button.tsx', import.meta.url), 'utf8');
+    assert.match(voiceSrc, /Mic size=\{20\} strokeWidth=\{1\.75\}/);
+    assert.match(voiceSrc, /aria-label="Record a voice note"/);
+    assert.match(voiceSrc, /onTranscript\(out\.transcript\)/);
+    assert.doesNotMatch(voiceSrc, /#[0-9a-fA-F]{3,6}/);
+    assert.match(chromeSrc, /<VoiceButton disabled=\{voice\.disabled\} onTranscript=\{voice\.onTranscript\} \/>/);
+  });
+
   it('attach control is quiet: tokens only, lucide icon at 1.75 stroke', () => {
     assert.match(globalsCss, /\.mz-composer-attach\s*\{[^}]*color:\s*var\(--mz-secondary\)/);
     assert.match(globalsCss, /\.mz-composer-chip\s*\{[^}]*background:\s*var\(--mz-muted\)/);

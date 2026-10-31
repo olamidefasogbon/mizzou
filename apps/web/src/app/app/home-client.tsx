@@ -171,6 +171,7 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
           onChange={setInput}
           onSend={send}
           attach={{ state: attach, disabled: attaching, onPick: pickImage, onRemove: removeImage }}
+          voice={{ onTranscript: (t) => setInput((v) => (v ? `${v} ${t}` : t)) }}
         />
       </div>
     </>

@@ -128,9 +128,32 @@ through `readImageExtraction`. Result: HTTP 200 in 109s wall, 2,532 in /
 flyer. Image-input mechanics are verified; real-flyer extraction quality
 is a live-URL human retest, not claimed here.
 
-## 8. SAM 3.1 + speech endpoint shapes — PENDING
+## 8. Speech endpoint shape — VERIFIED (voice probe, Oct 31); SAM 3.1 — CUT
 
-Only if M9 is built.
+`POST /v1/asr/transcribe`, multipart with a `request` part (JSON:
+`{model: "muse-voice-transcribe-1.0", audioEncoding: "WAV"}`) plus an
+`audio` part (the WAV). Audio must be mono 16-bit PCM WAV at 16 or 24 kHz
+(44.1 kHz stereo is rejected as malformed; 32 MB / 10 min limits per the
+contract). Auth is the same Bearer key. Reply: HTTP 200 with
+`{transcript, turns, audioDurationMs}`.
+
+Probes (est <$0.01 BEFORE the runs, actual ≈ $0.0015 for two 15s 200s):
+shape found by iteration — `file`+`model` parts 400 ("Both a 'request'
+and an 'audio' part are required"), then 400 ("You must specify the
+'audioEncoding' field"), then 400 on 44.1 kHz stereo ("Malformed
+request"), then 200 on a locally resampled 16 kHz mono slice with
+`audioDurationMs: 15040`. Both transcripts came back empty: the sample
+(a public file-sample clip, converted locally exactly as the browser
+converts) carries no intelligible speech in the probed slices, so
+transcription QUALITY on real speech is a live-URL human retest, not
+claimed here. Transport, auth, part names, encoding flag, and reply
+shape are verified.
+
+SAM 3.1: CUT for this submission (contract allows the cut). The model
+exists on the API (`sam-3.1`, phrase-grounded detection/segmentation),
+but no real 5-flyer corpus exists in-sandbox to run the contract's 3-of-5
+test, and nothing ships half-working. Unblock: real flyer uploads on live
+plus a verified request shape, then re-run the 90-minute box.
 
 Base URL: `https://api.meta.ai/v1`. Auth: bearer key in `MODEL_API_KEY`
 (`META_API_KEY` accepted as a local fallback).

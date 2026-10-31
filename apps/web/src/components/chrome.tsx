@@ -2,6 +2,7 @@
 
 import { ArrowUp } from 'lucide-react';
 import { AttachButton, type AttachState } from './attach-button';
+import { VoiceButton } from './voice-button';
 
 // Shared composer for Home. White pill, hairline border, blue send button
 // that is blue only when there is text (or a ready attachment). Styles live
@@ -15,16 +16,23 @@ export type ComposerAttach = {
   onRemove: () => void;
 };
 
+export type ComposerVoice = {
+  disabled?: boolean;
+  onTranscript: (text: string) => void;
+};
+
 export function Composer({
   value,
   onChange,
   onSend,
   attach,
+  voice,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
   attach?: ComposerAttach;
+  voice?: ComposerVoice;
 }) {
   const hasText = value.trim().length > 0;
   const hasReady = attach?.state.status === 'ready';
@@ -40,6 +48,7 @@ export function Composer({
             onRemove={attach.onRemove}
           />
         ) : null}
+        {voice ? <VoiceButton disabled={voice.disabled} onTranscript={voice.onTranscript} /> : null}
         <input
           className="mz-composer-input"
           aria-label="Message Mizzou"

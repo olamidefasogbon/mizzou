@@ -8,6 +8,7 @@ import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { PackOverlay, type PackData, type PackDraft } from '@/components/pack-overlay';
 import { AttachButton, type AttachState } from '@/components/attach-button';
+import { VoiceButton } from '@/components/voice-button';
 import { downscaleImage, takeStashedVision, uploadImage, type VisionPayload } from '@/components/attach-image';
 import { ensureChatAction, loadChatHistoryAction } from '@/lib/actions';
 import { supabaseBrowser } from '@/lib/supabase/client';
@@ -448,7 +449,7 @@ function ChatContent(): React.JSX.Element {
     if (streamsRef.current === 0) setBusy(false);
   }, []);
   const handleEventRef = useRef<(event: ClientEvent) => void>(() => {});
-  const resumeRef = useRef<(body: Record<string, unknown>) => Promise<void>>(async () => {});
+  const resumeRef = useRef<(body: Record<string, unknown>) => Promise<boolean>>(async () => false);
 
   const pump = useCallback(async (res: Response): Promise<void> => {
     if (!res.body) throw new Error('Empty stream.');
@@ -681,9 +682,9 @@ function ChatContent(): React.JSX.Element {
     }
   };
 
-  resumeRef.current = async (body: Record<string, unknown>): Promise<void> => {
+  resumeRef.current = async (body: Record<string, unknown>): Promise<boolean> => {
     const id = runIdRef.current;
-    if (!id) return;
+    if (!id) return false;
     enterStream();
     try {
       const res = await fetch(`/api/runs/${id}/resume`, {
@@ -693,11 +694,13 @@ function ChatContent(): React.JSX.Element {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await pump(res);
+      return true;
     } catch {
       setFeed((prev) => [
         ...prev,
         { id: `err-${Date.now()}`, kind: 'error', text: 'I could not continue that step. Try again in a moment.' },
       ]);
+      return false;
     } finally {
       leaveStream();
       feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight });
@@ -972,10 +975,16 @@ function ChatContent(): React.JSX.Element {
                       <button
                         type="button"
                         onClick={() => {
-                          patch(item.id, { decision: 'yes' });
                           g1YesRef.current = true;
                           setPackReady(true);
-                          void resumeRef.current({ gate: 'G1', decision: { confirmed: true }, opId: crypto.randomUUID() });
+                          void (async () => {
+                            const ok = await resumeRef.current({ gate: 'G1', decision: { confirmed: true }, opId: crypto.randomUUID() });
+                            patch(item.id, ok ? { decision: 'yes' } : { decision: undefined });
+                            if (!ok) {
+                              g1YesRef.current = false;
+                              setPackReady(false);
+                            }
+                          })();
                           setFeed((prev) => {
                             const extra: FeedItem[] = [];
                             if (pendingCards?.fit) {
@@ -1435,6 +1444,10 @@ function ChatContent(): React.JSX.Element {
 
         <div className={styles.composer}>
           <AttachButton state={attach} disabled={busy || attaching} onPick={pickImage} onRemove={removeAttach} />
+          <VoiceButton
+            disabled={busy || attaching}
+            onTranscript={(t) => setInput((v) => (v ? `${v} ${t}` : t))}
+          />
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}

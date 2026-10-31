@@ -824,3 +824,59 @@ describe('drafts and versions (M6, PROMPT.md 7.5)', () => {
     expect(rollingEvents.some((e) => e.t === 'card' && (e as { kind: string }).kind === 'rolling_notice')).toBe(true);
   });
 });
+
+describe('run state carry-over', () => {
+  it('mirrors a recorded G1 confirmation and never re-asks it', async () => {
+    const h = makeHarness([textResult('On it, checking the apply page next.', 'resp-1')]);
+    h.run.decisions.push({ gate: 'G1', decision: { confirmed: true }, opId: 'g1-run-1' });
+    h.run.state['conversation'] = {
+      programUrl: 'https://example.edu/a',
+      programHint: 'Example MS',
+      pages: [{ url: 'https://example.edu/a', title: 'Example', summary: '' }],
+      gateContext: { gate: 'G1', what: 'Is this the one?' },
+      profile: [{ question: 'When do you graduate?', answer: '2027' }],
+    };
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'Yes, that is it',
+      userId: 'user-1',
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+      fetchPage: async () => stubPage,
+    });
+    const mem = (h.run.state as Record<string, unknown>)['conversation'] as {
+      g1Confirmed: boolean;
+      gateContext: null;
+      pages: Array<{ url: string; summary: string }>;
+    };
+    expect(mem.g1Confirmed).toBe(true);
+    expect(mem.gateContext).toBe(null);
+    const input = JSON.stringify(h.seen[0]?.input);
+    expect(input).toContain('G1 confirmed');
+    expect(input).toContain('never re-search a confirmed program');
+    expect(input).toContain('When do you graduate?');
+  });
+
+  it('stores a one-line summary per page read', async () => {
+    const h = makeHarness([
+      callResult('read_page', { url: 'https://example.edu/a' }, 'resp-1'),
+      textResult('Checked the page.', 'resp-2'),
+    ]);
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'https://example.edu/a',
+      userId: 'user-1',
+      send: () => {},
+      streamCall: h.streamCall,
+      fetchPage: async () => stubPage,
+      readPageText: async () => ({ extraction: stubExtraction(), costUsd: 0.002, model: 'muse-spark-1.3', inputTokens: 80, outputTokens: 40 }),
+    });
+    const mem = (h.run.state as Record<string, unknown>)['conversation'] as {
+      pages: Array<{ url: string; title: string; summary: string }>;
+    };
+    expect(mem.pages).toHaveLength(1);
+    expect(mem.pages[0].summary).toContain('deadline(s)');
+  });
+});

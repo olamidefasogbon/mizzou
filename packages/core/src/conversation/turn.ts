@@ -186,7 +186,7 @@ export const CONVERSATION_TOOL_DEFS: ResponsesFunctionTool[] = [
 export interface ConversationMemory {
   programUrl: string | null;
   programHint: string | null;
-  pages: Array<{ url: string; title: string }>;
+  pages: Array<{ url: string; title: string; summary: string }>;
   unreadable: Array<{ url: string; reason: string }>;
   languages: string[];
   extractions: ReconcilePage[];
@@ -199,6 +199,7 @@ export interface ConversationMemory {
   profile: Array<{ question: string; answer: string }>;
   /** Question asked by ask_profile_question, awaiting the user's answer. */
   pendingProfileQuestion: string | null;
+  g1Confirmed: boolean;
   /** Fit read asked at most once per run; the answer is recorded once in decisions. */
   fitAsked: boolean;
   fitDecision: 'apply' | 'not_now' | null;
@@ -207,7 +208,7 @@ export interface ConversationMemory {
 }
 
 function blankMemory(): ConversationMemory {
-  return { programUrl: null, programHint: null, pages: [], unreadable: [], languages: [], extractions: [], usage: [], lastReply: null, gateContext: null, profile: [], pendingProfileQuestion: null, fitAsked: false, fitDecision: null, drafts: [] };
+  return { programUrl: null, programHint: null, pages: [], unreadable: [], languages: [], extractions: [], usage: [], lastReply: null, gateContext: null, profile: [], pendingProfileQuestion: null, fitAsked: false, fitDecision: null, g1Confirmed: false, drafts: [] };
 }
 
 function readMemory(run: RunRecord): ConversationMemory {
@@ -217,7 +218,7 @@ function readMemory(run: RunRecord): ConversationMemory {
   return {
     programUrl: typeof m.programUrl === 'string' ? m.programUrl : null,
     programHint: typeof m.programHint === 'string' ? m.programHint : null,
-    pages: Array.isArray(m.pages) ? m.pages : [],
+    pages: Array.isArray(m.pages) ? (m.pages as Array<{ url?: unknown; title?: unknown; summary?: unknown }>).filter((p) => p && typeof p.url === 'string').map((p) => ({ url: p.url as string, title: typeof p.title === 'string' ? p.title : '', summary: typeof p.summary === 'string' ? p.summary : '' })) : [],
     unreadable: Array.isArray(m.unreadable) ? m.unreadable : [],
     languages: Array.isArray(m.languages) ? m.languages : [],
     extractions: Array.isArray(m.extractions) ? m.extractions : [],
@@ -232,6 +233,7 @@ function readMemory(run: RunRecord): ConversationMemory {
     pendingProfileQuestion: typeof m.pendingProfileQuestion === 'string' ? m.pendingProfileQuestion : null,
     fitAsked: m.fitAsked === true,
     fitDecision: m.fitDecision === 'apply' || m.fitDecision === 'not_now' ? m.fitDecision : null,
+    g1Confirmed: m.g1Confirmed === true,
     drafts: Array.isArray(m.drafts)
       ? (m.drafts as unknown[])
           .filter((d): d is { kind: string; title: string; body: string; version: number; kept: boolean } => !!d && typeof d === 'object' && typeof (d as { body?: unknown }).body === 'string')
@@ -425,6 +427,13 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
 
   const { run, save, send } = opts;
   const mem = readMemory(run);
+  {
+    const g1 = run.decisions.find((d) => d.gate === 'G1' && typeof d.decision === 'object' && d.decision !== null && (d.decision as { confirmed?: unknown }).confirmed === true);
+    if (g1) {
+      mem.g1Confirmed = true;
+      if (mem.gateContext?.gate === 'G1') mem.gateContext = null;
+    }
+  }
   const pageCache = new Map<string, FetchPageResult>();
   // Judge-role fit read (PROMPT.md 7.2). A throwing judge returns null so
   // the turn skips the fit card; like any tool failure it never ends the run.
@@ -694,7 +703,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     readerCost: { costUsd: number; model: string | null; inputTokens: number | null; outputTokens: number | null },
   ): Promise<{ gate: { gate: Gate; what: string; evidence: unknown; options: unknown } | null; summary: string }> => {
     mem.extractions.push({ url, title, extraction });
-    if (!mem.pages.some((p) => p.url === url)) mem.pages.push({ url, title });
+    if (!mem.pages.some((p) => p.url === url)) mem.pages.push({ url, title, summary: '' });
     if (!mem.programUrl) {
       mem.programUrl = url;
       const hint = extraction.program.name.value || extraction.program.institution.value || '';
@@ -702,6 +711,8 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     }
     logUsage({ kind: 'tool', tool: 'read_page', role: 'reader', model: readerCost.model, inputTokens: readerCost.inputTokens, outputTokens: readerCost.outputTokens, costUsd: readerCost.costUsd });
     pushCoverageCard();
+    const pageEntry = mem.pages.find((p) => p.url === url);
+    if (pageEntry) pageEntry.summary = `${title || url}: ${extraction.deadlines.length} deadline(s), ${extraction.documents.length} document(s), ${extraction.eligibility.length} eligibility rule(s)`.slice(0, 200);
     const rec = reconcileExtractions(mem.extractions, mem.programUrl);
     if (rec.conflicts.length === 0) {
       const deadlines = rec.merged?.deadlines.length ?? 0;
@@ -951,6 +962,16 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     if (mem.unreadable.length > 0) parts.push(`Pages that would not open: ${mem.unreadable.map((u) => u.url).slice(0, 5).join(', ')}`);
     parts.push(`New message: ${opts.userText}`);
     firstInput = parts.join('\n');
+  }
+  {
+    const lines: string[] = [];
+    if (mem.g1Confirmed) lines.push(`G1 confirmed${mem.programUrl ? ` for ${mem.programUrl}` : ''}${mem.programHint ? ` (${mem.programHint})` : ''}: do not re-ask, do not re-search this program.`);
+    else if (mem.programUrl) lines.push(`Working program (unconfirmed): ${mem.programUrl}${mem.programHint ? ` (${mem.programHint})` : ''}.`);
+    if (mem.pages.length > 0) lines.push(`Pages read: ${mem.pages.map((p) => `${p.url}: ${(p.summary || p.title).slice(0, 120)}`).join(' | ')}`);
+    if (mem.unreadable.length > 0) lines.push(`Unreadable: ${mem.unreadable.map((u) => u.url).join(', ')}`);
+    if (mem.profile.length > 0) lines.push(`Profile: ${mem.profile.map((f) => `${f.question} => ${f.answer}`.slice(0, 160)).join(' | ')}`);
+    if (run.decisions.length > 0) lines.push(`Decisions: ${run.decisions.map((d) => `${d.gate}=${JSON.stringify(d.decision).slice(0, 80)}`).join('; ')}`);
+    if (lines.length > 0) firstInput = `Run state (persisted; never re-search a confirmed program or re-ask a confirmed gate):\n${lines.join('\n')}\n${firstInput}`;
   }
   if (fitDecidedThisTurn === 'apply') {
     firstInput = `The user answered "Want to go for it anyway?" with "Yes, let's apply" (recorded — never ask again). Carry on with the plan and drafts.\n${firstInput}`;

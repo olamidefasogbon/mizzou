@@ -2,6 +2,7 @@
 
 import { resolveUser } from './auth';
 import { repo } from './repo';
+import type { ChatHistory } from './chat-history';
 import type { ChatSummary, Reminder } from './stores';
 
 // Server actions for app chrome state. No secrets; identity comes from
@@ -27,6 +28,12 @@ export async function getAppData(): Promise<AppData> {
 export async function ensureChatAction(id: string, title: string): Promise<ChatSummary> {
   const { userId } = await resolveUser();
   return (await repo()).chats.ensure(id, userId, title.slice(0, 60));
+}
+
+/** Stored messages of one chat so a reopened chat shows its conversation. */
+export async function loadChatHistoryAction(id: string): Promise<ChatHistory> {
+  const { userId } = await resolveUser();
+  return (await repo()).chats.history(id, userId);
 }
 
 export async function refreshChatsAction(): Promise<ChatSummary[]> {

@@ -517,7 +517,8 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   }
 
   let fullText = '';
-  const messageId = `conv-${run.id}-t${run.turnCount}`;
+  const messageBase = `conv-${run.id}-t${run.turnCount}`;
+  let messageId = messageBase;
   const emitText = (delta: string): void => {
     fullText += delta;
     send({ t: 'message', id: messageId, text: delta });
@@ -986,6 +987,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     { type: 'message', role: 'user', content: [{ type: 'input_text', text: firstInput }] },
   ]);
   for (let round = 0; round < maxRounds; round += 1) {
+    messageId = round === 0 ? messageBase : `${messageBase}-r${round}`;
     const result = await callWithRetry(
       {
         model: ROLE_MODEL_MAP.orchestrator,

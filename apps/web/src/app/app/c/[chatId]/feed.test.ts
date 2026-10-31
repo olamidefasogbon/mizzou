@@ -41,6 +41,34 @@ describe('status runs', () => {
   });
 });
 
+describe('live stream bubbles', () => {
+  it('keeps each captured message id in its own bubble across card rows', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { join, dirname } = await import('node:path');
+    const { fileURLToPath } = await import('node:url');
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', '..');
+    const captured = JSON.parse(readFileSync(join(root, 'packages', 'eval', 'fixtures', 'oist-stream.json'), 'utf8'));
+    const idA = captured.items.find((m) => m.type === 'message').id;
+    const idB = captured.turn2.find((m) => m.type === 'message').id;
+    assert.ok(typeof idA === 'string' && idA.length > 0);
+    assert.ok(typeof idB === 'string' && idB.length > 0);
+    assert.notEqual(idA, idB);
+    let feed = [];
+    let r = messageBubble(feed, idA);
+    assert.deepEqual(r, { id: idA, append: false });
+    feed.push({ id: r.id, kind: 'message' });
+    r = messageBubble(feed, idA);
+    assert.deepEqual(r, { id: idA, append: true });
+    feed.push({ id: 'plan-1', kind: 'plan' });
+    r = messageBubble(feed, idB);
+    assert.deepEqual(r, { id: idB, append: false });
+    feed.push({ id: r.id, kind: 'message' });
+    r = messageBubble(feed, idA);
+    assert.equal(r.append, false);
+    assert.equal(r.id.startsWith(idA + '#'), true);
+  });
+});
+
 describe('isTightGroup', () => {
   it('keeps same-sender bubbles tight and separates groups', () => {
     const feed = [user('u1'), user('u2'), msg('m1'), status('s1')];

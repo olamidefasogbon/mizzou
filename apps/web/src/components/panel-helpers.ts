@@ -59,3 +59,26 @@ export function readSnapshot(raw: string | null | undefined, now: number): ChatS
     return null;
   }
 }
+
+/** One row per program and date: repeated syncs of the same plan show once. */
+export function dedupeReminders(reminders: Reminder[]): Reminder[] {
+  const seen = new Set<string>();
+  const out: Reminder[] = [];
+  for (const r of reminders) {
+    const key = `${r.title}|${r.sub}|${r.pill}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
+}
+
+/** What a tapped reminder asks the chat, in the user's own words. */
+export function reminderQuestion(r: Pick<Reminder, 'title'>): string {
+  return `What should I do next for ${r.title}?`;
+}
+
+/** Route for a fresh chat that opens with a question. */
+export function newChatHref(question: string, id: string): string {
+  return `/app/c/${id}?q=${encodeURIComponent(question)}`;
+}

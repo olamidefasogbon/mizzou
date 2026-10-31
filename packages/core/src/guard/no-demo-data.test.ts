@@ -13,6 +13,9 @@ const ROOT = join(HERE, '..', '..', '..', '..');
 
 const SCAN_DIRS = ['apps/web/src', 'packages/core/src'];
 const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', 'fixtures']);
+// Test runs create .tmp-* directories under src while this scan runs in
+// parallel (agent.test.ts); skip them or the scan races their cleanup (EPERM).
+const SKIP_DIR_PATTERN = /^\.tmp-/;
 const SKIP_FILES = [/\.test\.[jt]sx?$/, /\.spec\.[jt]sx?$/, /^\.tmp-/, /^guard-.*\.test\.[jt]sx?$/];
 
 // Legitimate chat-group interface labels, not demo data. Stripped by exact
@@ -30,6 +33,7 @@ const BANNED: Array<{ label: string; pattern: RegExp }> = [
 
 function* walk(dir: string): Generator<string> {
   for (const entry of readdirSync(dir)) {
+    if (SKIP_DIR_PATTERN.test(entry)) continue;
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) {
       if (!SKIP_DIRS.has(entry)) yield* walk(full);

@@ -90,6 +90,12 @@ function ShellBody({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener('mz:open-panel', onOpenPanel);
   }, []);
 
+  // Close the panel without touching focus or the route (a row is about to navigate).
+  const dismissPanel = useCallback(() => {
+    setPanelOpen(false);
+    setPanelSection(null);
+  }, []);
+
   const goNew = useCallback(() => {
     setPanelOpen(false);
     router.push('/app');
@@ -115,7 +121,7 @@ function ShellBody({ children }: { children: React.ReactNode }) {
         <>
           <button type="button" aria-label="Close menu" className={shell.scrim} onClick={closePanel} />
           <div className={shell.overlay} role="dialog" aria-modal="true" aria-label="Menu">
-            <Panel onNavigate={goNew} onClose={closePanel} section={panelSection} />
+            <Panel onNavigate={goNew} onDismiss={dismissPanel} onClose={closePanel} section={panelSection} />
           </div>
         </>
       ) : null}

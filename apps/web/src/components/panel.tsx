@@ -9,6 +9,9 @@ import { upgradeToGoogle } from './google-upgrade';
 import { groupChatsByRecency } from '@/lib/chat-groups';
 import {
   activeChatIdFromPath,
+  dedupeReminders,
+  newChatHref,
+  reminderQuestion,
   filterPanelChats,
   filterPanelReminders,
   openReminderCount,
@@ -23,10 +26,13 @@ import styles from './panel.module.css';
 
 export function Panel({
   onNavigate,
+  onDismiss,
   onClose,
   section,
 }: {
   onNavigate: () => void;
+  /** Close the panel only; the caller navigates itself. */
+  onDismiss: () => void;
   onClose: () => void;
   /** Home "See all" opens the panel scrolled to this section. */
   section?: string | null;
@@ -113,12 +119,18 @@ export function Panel({
     };
   }, [undoArmed, expireUndo]);
 
-  const visibleReminders = filterPanelReminders(reminders, query);
+  const visibleReminders = dedupeReminders(filterPanelReminders(reminders, query));
   const visibleChats = filterPanelChats(chats, query);
   const groups = groupChatsByRecency(visibleChats);
   const openChat = (id: string): void => {
-    onNavigate();
+    onDismiss();
     router.push(`/app/c/${id}`);
+  };
+
+  // A tapped reminder opens a fresh chat that asks about that program.
+  const openReminder = (r: (typeof reminders)[number]): void => {
+    onDismiss();
+    router.push(newChatHref(reminderQuestion(r), crypto.randomUUID()));
   };
 
   const renderGroup = (label: string, list: typeof chats): React.JSX.Element | null => {
@@ -156,10 +168,7 @@ export function Panel({
       <button
         type="button"
         className={styles.newChatRow}
-        onClick={() => {
-          onNavigate();
-          router.push('/app');
-        }}
+        onClick={onNavigate}
       >
         <SquarePen size={20} strokeWidth={1.75} aria-hidden="true" />
         <span className={styles.newChatLabel}>New chat</span>
@@ -187,16 +196,13 @@ export function Panel({
       {visibleReminders.length > 0 ? (
         <div className={styles.card}>
           {visibleReminders.map((r) => (
-            <div key={r.id}>
-              <div className={styles.reminderRow}>
-                <div className={styles.reminderText}>
-                  <span className={styles.reminderTitle}>{r.title}</span>
-                  <span className={styles.reminderSub}>{r.sub}</span>
-                </div>
-                <span className={`mz-pill ${styles.reminderPill}`}>{r.pill}</span>
-              </div>
-              <div className="mz-divider" />
-            </div>
+            <button key={r.id} type="button" className={styles.reminderRow} onClick={() => openReminder(r)}>
+              <span className={styles.reminderText}>
+                <span className={styles.reminderTitle}>{r.title}</span>
+                <span className={styles.reminderSub}>{r.sub}</span>
+              </span>
+              <span className={`mz-pill ${styles.reminderPill}`}>{r.pill}</span>
+            </button>
           ))}
         </div>
       ) : null}

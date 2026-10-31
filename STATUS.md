@@ -1,5 +1,32 @@
 # Mizzou Build Status
 
+## Oct 31: duplicate-item 400 fix (Vercel ref emvw9313r7nmok) — DONE, 5 commits
+
+Root cause was client-side: the stream transport appended every
+reasoning/message item twice (`output_item.done` + `response.completed`
+envelope), and the turn thread replayed the copies on round two after
+`fetch_page`. Live probe (est <$0.01, actual ≈$0.0021) proved a
+`[function_call, function_call_output]` continuation without the reasoning
+item is HTTP 200, so reasoning is never replayed. Commits: `d8aa5b1`
+transport dedupe + `buildInput(history, newItems)` as the only appender;
+`dde36d1` reasoning dropped from replay (+ META_API_NOTES §9); `715c13d`
+4xx fail-fast with full provider message, retry only 429/5xx/network;
+`d700156` regression tests (mock 400, two tool calls + follow-up, 0 retries
+on 400); this commit adds tool-failure handling (a throwing tool returns
+`{error}` to the model; the run never ends on a tool failure) plus this
+status update. Core: 117/118 passing, 1 pre-existing failure
+(`no-demo-data` on P2 panel day-count strings in `panel.tsx`,
+`chat-groups.ts` — untouched by this sequence).
+
+Human checks (live Vercel URL first, then the same on localhost): `POST
+/api/chat` with "im interested in harvard masters in computer science, when
+does the application open?" gets a human reply in separate bubbles with a
+visible tool row and no 400 in the Vercel logs; `/api/health` lists every
+required env var as present; EPFL link flow still yields a local-time plan
+card with a working ICS download. P0 items 1-5 (FIXLIST) stand as
+committed: Supabase-only stores, stateless turns, error refs + `/api/health`,
+Google-only auth, DB-backed budgets.
+
 ## Current milestone: FIXLIST P0 + P1 + P2 all done and committed Oct 30 (head e235333; P2-16 next). P0: Supabase-only stores, stateless turns, Google-only auth, error refs + /api/health, DB-backed budgets. P1: bubbles/tool rows (bba7ac2), card order rule (d024cdf), voice rewrite (2ab1649), plan/AOE/ICS (9d88ccd), chat titles (f65e6c1). P2: top bar (54165ff), panel + settings + delete-my-data (46a7d1d), composer (e235333). Human checks now, all on the live Vercel URL then localhost: /api/health lists every env var present; Google sign-up → /app → refresh stays signed in → log out → log in; Harvard-CS-masters question gets bubbles + tool row + titled chat; EPFL link flow yields a local-time plan card + working ICS; wordmark/composer/panel/settings eyeball pass. Live wiring still human-side: Supabase project, Google OAuth, migrations, Vercel env values.
 
 - [x] M0: Monorepo scaffolded (`apps/web`, `packages/core`)

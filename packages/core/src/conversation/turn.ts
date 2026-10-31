@@ -705,7 +705,15 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     for (const call of calls) {
       const args = parseArgs(call.argsText);
       opts.onToolCall?.(call.name, args);
-      const outcome = await executeTool(call.name, args);
+      // A failing tool returns a structured result to the model; it never ends the run.
+      // Only the budget guard propagates (it is a gate, not a tool failure).
+      let outcome: ExecOutcome;
+      try {
+        outcome = await executeTool(call.name, args);
+      } catch (err) {
+        if (err instanceof BudgetExceededError) throw err;
+        outcome = { output: { error: err instanceof Error ? err.message : String(err) } };
+      }
       if (outcome.gate) gateHit = outcome.gate;
       outputs.push({ type: 'function_call_output', call_id: call.callId, output: JSON.stringify(outcome.output) });
     }

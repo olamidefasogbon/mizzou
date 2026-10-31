@@ -413,4 +413,24 @@ describe('settled extraction card guards', () => {
     expect(thread).toContain('Is this the one?');
     expect(thread).toContain('Yes, that is the one');
   });
+
+  it('a throwing tool returns a structured error and the turn continues', async () => {
+    const h = makeHarness([
+      callResult('list_reminders', {}, 'resp-1'),
+      textResult('I could not load reminders, but here is what I found.', 'resp-2'),
+    ]);
+    const result = await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'what are my reminders?',
+      userId: 'user-1',
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+      listReminders: async () => { throw new Error('reminders db down'); },
+    });
+    expect(result.gated).toBe(false);
+    expect(result.text).toContain('here is what I found');
+    const secondInput = JSON.stringify(h.seen[1]?.input);
+    expect(secondInput).toContain('reminders db down');
+  });
 });

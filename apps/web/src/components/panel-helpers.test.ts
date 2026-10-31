@@ -4,7 +4,10 @@ import { describe, it } from 'node:test';
 import {
   activeChatIdFromPath,
   filterPanelChats,
+  dedupeReminders,
   filterPanelReminders,
+  newChatHref,
+  reminderQuestion,
   openReminderCount,
   readSnapshot,
   serializeSnapshot,
@@ -85,5 +88,19 @@ describe('clear-undo snapshot', () => {
     assert.equal(readSnapshot(null, 0), null);
     assert.equal(readSnapshot('not-json', 0), null);
     assert.equal(readSnapshot('{"at":"x","rows":[]}', 0), null);
+  });
+});
+
+describe('reminder rows', () => {
+  const r = (id: string, title: string, pill: string): Reminder => ({
+    id, userId: 'u', title, sub: 'Application deadline', pill, dueAt: null, kind: 'deadline', done: false,
+  });
+  it('shows a repeated program and date once', () => {
+    const out = dedupeReminders([r('1', 'ETH Fellowship', 'Dec 16'), r('2', 'ETH Fellowship', 'Dec 16'), r('3', 'ETH Fellowship', 'Jul 2')]);
+    assert.deepEqual(out.map((x) => x.id), ['1', '3']);
+  });
+  it('asks about the program by name and builds a chat href', () => {
+    assert.equal(reminderQuestion({ title: 'ETH Fellowship' }), 'What should I do next for ETH Fellowship?');
+    assert.equal(newChatHref('a b?', 'abc'), '/app/c/abc?q=a%20b%3F');
   });
 });

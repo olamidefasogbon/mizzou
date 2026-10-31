@@ -159,7 +159,8 @@ export async function POST(req: Request): Promise<Response> {
             .map((m) => m as { role?: unknown; text?: unknown })
             .filter((m) => m.role === 'assistant' && typeof m.text === 'string' && m.text.length > 0)
             .map((m) => m.text as string);
-          const title = await generateChatTitle(message, assistantTexts[assistantTexts.length - 1] ?? '');
+          const taken = (await db.chats.list(userId)).filter((c) => c.id !== chatId).map((c) => c.title);
+          const title = await generateChatTitle(message, assistantTexts[assistantTexts.length - 1] ?? '', userId, taken);
           await db.chats.rename(chatId, userId, title);
         }
         if (run.pendingGate) {

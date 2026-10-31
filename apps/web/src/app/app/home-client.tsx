@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Composer } from '@/components/chrome';
 import { useStore } from '@/components/store-context';
+import { dedupeReminders, newChatHref, reminderQuestion } from '@/components/panel-helpers';
 import { DISMISS_COOKIE, remindersVersion, shouldShowComingUp } from './coming-up';
 import styles from './home.module.css';
 
@@ -107,14 +108,19 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
                 </button>
               </span>
             </div>
-            {reminders.slice(0, 3).map((row) => (
-              <div key={row.id} className={styles.row}>
-                <div className={styles.rowText}>
+            {dedupeReminders(reminders).slice(0, 3).map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                className={styles.row}
+                onClick={() => router.push(newChatHref(reminderQuestion(row), crypto.randomUUID()))}
+              >
+                <span className={styles.rowText}>
                   <span className={styles.rowTitle}>{row.title}</span>
                   <span className={styles.rowSub}>{row.sub}</span>
-                </div>
+                </span>
                 <span className={`mz-pill ${styles.rowPill}`}>{row.pill}</span>
-              </div>
+              </button>
             ))}
           </div>
         ) : null}

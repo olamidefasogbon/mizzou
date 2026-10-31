@@ -125,6 +125,10 @@
 }
 
 .mz-link-quiet {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
   display: inline-flex;
   align-items: center;
   min-height: var(--mz-touch);

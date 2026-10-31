@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { hasLayoutReference } from '../voice/index.js';
+import { CONVERSATION_MAX_ROUNDS } from '../conversation/turn.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const prompt = readFileSync(join(here, 'orchestrator.md'), 'utf8');
@@ -29,6 +30,12 @@ describe('card order rule', () => {
     for (const sample of GOOD_SAMPLES) {
       expect(hasLayoutReference(sample)).toBe(false);
     }
+  });
+
+  it('keeps autonomy: round cap 10-12 and read-only steps need no ask', () => {
+    expect(CONVERSATION_MAX_ROUNDS).toBeGreaterThanOrEqual(10);
+    expect(CONVERSATION_MAX_ROUNDS).toBeLessThanOrEqual(12);
+    expect(prompt).toMatch(/read-only steps/i);
   });
 
   it('fails sample bubbles that point above or below', () => {

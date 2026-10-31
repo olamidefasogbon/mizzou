@@ -52,7 +52,7 @@ import type { RunEvent } from '../schemas/events.js';
 import type { Gate, RunRecord } from '../agent/types.js';
 import type { UsageEntry } from '../deepscan/orchestrator.js';
 
-export const CONVERSATION_MAX_ROUNDS = 3;
+export const CONVERSATION_MAX_ROUNDS = 10;
 const RETRY_BACKOFF_MS = [500, 1000];
 
 let cachedPrompt: string | null = null;
@@ -283,10 +283,21 @@ export interface ConversationTurnDeps {
   sleepMs?: (ms: number) => Promise<void>;
 }
 
+export interface VisionSeed {
+  /** Upload id; becomes the evidence source `upload:{id}`. */
+  id: string;
+  /** Human file name shown on cards (never trusted for facts). */
+  name: string;
+  extraction: Extraction;
+}
+
 export interface ConversationTurnOptions extends ConversationTurnDeps {
   run: RunRecord;
   save: (run: RunRecord) => Promise<void>;
-  userText: string;
+    /** Vision-role extractions from uploaded flyers (upload route). Merged
+   * like a read page: same cards, same evidence, nothing auto-accepted. */
+  seedExtractions?: VisionSeed[];
+userText: string;
   userId?: string;
   /** Usage-backed budget guard (routes build one per request). Defaults to the shared process guard. */
   budgetGuard?: BudgetGuard;
@@ -892,7 +903,34 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   // flow; after a gate the provider will not retain the gate-ended response
   // (chaining 400s), so the next turn restarts the chain with a short text
   // recap instead. Within-turn rounds always chain.
+  const eolC = '\r\n';
+  // Vision seeds (PROMPT.md 4, flyers): uploaded images arrive with the
+  // upload route's vision-role extraction. Merge each like a read page —
+  // same cards, same evidence post-check, nothing auto-accepted — then
+  // tell the orchestrator the G1 program card is still unconfirmed.
+  const seedNotes: string[] = [];
+  for (const seed of opts.seedExtractions ?? []) {
+    const url = `upload:${seed.id}`;
+    const merged = await mergeAndReconcile(url, seed.name, seed.extraction, {
+      costUsd: 0,
+      model: null,
+      inputTokens: null,
+      outputTokens: null,
+    });
+    const noun = seed.extraction.deadlines.length === 1 ? 'deadline' : 'deadlines';
+    seedNotes.push(
+      `read ${seed.name || url}; ${seed.extraction.deadlines.length} ${noun} extracted, no conflicts: ${merged.summary}`,
+    );
+  }
   let firstInput = opts.userText;
+  if (seedNotes.length > 0) {
+    firstInput =
+      `An uploaded flyer or screenshot was read this turn with the vision role ` +
+      `(same extraction schema, evidence quotes copied from the image text):${eolC}` +
+      seedNotes.join(eolC) +
+      `${eolC}The G1 program card is NOT confirmed. Confirm it with the user ` +
+      `through request_approval G1 before any deep scan.${eolC}${firstInput}`;
+  }
   if (mem.gateContext) {
     const parts: string[] = [];
     if (mem.lastReply) parts.push(`Earlier in this conversation you said: "${mem.lastReply.slice(0, 500)}"`);

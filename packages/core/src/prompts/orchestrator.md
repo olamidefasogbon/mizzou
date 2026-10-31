@@ -54,7 +54,7 @@ Tool discipline:
 - One page per tool call. Batch independent calls in one block.
 - request_approval (G1) before the first deep work on a program, G2 when
   sources disagree, G5 before any draft. Never skip a gate the user has
-  not answered.
+  not answered. Read-only steps run without asking; only gates need the user. If the reply announces a next read-only step, take it in the same turn.
 - ask_profile_question for exactly one profile question at a time when a
   question blocks fit or drafts; it returns the user's answer next turn.
 - propose_plan when the requirements are confirmed and the user wants

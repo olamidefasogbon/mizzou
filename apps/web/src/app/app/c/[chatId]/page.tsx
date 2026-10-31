@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowUp, Check, ChevronDown, Download, Loader2, X } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, CircleAlert, Download, Loader2, Quote, X } from 'lucide-react';
 import { DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, FIT_APPLY_LABEL, FIT_PARK_LABEL, PACK_OPEN_LABEL, TALKBACK_DONE_LABEL, TALKBACK_HELP_LABEL, TALKBACK_SNOOZE_LABEL, formatDueMessage, formatG1Prompt } from '@mizzou/core/voice';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
@@ -288,16 +288,7 @@ function ChatContent(): React.JSX.Element {
             portalUrl: plan.portalUrl,
           }),
         });
-        if (!res.ok) {
-          let detail = 'Could not build the calendar file. Give it a minute and try again.';
-          try {
-            const data = (await res.json()) as { error?: unknown };
-            if (typeof data.error === 'string') detail = data.error;
-          } catch {
-            // Keep the default text when the body is not JSON.
-          }
-          throw new Error(detail);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -308,9 +299,8 @@ function ChatContent(): React.JSX.Element {
         a.remove();
         URL.revokeObjectURL(url);
       } catch (err) {
-        patch(itemId, {
-          planError: err instanceof Error ? err.message : 'Could not build the calendar file. Give it a minute and try again.',
-        });
+        console.error('[chat] calendar file failed:', err);
+        patch(itemId, { planError: 'I could not build the calendar file. Try again in a moment' });
       } finally {
         patch(itemId, { downloading: false });
       }
@@ -354,16 +344,7 @@ function ChatContent(): React.JSX.Element {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: plan.title, deadlines: plan.deadlines, items: plan.items, opens: plan.opensIso }),
         });
-        if (!res.ok) {
-          let detail = 'Could not sync reminders. Give it a minute and try again.';
-          try {
-            const data = (await res.json()) as { error?: unknown };
-            if (typeof data.error === 'string') detail = data.error;
-          } catch {
-            // Keep the default text when the body is not JSON.
-          }
-          throw new Error(detail);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         patch(itemId, { approved: true });
         if (isGuest) {
           // No Calendar grant exists yet: ask for it now, with the Calendar
@@ -378,9 +359,8 @@ function ChatContent(): React.JSX.Element {
           await syncPlan(itemId, plan);
         }
       } catch (err) {
-        patch(itemId, {
-          planError: err instanceof Error ? err.message : 'Could not sync reminders. Give it a minute and try again.',
-        });
+        console.error('[chat] reminder sync failed:', err);
+        patch(itemId, { planError: 'I could not save your reminders. Try again in a moment' });
       } finally {
         patch(itemId, { approving: false });
       }
@@ -466,7 +446,7 @@ function ChatContent(): React.JSX.Element {
             id: `g1-${Date.now()}`,
             kind: 'g1',
             program: {
-              name: card.name ?? 'Unknown program',
+              name: card.name ?? 'This program',
               unit: card.unit ?? '',
               institution: card.institution ?? '',
               portal_url: card.portal_url ?? null,
@@ -644,7 +624,7 @@ function ChatContent(): React.JSX.Element {
     } catch {
       setFeed((prev) => [
         ...prev,
-        { id: `err-${Date.now()}`, kind: 'error', text: 'Something went wrong on my side. Give it a minute and try again.' },
+        { id: `err-${Date.now()}`, kind: 'error', text: 'I could not continue that step. Try again in a moment.' },
       ]);
     } finally {
       leaveStream();
@@ -679,7 +659,7 @@ function ChatContent(): React.JSX.Element {
     } catch {
       setFeed((prev) => [
         ...prev,
-        { id: `err-${Date.now()}`, kind: 'error', text: 'Something went wrong on my side. Give it a minute and try again.' },
+        { id: `err-${Date.now()}`, kind: 'error', text: 'I could not send that. Try again in a moment.' },
       ]);
     } finally {
       leaveStream();
@@ -1071,11 +1051,7 @@ function ChatContent(): React.JSX.Element {
                           return (
                             <li key={i} className={styles.reqItem}>
                               {needsLook(d.confidence, d.needs_human) ? (
-                                <span aria-label="needs a look" className={styles.warnBadge}>
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
-                                    <path d="M12 5v10M12 19v0.5" />
-                                  </svg>
-                                </span>
+                                <CircleAlert className={styles.warnIcon} aria-label="needs a look" />
                               ) : (
                                 <Check className={styles.checkIcon} aria-label="clear" />
                               )}
@@ -1092,6 +1068,7 @@ function ChatContent(): React.JSX.Element {
                                         select({ title: d.name, quote: d.evidenceQuote as string, sourceUrl: d.sourceUrl ?? null });
                                       }}
                                     >
+                                      <Quote className={styles.evidenceIcon} aria-hidden="true" />
                                       Where I found this
                                     </button>
                                   </span>
@@ -1111,11 +1088,7 @@ function ChatContent(): React.JSX.Element {
                           return (
                             <li key={i} className={styles.reqItem}>
                               {needsLook(e.confidence, e.needs_human) ? (
-                                <span aria-label="needs a look" className={styles.warnBadge}>
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
-                                    <path d="M12 5v10M12 19v0.5" />
-                                  </svg>
-                                </span>
+                                <CircleAlert className={styles.warnIcon} aria-label="needs a look" />
                               ) : (
                                 <Check className={styles.checkIcon} aria-label="clear" />
                               )}
@@ -1130,6 +1103,7 @@ function ChatContent(): React.JSX.Element {
                                         select({ title: e.rule, quote: e.evidenceQuote as string, sourceUrl: e.sourceUrl ?? null });
                                       }}
                                     >
+                                      <Quote className={styles.evidenceIcon} aria-hidden="true" />
                                       Where I found this
                                     </button>
                                   </span>
@@ -1191,7 +1165,7 @@ function ChatContent(): React.JSX.Element {
                         }}
                         className={styles.btnPrimary}
                       >
-                        {item.approving === true ? 'Syncing…' : 'Approve & Sync'}
+                        {item.approving === true ? 'Syncing…' : 'Approve and sync'}
                       </button>
                     )}
                       {item.approved === true && item.sync === 'synced' && (
@@ -1365,7 +1339,7 @@ function ChatContent(): React.JSX.Element {
 
 export default function ConversationPage(): React.JSX.Element {
   return (
-    <Suspense fallback={<div className={styles.loadingFallback}>Loading chat...</div>}>
+    <Suspense fallback={<div className={styles.loadingFallback}>Loading</div>}>
       <ChatContent />
     </Suspense>
   );

@@ -17,7 +17,7 @@
   width: min(760px, calc(100vw - 48px));
   height: min(520px, calc(100dvh - 48px));
   display: flex;
-  background: #fff;
+  background: var(--mz-surface);
   border: 1px solid var(--mz-border);
   border-radius: var(--mz-radius-card);
   box-shadow: var(--mz-shadow-large);
@@ -32,7 +32,7 @@
   height: 44px;
   border-radius: 22px;
   border: 1px solid var(--mz-border);
-  background: #fff;
+  background: var(--mz-surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -46,7 +46,7 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding: 56px 12px 16px;
   border-right: 1px solid var(--mz-border);
 }
@@ -56,12 +56,32 @@
   background: transparent;
   min-height: 44px;
   padding: 0 12px;
-  border-radius: 12px;
+  border-radius: var(--mz-radius-control);
   font-family: inherit;
   font-size: 15px;
   color: var(--mz-ink);
   text-align: left;
   cursor: pointer;
+  transition: background-color var(--mz-dur-fast) var(--mz-ease);
+}
+
+.navItem:disabled {
+  color: var(--mz-secondary);
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .navItem:hover {
+    background: var(--mz-hover);
+  }
+}
+
+.navError {
+  margin: 0;
+  padding: 0 12px 4px;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--mz-error);
 }
 
 .navItemActive {
@@ -83,7 +103,7 @@
 .heading {
   margin: 0 0 12px;
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .accountCard {
@@ -92,15 +112,15 @@
   gap: 12px;
   padding: 12px;
   border: 1px solid var(--mz-border);
-  border-radius: 16px;
+  border-radius: var(--mz-radius-control);
   margin-bottom: 8px;
 }
 
 .avatar {
   flex: none;
-  width: 38px;
-  height: 38px;
-  border-radius: 19px;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
   background: var(--mz-muted);
   display: flex;
   align-items: center;
@@ -154,7 +174,7 @@
 }
 
 .helpLine {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   font-size: 15px;
   line-height: 1.5;
 }
@@ -184,16 +204,34 @@
 }
 
 .legalTitle {
-  margin: 14px 0 2px;
+  margin: 24px 0 4px;
   font-size: 15px;
   font-weight: 600;
 }
 
 .legalText {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 14px;
   line-height: 1.5;
   color: var(--mz-secondary);
+}
+
+.confirmRow {
+  display: flex;
+  gap: 8px;
+}
+
+.confirmBtn,
+.confirmDelete {
+  height: 44px;
+  padding: 0 20px;
+  font-size: 15px;
+}
+
+.confirmDelete {
+  background: var(--mz-error);
+  color: var(--mz-on-blue);
+  font-weight: 600;
 }
 
 @media (max-width: 767px) {

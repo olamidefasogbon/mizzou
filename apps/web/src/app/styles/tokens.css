@@ -12,6 +12,9 @@
   --mz-blue-pressed: #004BA8;
   --mz-border: #DEE3E9;
   --mz-muted: #F1F4F7;
+  --mz-hover: #F7F9FB;
+  --mz-surface: #FFFFFF;
+  --mz-on-blue: #FFFFFF;
   --mz-success: #31A24C;
   --mz-error: #E41E3F;
   --mz-amber: #D97706;
@@ -27,6 +30,10 @@
   --mz-radius-bubble: 18px;
   --mz-radius-pill: 999px;
   --mz-touch: 44px;
+  --mz-radius-control: 12px;
+  --mz-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --mz-dur-fast: 160ms;
+  --mz-dur-enter: 240ms;
 
   --mz-font:
     "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -65,10 +72,11 @@
   cursor: pointer;
   text-decoration: none;
   min-height: var(--mz-touch);
+  transition: background-color var(--mz-dur-fast) var(--mz-ease);
 }
 .mz-btn-primary {
   background: var(--mz-blue);
-  color: #fff;
+  color: var(--mz-on-blue);
   font-weight: 600;
 }
 @media (hover: hover) {
@@ -106,7 +114,7 @@
   height: var(--mz-touch);
   border-radius: 22px;
   border: 1px solid var(--mz-border);
-  background: #fff;
+  background: var(--mz-surface);
   box-shadow: var(--mz-shadow);
   display: flex;
   align-items: center;
@@ -114,6 +122,24 @@
   flex: none;
   text-decoration: none;
   color: var(--mz-ink);
+}
+
+.mz-link-quiet {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--mz-touch);
+  padding: 0 12px;
+  border-radius: var(--mz-radius-control);
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--mz-ink);
+  text-decoration: none;
+  transition: background-color var(--mz-dur-fast) var(--mz-ease);
+}
+@media (hover: hover) {
+  .mz-link-quiet:hover {
+    background: var(--mz-muted);
+  }
 }
 
 .mz-divider {
@@ -125,7 +151,7 @@
 :where(button, a, input, [tabindex]):focus-visible {
   outline: none;
   box-shadow:
-    0 0 0 2px #fff,
+    0 0 0 2px var(--mz-surface),
     0 0 0 4px var(--mz-blue);
 }
 

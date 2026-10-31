@@ -33,8 +33,8 @@
   border-radius: var(--mz-radius-bubble);
   border-bottom-right-radius: 6px;
   background: var(--mz-blue);
-  color: #fff;
-  padding: 10px 16px;
+  color: var(--mz-on-blue);
+  padding: 12px 16px;
   font-size: 15px;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -52,7 +52,7 @@
   border-radius: var(--mz-radius-bubble);
   border-bottom-left-radius: 6px;
   background: var(--mz-muted);
-  padding: 10px 16px;
+  padding: 12px 16px;
   font-size: 15px;
   line-height: 1.55;
   overflow-wrap: anywhere;
@@ -100,7 +100,7 @@
   box-sizing: border-box;
   border-radius: var(--mz-radius-card);
   border: 1px solid var(--mz-border);
-  background: #fff;
+  background: var(--mz-surface);
   padding: 20px;
   box-shadow: var(--mz-shadow);
 }
@@ -115,7 +115,7 @@
   margin: 8px 0 0;
   font-size: 20px;
   line-height: 1.25;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .cardSub {
@@ -133,8 +133,9 @@
   border: 0;
   border-radius: var(--mz-radius-pill);
   background: var(--mz-blue);
-  color: #fff;
-  padding: 8px 16px;
+  color: var(--mz-on-blue);
+  min-height: var(--mz-touch);
+  padding: 0 20px;
   font-family: inherit;
   font-size: 14px;
   font-weight: 500;
@@ -160,7 +161,8 @@
   border-radius: var(--mz-radius-pill);
   background: var(--mz-muted);
   color: var(--mz-ink);
-  padding: 8px 16px;
+  min-height: var(--mz-touch);
+  padding: 0 20px;
   font-family: inherit;
   font-size: 14px;
   font-weight: 500;
@@ -183,7 +185,7 @@
 .g1DoneText {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 14px;
   font-weight: 500;
 }
@@ -211,7 +213,7 @@
 
 .conflictQuote {
   display: block;
-  font-style: italic;
+  color: var(--mz-secondary);
 }
 
 .link {
@@ -253,7 +255,7 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .reqItem {
@@ -267,29 +269,44 @@
   color: var(--mz-secondary);
 }
 
-.warnBadge {
+/* Needs-a-look marker: amber line icon, same box as the check. */
+.warnIcon {
   margin-top: 2px;
   flex: none;
   width: 16px;
   height: 16px;
-  border-radius: 8px;
-  background: var(--mz-amber);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  color: var(--mz-amber);
+  stroke-width: 1.75;
 }
 
 .evidenceBtn {
-  border: 0;
-  background: transparent;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  margin-top: 4px;
+  padding: 0 8px;
+  border: 1px solid var(--mz-border);
+  border-radius: 8px;
+  background: var(--mz-surface);
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 500;
   color: var(--mz-blue);
-  text-decoration: underline;
-  text-underline-offset: 3px;
   cursor: pointer;
-  display: block;
+  transition: background-color var(--mz-dur-fast) var(--mz-ease);
+}
+
+@media (hover: hover) {
+  .evidenceBtn:hover {
+    background: var(--mz-hover);
+  }
+}
+
+.evidenceIcon {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.75;
 }
 
 .flagNote {
@@ -320,7 +337,7 @@
 .syncedNote {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   margin: 0;
   font-size: 14px;
   font-weight: 500;
@@ -330,7 +347,7 @@
   margin-top: 12px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .icsBtn:disabled {
@@ -347,7 +364,7 @@
 }
 
 .rollingText {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   font-size: 14px;
   color: var(--mz-secondary);
 }
@@ -360,12 +377,6 @@
   margin-top: 8px;
 }
 
-.warnMark {
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-}
-
 .sendIcon {
   width: 16px;
   height: 16px;
@@ -373,9 +384,9 @@
 
 .errorCard {
   border-radius: var(--mz-radius-bubble);
-  background: #fff;
+  background: var(--mz-surface);
   border: 1px solid var(--mz-border);
-  padding: 10px 16px;
+  padding: 12px 16px;
   font-size: 15px;
   line-height: 1.5;
 }
@@ -395,8 +406,8 @@
   gap: 8px;
   border-radius: var(--mz-radius-composer);
   border: 1px solid var(--mz-border);
-  background: #fff;
-  padding: 8px 8px 8px 16px;
+  background: var(--mz-surface);
+  padding: 8px 8px 8px 20px;
   box-shadow: var(--mz-shadow);
 }
 
@@ -411,7 +422,7 @@
   background: transparent;
   outline: none;
   font-family: inherit;
-  font-size: 15px;
+  font-size: 16px;
   color: var(--mz-ink);
 }
 
@@ -425,12 +436,12 @@
 
 .sendBtn {
   flex: none;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: 0;
-  border-radius: 18px;
+  border-radius: 20px;
   background: var(--mz-blue);
-  color: #fff;
+  color: var(--mz-on-blue);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -466,9 +477,9 @@
 /* Compact tool-progress row: one line per run of status events. */
 .toolSteps {
   border-radius: var(--mz-radius-bubble);
-  background: #fff;
+  background: var(--mz-surface);
   border: 1px solid var(--mz-border);
-  padding: 6px 12px;
+  padding: 8px 12px;
 }
 
 .toolHead {
@@ -510,7 +521,7 @@
 }
 
 .toolList {
-  margin: 6px 0 2px;
+  margin: 8px 0 4px;
   padding: 0;
   list-style: none;
   display: flex;
@@ -537,8 +548,8 @@
 }
 
 .typingDot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   border-radius: 4px;
   background: var(--mz-secondary);
   animation: mz-typing 1.2s ease-in-out infinite;

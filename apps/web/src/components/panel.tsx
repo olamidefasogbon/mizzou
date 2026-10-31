@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { Search, Settings, SquarePen, X } from 'lucide-react';
 import { useStore } from './store-context';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { upgradeToGoogle } from './google-upgrade';
@@ -17,7 +18,8 @@ import styles from './panel.module.css';
 
 // Left panel drawer. Contents in order: New chat, search, Reminders, Chats
 // grouped by recency, Clear all + Undo, footer with avatar, name/email and
-// the settings icon. No wordmark (the top bar has it), no placeholder rows.
+// the settings icon. The wordmark sits top left in the same spot as the top
+// bar's, which hides while the panel is open.
 
 export function Panel({
   onNavigate,
@@ -134,9 +136,6 @@ export function Panel({
             onClick={() => openChat(c.id)}
           >
             <span className={styles.chatTitle}>{c.title}</span>
-            <svg className={styles.chatArrow} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M9 5l7 7-7 7" />
-            </svg>
           </button>
         ))}
       </div>
@@ -146,10 +145,11 @@ export function Panel({
   return (
     <div className={styles.drawer} ref={rootRef} tabIndex={-1}>
       <div className={styles.topRow}>
+        <div className={`mz-wordmark ${styles.wordmark}`} aria-hidden="true">
+          Mizzou
+        </div>
         <button type="button" aria-label="Close menu" data-autofocus="true" className={styles.roundBtn} onClick={onClose}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
+          <X size={20} strokeWidth={1.75} aria-hidden="true" />
         </button>
       </div>
 
@@ -161,17 +161,12 @@ export function Panel({
           router.push('/app');
         }}
       >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 5H8.5A3.5 3.5 0 005 8.5v7A3.5 3.5 0 008.5 19h7a3.5 3.5 0 003.5-3.5V12M17.5 4.5a1.8 1.8 0 012.5 2.5L12 15l-3.5.5L9 12z" />
-        </svg>
+        <SquarePen size={20} strokeWidth={1.75} aria-hidden="true" />
         <span className={styles.newChatLabel}>New chat</span>
       </button>
 
       <div className={styles.searchRow}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#48484A" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="7" />
-          <path d="M20 20l-3.5-3.5" />
-        </svg>
+        <Search size={16} strokeWidth={1.75} className={styles.searchIcon} aria-hidden="true" />
         <input
           type="search"
           aria-label="Search chats and reminders"
@@ -222,7 +217,7 @@ export function Panel({
       </div>
       {undoArmed ? (
         <div className={styles.undoToast} role="status">
-          <span>Chats cleared.</span>
+          <span>Chats cleared</span>
           <button type="button" className={styles.undoButton} onClick={() => void undoClearChats()}>
             Undo
           </button>
@@ -255,10 +250,7 @@ export function Panel({
           className={styles.gearBtn}
           onClick={() => setSettingsOpen(true)}
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.9-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.9 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.9l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3h0a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5h0a1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9v0a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" />
-          </svg>
+          <Settings size={20} strokeWidth={1.75} aria-hidden="true" />
         </button>
       </div>
 

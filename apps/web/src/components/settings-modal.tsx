@@ -1,6 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { openReminderCount } from './panel-helpers';
@@ -12,7 +14,8 @@ import styles from './settings-modal.module.css';
 
 // Settings dialog (P2-14). General / Help & support / Legal & safety on
 // the left, Log out at the bottom of the nav, close button top-right,
-// Esc closes. Full-screen sheet under 768px.
+// Esc closes. Full-screen sheet under 768px. Delete asks for a second
+// click; Log out only leaves the page once sign-out succeeded.
 
 type Section = SettingsSection;
 
@@ -39,6 +42,9 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
   };
   const [section, setSection] = useState<Section>('general');
   const [deleted, setDeleted] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [logoutFailed, setLogoutFailed] = useState(false);
   const closeRef = useRef<HTMLButtonElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
@@ -82,9 +88,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
         onClick={(e) => e.stopPropagation()}
       >
         <button ref={closeRef} type="button" aria-label="Close settings" className={styles.closeBtn} onClick={onClose}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
-            <path d="M6 6l12 12M18 6L6 18" />
-          </svg>
+          <X size={20} strokeWidth={1.75} aria-hidden="true" />
         </button>
         <nav className={styles.nav} aria-label="Settings sections">
           {NAV.map((item) => (
@@ -99,18 +103,37 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </button>
           ))}
           <span className={styles.navSpacer} />
+          {!isGuest ? (
+            <>
+          {logoutFailed ? (
+            <p className={styles.navError} role="alert">
+              Could not log out. Try again
+            </p>
+          ) : null}
           <button
             type="button"
             className={styles.navItem}
+            disabled={signingOut}
             onClick={() => {
-              onClose();
+              setSigningOut(true);
+              setLogoutFailed(false);
               void supabaseBrowser()
                 .auth.signOut()
-                .finally(() => router.push('/'));
+                .then(({ error }) => {
+                  if (error) throw error;
+                  onClose();
+                  router.push('/');
+                })
+                .catch(() => {
+                  setLogoutFailed(true);
+                  setSigningOut(false);
+                });
             }}
           >
-            Log out
+            {signingOut ? 'Logging out…' : 'Log out'}
           </button>
+            </>
+          ) : null}
         </nav>
         <div className={styles.body}>
           {section === 'general' ? (
@@ -146,10 +169,6 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
                 </div>
               )}
               <div className={styles.kvRow}>
-                <span>Calendar (.ics export)</span>
-                <span className={styles.kvValue}>Ready</span>
-              </div>
-              <div className={styles.kvRow}>
                 <span>Active reminders</span>
                 <span className={styles.kvValue}>{activeReminders}</span>
               </div>
@@ -162,38 +181,42 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             <>
               <p className={styles.heading}>Help &amp; support</p>
               <p className={styles.helpLine}>Paste a program link in any chat and Mizzou reads what they ask for.</p>
-              <p className={styles.helpLine}>Approve each step — nothing happens without your yes.</p>
+              <p className={styles.helpLine}>Approve each step. Nothing happens without your yes.</p>
               <p className={styles.helpLine}>Download the .ics file to put deadlines on your calendar.</p>
-              <a className={styles.linkRow} href="mailto:feedback@mizzou.app">
-                Send feedback
-              </a>
             </>
           ) : null}
           {section === 'legal' ? (
             <>
               <p className={styles.heading}>Legal &amp; safety</p>
-              <p className={styles.legalTitle}>Terms</p>
-              <p className={styles.legalText}>
-                Use Mizzou for your own applications. Don&apos;t paste anyone else&apos;s private information into chats.
-              </p>
-              <p className={styles.legalTitle}>Privacy</p>
-              <p className={styles.legalText}>
-                No signup required: guests are anonymous. An optional Google account only tells us who you are. Your chats, reminders, saved runs, and daily spend live in
-                your own Supabase project.
-              </p>
+              <Link className={styles.linkRow} href="/terms" target="_blank">
+                Terms
+              </Link>
+              <Link className={styles.linkRow} href="/privacy" target="_blank">
+                Privacy policy
+              </Link>
               <p className={styles.legalTitle}>Delete my data</p>
+              <p className={styles.legalText}>Removes all your chats and reminders. You will stay signed in.</p>
               {deleted ? (
                 <p className={styles.helpLine} role="status">
                   Deleted your chats and reminders.
                 </p>
+              ) : confirmDelete ? (
+                <div className={styles.confirmRow}>
+                  <button type="button" className={`mz-btn mz-btn-secondary ${styles.confirmBtn}`} onClick={() => setConfirmDelete(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className={`mz-btn ${styles.confirmDelete}`}
+                    onClick={() => {
+                      void deleteMyData().then(() => setDeleted(true));
+                    }}
+                  >
+                    Delete everything
+                  </button>
+                </div>
               ) : (
-                <button
-                  type="button"
-                  className={styles.dangerRow}
-                  onClick={() => {
-                    void deleteMyData().then(() => setDeleted(true));
-                  }}
-                >
+                <button type="button" className={styles.dangerRow} onClick={() => setConfirmDelete(true)}>
                   Delete my chats and reminders
                 </button>
               )}

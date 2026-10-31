@@ -25,7 +25,7 @@
   align-items: center;
   justify-content: center;
   text-align: center;
-  gap: 10px;
+  gap: 8px;
   padding: 0 12px;
 }
 
@@ -33,7 +33,7 @@
   margin: 0;
   font-size: 34px;
   line-height: 1.15;
-  font-weight: 700;
+  font-weight: 600;
   overflow-wrap: break-word;
   max-width: 100%;
 }
@@ -41,16 +41,17 @@
 .rotating {
   margin: 0;
   min-height: 56px;
-  max-width: min(300px, 100%);
+  max-width: min(480px, 100%);
   font-size: 20px;
   line-height: 1.4;
   overflow-wrap: break-word;
 }
 
 .rotatingWord {
-  font-weight: 700;
+  font-weight: 600;
+  color: var(--mz-blue);
   opacity: 1;
-  transition: opacity 260ms ease;
+  transition: opacity 200ms var(--mz-ease);
 }
 
 /* Renders only when at least one reminder exists. Rises once per
@@ -62,16 +63,16 @@
   box-sizing: border-box;
   padding: 8px 16px 8px;
   border-radius: var(--mz-radius-card);
-  background: #fff;
+  background: var(--mz-surface);
   border: 1px solid var(--mz-border);
   box-shadow: var(--mz-shadow);
-  animation: coming-rise 240ms cubic-bezier(0.3, 1.1, 0.4, 1);
+  animation: coming-rise var(--mz-dur-enter) var(--mz-ease);
 }
 
 @keyframes coming-rise {
   from {
     opacity: 0;
-    transform: translateY(16px);
+    transform: translateY(12px);
   }
 
   to {
@@ -109,7 +110,7 @@
   cursor: pointer;
   min-height: 44px;
   padding: 0 12px;
-  border-radius: 12px;
+  border-radius: var(--mz-radius-control);
 }
 
 .comingUpClose {
@@ -122,14 +123,14 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #000;
+  color: var(--mz-ink);
 }
 
 .row {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 54px;
+  min-height: 56px;
   min-width: 0;
   padding: 0 4px;
   border-top: 1px solid var(--mz-border);
@@ -165,17 +166,6 @@
   padding: 0 12px;
   border-radius: 14px;
   font-size: 13px;
-}
-
-.pickedFile {
-  flex: none;
-  margin-bottom: 8px;
-  font-size: 13px;
-  color: var(--mz-secondary);
-  padding: 0 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* Mobile: composer docks to the column bottom. */

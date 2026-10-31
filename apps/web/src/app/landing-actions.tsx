@@ -11,6 +11,8 @@ import { Turnstile } from './turnstile';
 // returning users: plain Google OAuth with no session, linkIdentity when
 // one exists so the visitor's chats and reminders carry over.
 
+const errorStyle = { margin: '8px 0 0', fontSize: 14, lineHeight: '20px', color: 'var(--mz-error)', textAlign: 'center' } as const;
+
 function oauthError(friendly: string, detail: string): string {
   return process.env.NODE_ENV === 'production' ? friendly : `${friendly} (${detail})`;
 }
@@ -25,7 +27,7 @@ export function TryButton({ className }: { className: string }) {
   async function start(): Promise<void> {
     if (busy) return;
     if (siteKey && !token) {
-      setError('Complete the human check first, then try again.');
+      setError('Complete the human check, then try again');
       return;
     }
     setBusy(true);
@@ -34,7 +36,7 @@ export function TryButton({ className }: { className: string }) {
       await ensureAnonymousSession(supabaseBrowser().auth, token ?? undefined);
       router.push('/app');
     } catch (err) {
-      setError(oauthError('Could not start. Give it a minute and try again.', err instanceof Error ? err.message : String(err)));
+      setError(oauthError('Could not start. Try again in a moment', err instanceof Error ? err.message : String(err)));
       setBusy(false);
     }
   }
@@ -46,7 +48,7 @@ export function TryButton({ className }: { className: string }) {
         {busy ? 'Starting…' : 'Try it for free'}
       </button>
       {error ? (
-        <p role="alert" style={{ marginTop: 8, fontSize: 13 }}>
+        <p role="alert" style={errorStyle}>
           {error}
         </p>
       ) : null}
@@ -70,7 +72,7 @@ export function LoginButton({ className }: { className: string }) {
         ? await supabase.auth.linkIdentity({ provider: 'google', options: { redirectTo } })
         : await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
       if (res.error) {
-        setError(oauthError('Google sign-in did not start. Try again.', res.error.message));
+        setError(oauthError('Google sign-in did not start. Try again', res.error.message));
         setBusy(false);
         return;
       }
@@ -78,7 +80,7 @@ export function LoginButton({ className }: { className: string }) {
       if (url) window.location.assign(url);
       // Otherwise the client is already redirecting; stay busy.
     } catch (err) {
-      setError(oauthError('Google sign-in did not start. Try again.', err instanceof Error ? err.message : String(err)));
+      setError(oauthError('Google sign-in did not start. Try again', err instanceof Error ? err.message : String(err)));
       setBusy(false);
     }
   }
@@ -89,7 +91,7 @@ export function LoginButton({ className }: { className: string }) {
         {busy ? 'Connecting…' : 'Log in'}
       </button>
       {error ? (
-        <p role="alert" style={{ marginTop: 8, fontSize: 13 }}>
+        <p role="alert" style={errorStyle}>
           {error}
         </p>
       ) : null}

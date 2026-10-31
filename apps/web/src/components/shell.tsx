@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AlignLeft, SquarePen } from 'lucide-react';
 import { EvidenceProvider } from './evidence';
 import { Panel } from './panel';
 import { StoreProvider } from './store-context';
@@ -23,7 +24,7 @@ function TopBar({
   panelOpen: boolean;
 }) {
   // One wordmark per screen: while the panel (which carries its own
-  // wordmark) is open, the bar controls hide. They stay mounted so focus
+  // wordmark in the same spot) is open, the bar controls hide. They stay mounted so focus
   // returns to the menu button on close.
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
@@ -52,9 +53,7 @@ function TopBar({
         tabIndex={panelOpen ? -1 : undefined}
         className={`mz-icon-btn ${shell.menuBtn} ${shell.solidBtn} ${hidden}`}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
-          <path d="M4 8h16M4 16h10" />
-        </svg>
+        <AlignLeft size={20} strokeWidth={1.75} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -62,9 +61,7 @@ function TopBar({
         aria-label="New chat"
         className={`mz-icon-btn ${shell.newBtn} ${shell.solidBtn}`}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M12 5H8.5A3.5 3.5 0 005 8.5v7A3.5 3.5 0 008.5 19h7a3.5 3.5 0 003.5-3.5V12M17.5 4.5a1.8 1.8 0 012.5 2.5L12 15l-3.5.5L9 12z" />
-        </svg>
+        <SquarePen size={20} strokeWidth={1.75} aria-hidden="true" />
       </button>
     </div>
   );

@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowUp, Check, ChevronDown, Download, Loader2, X } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, CircleAlert, Download, Loader2, Quote, X } from 'lucide-react';
 import { DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, FIT_APPLY_LABEL, FIT_PARK_LABEL, PACK_OPEN_LABEL, TALKBACK_DONE_LABEL, TALKBACK_HELP_LABEL, TALKBACK_SNOOZE_LABEL, formatDueMessage, formatG1Prompt } from '@mizzou/core/voice';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
@@ -107,6 +107,8 @@ interface FeedItem {
   what?: string;
   conflicts?: G2Conflict[];
   lines?: string[];
+  pages?: Array<{ url: string; title: string }>;
+  languages?: string[];
   unreadable?: Array<{ url: string; reason: string }>;
   requirements?: { documents: RequirementDoc[]; eligibility: RequirementRule[] };
   plan?: PlanPayload;
@@ -153,40 +155,35 @@ function needsLook(confidence: string, needsHuman: boolean): boolean {
   return needsHuman || confidence === 'low';
 }
 
-// One compact row for a run of consecutive tool-status events: a spinner
-// while any step is active, then a one-line summary that expands on tap
-// into the per-step list. Each status id renders once — never repeated.
+// Progress line for a run of consecutive tool-status events. No box: one
+// quiet row with a spinner while a step is active, a check when done, and
+// the latest step label. Tap it to see every step. Each status id renders
+// once, never repeated.
 function ToolSteps({ items, grouped }: { items: Array<{ id: string; label?: string; state?: StatusState }>; grouped: boolean }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const activeItem = items.find((entry) => entry.state === 'active');
-  const doneCount = items.filter((entry) => entry.state === 'done').length;
-  const summary = activeItem
-    ? (activeItem.label ?? 'Working')
-    : `Finished ${items.length} step${items.length === 1 ? '' : 's'}`;
+  const failedItem = items.find((entry) => entry.state === 'failed');
+  const shown = activeItem ?? failedItem ?? items[items.length - 1];
+  const summary = shown?.label ?? 'Working';
   return (
-    <div className={grouped ? `${styles.toolSteps} ${styles.gapGroup}` : styles.toolSteps}>
-      <button
-        type="button"
-        className={styles.toolHead}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-      >
+    <div className={grouped ? `${styles.progress} ${styles.gapGroup}` : styles.progress}>
+      <button type="button" className={styles.progressHead} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         {activeItem ? (
           <Loader2 className={styles.spin} aria-label="working" />
+        ) : failedItem ? (
+          <CircleAlert className={styles.warnIcon} aria-label="needs attention" />
         ) : (
           <Check className={styles.checkIcon} aria-label="done" />
         )}
-        <span className={styles.toolSummary}>{summary}</span>
-        {doneCount > 0 && activeItem ? <span className={styles.toolCount}>{doneCount} done</span> : null}
-        <ChevronDown
-          className={open ? `${styles.toolChevron} ${styles.toolChevronOpen}` : styles.toolChevron}
-          aria-hidden="true"
-        />
+        <span className={styles.progressLabel}>{summary}</span>
+        {items.length > 1 ? (
+          <ChevronDown className={open ? `${styles.toolChevron} ${styles.toolChevronOpen}` : styles.toolChevron} aria-hidden="true" />
+        ) : null}
       </button>
-      {open ? (
-        <ul className={styles.toolList}>
+      {open && items.length > 1 ? (
+        <ul className={styles.progressList}>
           {items.map((entry) => (
-            <li key={entry.id} className={styles.toolStep}>
+            <li key={entry.id} className={styles.progressStep}>
               {entry.state === 'active' && <Loader2 className={styles.spin} aria-label="working" />}
               {entry.state === 'done' && <Check className={styles.checkIcon} aria-label="done" />}
               {entry.state === 'failed' && <X className={styles.failIcon} aria-label="failed" />}
@@ -244,6 +241,70 @@ function DraftCard({ item, onKeep, onEdit }: { item: FeedItem; onKeep: () => voi
   );
 }
 
+// Sources line shown after a scan: "Read 3 pages" with the page titles as
+// links underneath on tap. Replaces the old boxed "I read this page" card.
+function Sources({
+  pages,
+  languages,
+  unreadable,
+  fallback,
+  grouped,
+}: {
+  pages: Array<{ url: string; title: string }>;
+  languages: string[];
+  unreadable: Array<{ url: string; reason: string }>;
+  fallback: string | undefined;
+  grouped: boolean;
+}): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const count = pages.length;
+  const summary = count > 0 ? `Read ${count} ${count === 1 ? 'page' : 'pages'}` : (fallback ?? 'No page could be read');
+  return (
+    <div className={grouped ? `${styles.progress} ${styles.gapGroup}` : styles.progress}>
+      <button
+        type="button"
+        className={styles.progressHead}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        disabled={count === 0}
+      >
+        {count > 0 ? <Check className={styles.checkIcon} aria-hidden="true" /> : <CircleAlert className={styles.warnIcon} aria-hidden="true" />}
+        <span className={styles.progressLabel}>{summary}</span>
+        {count > 0 ? (
+          <ChevronDown className={open ? `${styles.toolChevron} ${styles.toolChevronOpen}` : styles.toolChevron} aria-hidden="true" />
+        ) : null}
+      </button>
+      {open && count > 0 ? (
+        <ul className={styles.progressList}>
+          {pages.map((p) => (
+            <li key={p.url} className={styles.progressStep}>
+              <a href={p.url} target="_blank" rel="noreferrer" className={styles.link}>
+                {p.title}
+              </a>
+            </li>
+          ))}
+          {languages.map((l) => (
+            <li key={l} className={styles.progressStep}>
+              <span>Read in {l}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {unreadable.map((u) => (
+        <p key={u.url} className={styles.progressNote}>
+          <CircleAlert className={styles.warnIcon} aria-hidden="true" />
+          <span>
+            One page would not open.{' '}
+            <a href={u.url} target="_blank" rel="noreferrer" className={styles.link}>
+              Open it
+            </a>
+          </span>
+        </p>
+      ))}
+    </div>
+  );
+}
+
 function ChatContent(): React.JSX.Element {
   const params = useParams<{ chatId: string }>();
   const router = useRouter();
@@ -288,16 +349,7 @@ function ChatContent(): React.JSX.Element {
             portalUrl: plan.portalUrl,
           }),
         });
-        if (!res.ok) {
-          let detail = 'Could not build the calendar file. Give it a minute and try again.';
-          try {
-            const data = (await res.json()) as { error?: unknown };
-            if (typeof data.error === 'string') detail = data.error;
-          } catch {
-            // Keep the default text when the body is not JSON.
-          }
-          throw new Error(detail);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -308,9 +360,8 @@ function ChatContent(): React.JSX.Element {
         a.remove();
         URL.revokeObjectURL(url);
       } catch (err) {
-        patch(itemId, {
-          planError: err instanceof Error ? err.message : 'Could not build the calendar file. Give it a minute and try again.',
-        });
+        console.error('[chat] calendar file failed:', err);
+        patch(itemId, { planError: 'I could not build the calendar file. Try again in a moment' });
       } finally {
         patch(itemId, { downloading: false });
       }
@@ -354,16 +405,7 @@ function ChatContent(): React.JSX.Element {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: plan.title, deadlines: plan.deadlines, items: plan.items, opens: plan.opensIso }),
         });
-        if (!res.ok) {
-          let detail = 'Could not sync reminders. Give it a minute and try again.';
-          try {
-            const data = (await res.json()) as { error?: unknown };
-            if (typeof data.error === 'string') detail = data.error;
-          } catch {
-            // Keep the default text when the body is not JSON.
-          }
-          throw new Error(detail);
-        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         patch(itemId, { approved: true });
         if (isGuest) {
           // No Calendar grant exists yet: ask for it now, with the Calendar
@@ -378,9 +420,8 @@ function ChatContent(): React.JSX.Element {
           await syncPlan(itemId, plan);
         }
       } catch (err) {
-        patch(itemId, {
-          planError: err instanceof Error ? err.message : 'Could not sync reminders. Give it a minute and try again.',
-        });
+        console.error('[chat] reminder sync failed:', err);
+        patch(itemId, { planError: 'I could not save your reminders. Try again in a moment' });
       } finally {
         patch(itemId, { approving: false });
       }
@@ -466,7 +507,7 @@ function ChatContent(): React.JSX.Element {
             id: `g1-${Date.now()}`,
             kind: 'g1',
             program: {
-              name: card.name ?? 'Unknown program',
+              name: card.name ?? 'This program',
               unit: card.unit ?? '',
               institution: card.institution ?? '',
               portal_url: card.portal_url ?? null,
@@ -521,6 +562,8 @@ function ChatContent(): React.JSX.Element {
         text?: string;
         lines?: string[];
         unreadable?: Array<{ url: string; reason: string }>;
+        pages?: Array<{ url: string; title: string }>;
+        languages?: string[];
       };
       const toDoc = (d: RequirementDoc & { evidence_quote?: string; source_url?: string }): RequirementDoc => ({
         ...d,
@@ -615,6 +658,8 @@ function ChatContent(): React.JSX.Element {
             id: `coverage-${Date.now()}`,
             kind: 'coverage',
             lines: payload.lines as string[],
+            pages: Array.isArray(payload.pages) ? (payload.pages as Array<{ url: string; title: string }>) : [],
+            languages: Array.isArray(payload.languages) ? (payload.languages as string[]) : [],
             unreadable: Array.isArray(payload.unreadable) ? payload.unreadable : [],
           },
         ]);
@@ -644,7 +689,7 @@ function ChatContent(): React.JSX.Element {
     } catch {
       setFeed((prev) => [
         ...prev,
-        { id: `err-${Date.now()}`, kind: 'error', text: 'Something went wrong on my side. Give it a minute and try again.' },
+        { id: `err-${Date.now()}`, kind: 'error', text: 'I could not continue that step. Try again in a moment.' },
       ]);
     } finally {
       leaveStream();
@@ -679,7 +724,7 @@ function ChatContent(): React.JSX.Element {
     } catch {
       setFeed((prev) => [
         ...prev,
-        { id: `err-${Date.now()}`, kind: 'error', text: 'Something went wrong on my side. Give it a minute and try again.' },
+        { id: `err-${Date.now()}`, kind: 'error', text: 'I could not send that. Try again in a moment.' },
       ]);
     } finally {
       leaveStream();
@@ -896,11 +941,9 @@ function ChatContent(): React.JSX.Element {
                     </div>
                   )}
                   {item.decision === 'yes' && (
-                    <div className={styles.g1Done}>
-                      <p className={styles.g1DoneText}>
-                        <Check className={styles.checkIcon} aria-label="confirmed" /> Confirmed. Here&apos;s what they ask for.
-                      </p>
-                    </div>
+                    <p className={styles.g1DoneText}>
+                      <Check className={styles.checkIcon} aria-label="confirmed" /> Confirmed
+                    </p>
                   )}
                   {item.decision === 'no' && (
                     <p className={styles.g1No}>No problem — paste a different link and I&apos;ll check that one.</p>
@@ -947,18 +990,14 @@ function ChatContent(): React.JSX.Element {
             }
             if (item.kind === 'coverage' && item.lines) {
               return (
-                <div key={item.id} className={`${styles.card} ${styles.gapGroup}`}>
-                  {item.lines.map((line, i) => (
-                    <p key={i} className={styles.coverageLine}>
-                      {line}
-                    </p>
-                  ))}
-                  {(item.unreadable ?? []).map((u) => (
-                    <a key={u.url} href={u.url} target="_blank" rel="noreferrer" className={`${styles.link} ${styles.coverageOpen}`}>
-                      Open the page
-                    </a>
-                  ))}
-                </div>
+                <Sources
+                  key={item.id}
+                  pages={item.pages ?? []}
+                  languages={item.languages ?? []}
+                  unreadable={item.unreadable ?? []}
+                  fallback={item.lines[0]}
+                  grouped={i > 0}
+                />
               );
             }
             if (item.kind === 'fit' && item.fit) {
@@ -990,11 +1029,7 @@ function ChatContent(): React.JSX.Element {
                       <ul className={styles.reqList}>
                         {fit.stretch.map((line, i) => (
                           <li key={i} className={styles.reqItem}>
-                            <span aria-label="needs a look" className={styles.warnBadge}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
-                                <path d="M12 5v10M12 19v0.5" />
-                              </svg>
-                            </span>
+                            <CircleAlert className={styles.warnIcon} aria-label="needs a look" />
                             <span>{line}</span>
                           </li>
                         ))}
@@ -1007,11 +1042,7 @@ function ChatContent(): React.JSX.Element {
                       <ul className={styles.reqList}>
                         {fit.missing.map((line, i) => (
                           <li key={i} className={styles.reqItem}>
-                            <span aria-label="needs a look" className={styles.warnBadge}>
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
-                                <path d="M12 5v10M12 19v0.5" />
-                              </svg>
-                            </span>
+                            <CircleAlert className={styles.warnIcon} aria-label="needs a look" />
                             <span>{line}</span>
                           </li>
                         ))}
@@ -1071,11 +1102,7 @@ function ChatContent(): React.JSX.Element {
                           return (
                             <li key={i} className={styles.reqItem}>
                               {needsLook(d.confidence, d.needs_human) ? (
-                                <span aria-label="needs a look" className={styles.warnBadge}>
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
-                                    <path d="M12 5v10M12 19v0.5" />
-                                  </svg>
-                                </span>
+                                <CircleAlert className={styles.warnIcon} aria-label="needs a look" />
                               ) : (
                                 <Check className={styles.checkIcon} aria-label="clear" />
                               )}
@@ -1092,6 +1119,7 @@ function ChatContent(): React.JSX.Element {
                                         select({ title: d.name, quote: d.evidenceQuote as string, sourceUrl: d.sourceUrl ?? null });
                                       }}
                                     >
+                                      <Quote className={styles.evidenceIcon} aria-hidden="true" />
                                       Where I found this
                                     </button>
                                   </span>
@@ -1111,11 +1139,7 @@ function ChatContent(): React.JSX.Element {
                           return (
                             <li key={i} className={styles.reqItem}>
                               {needsLook(e.confidence, e.needs_human) ? (
-                                <span aria-label="needs a look" className={styles.warnBadge}>
-                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
-                                    <path d="M12 5v10M12 19v0.5" />
-                                  </svg>
-                                </span>
+                                <CircleAlert className={styles.warnIcon} aria-label="needs a look" />
                               ) : (
                                 <Check className={styles.checkIcon} aria-label="clear" />
                               )}
@@ -1130,6 +1154,7 @@ function ChatContent(): React.JSX.Element {
                                         select({ title: e.rule, quote: e.evidenceQuote as string, sourceUrl: e.sourceUrl ?? null });
                                       }}
                                     >
+                                      <Quote className={styles.evidenceIcon} aria-hidden="true" />
                                       Where I found this
                                     </button>
                                   </span>
@@ -1191,7 +1216,7 @@ function ChatContent(): React.JSX.Element {
                         }}
                         className={styles.btnPrimary}
                       >
-                        {item.approving === true ? 'Syncing…' : 'Approve & Sync'}
+                        {item.approving === true ? 'Syncing…' : 'Approve and sync'}
                       </button>
                     )}
                       {item.approved === true && item.sync === 'synced' && (
@@ -1365,7 +1390,7 @@ function ChatContent(): React.JSX.Element {
 
 export default function ConversationPage(): React.JSX.Element {
   return (
-    <Suspense fallback={<div className={styles.loadingFallback}>Loading chat...</div>}>
+    <Suspense fallback={<div className={styles.loadingFallback}>Loading</div>}>
       <ChatContent />
     </Suspense>
   );

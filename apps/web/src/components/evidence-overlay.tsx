@@ -1,5 +1,7 @@
 'use client';
 
+import { X } from 'lucide-react';
+
 import { useEffect, useRef } from 'react';
 import { useEvidence } from './evidence';
 import styles from './evidence-overlay.module.css';
@@ -87,9 +89,7 @@ export function EvidenceOverlay(): React.JSX.Element | null {
         <div className={styles.head}>
           <p className={styles.title}>{selected.title}</p>
           <button type="button" ref={closeRef} aria-label="Close evidence" className={styles.close} onClick={clear}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
+            <X size={20} strokeWidth={1.75} aria-hidden="true" />
           </button>
         </div>
         <blockquote className={styles.quote}>&ldquo;{selected.quote}&rdquo;</blockquote>

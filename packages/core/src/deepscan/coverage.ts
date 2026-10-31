@@ -13,6 +13,10 @@ export interface CoverageInput {
 
 export interface CoveragePayload {
   lines: string[];
+  /** Pages that were read, for the sources list in the UI. */
+  pages: Array<{ url: string; title: string }>;
+  /** Non-English languages that were read, for the sources list. */
+  languages: string[];
   unreadable: Array<{ url: string; reason: string }>;
 }
 
@@ -27,5 +31,6 @@ export function buildCoveragePayload(input: CoverageInput): CoveragePayload {
       lines.push(sayLanguageRead(lang));
     }
   }
-  return { lines, unreadable: input.unreadable };
+  const otherLanguages = input.languages.filter((l) => l.trim() !== '' && l.toLowerCase() !== 'en');
+  return { lines, languages: otherLanguages, pages: input.pagesRead.map((p) => ({ url: p.url, title: p.title || p.url })), unreadable: input.unreadable };
 }

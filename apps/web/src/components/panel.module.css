@@ -1,14 +1,15 @@
-/* Left panel drawer + log-out modal. meta.ai style: white surfaces,
-   1px borders, small shadow. No blur, no glass. */
+/* Left panel drawer. White surface, hairline borders, small neutral shadow.
+   The drawer sits inside a 28px overlay with 16px padding, so inner radii
+   are 12. Rows are 44 tall for touch. Values sit on the 4px scale. */
 
 .drawer {
   box-sizing: border-box;
-  padding: 58px 16px 30px;
+  padding: calc(8px + env(safe-area-inset-top, 0px)) 16px 32px;
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  background: #fff;
+  background: var(--mz-surface);
   border-right: 1px solid var(--mz-border);
 }
 
@@ -16,19 +17,21 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px 0 8px;
   height: 44px;
+  margin-bottom: 8px;
 }
 
 .wordmark {
-  font-size: 38px;
+  font-size: 40px;
+  padding-left: 8px;
+  pointer-events: none;
 }
 
 .roundBtn {
   width: 44px;
   height: 44px;
   border-radius: 22px;
-  background: #fff;
+  background: var(--mz-surface);
   border: 1px solid var(--mz-border);
   box-shadow: var(--mz-shadow);
   display: flex;
@@ -38,24 +41,17 @@
   color: var(--mz-ink);
 }
 
-.sectionRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 8px 6px;
-}
-
 .newChatRow {
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 12px;
   width: 100%;
   min-height: 52px;
-  padding: 0 14px;
-  margin: 4px 0 0;
+  padding: 0 16px;
   border: 1px solid var(--mz-border);
-  border-radius: 16px;
-  background: #fff;
+  border-radius: var(--mz-radius-control);
+  background: var(--mz-surface);
   box-shadow: var(--mz-shadow);
   font-family: inherit;
   font-size: 16px;
@@ -63,18 +59,70 @@
   color: var(--mz-ink);
   cursor: pointer;
   text-align: left;
-  box-sizing: border-box;
+  transition: background-color var(--mz-dur-fast) var(--mz-ease);
+}
+
+@media (hover: hover) {
+  .newChatRow:hover {
+    background: var(--mz-hover);
+  }
+}
+
+.newChatLabel {
+  flex: 1;
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin-top: 12px;
+  padding: 0 12px;
+  border: 1px solid var(--mz-border);
+  border-radius: var(--mz-radius-control);
+  background: var(--mz-surface);
+}
+
+.searchIcon {
+  flex: none;
+  color: var(--mz-secondary);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: inherit;
+  font-size: 16px;
+  color: var(--mz-ink);
+  height: 42px;
+}
+
+.searchInput::placeholder {
+  color: var(--mz-secondary);
+}
+
+/* Section labels: 24 above, 8 below, so a label sits with its own items. */
+.sectionRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 8px 8px;
 }
 
 .sectionRowTight {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 8px 4px;
+  padding: 16px 8px 0;
 }
 
 .sectionLabel {
   font-size: 13px;
+  line-height: 16px;
   font-weight: 600;
   color: var(--mz-secondary);
 }
@@ -83,21 +131,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 22px;
-  padding: 0 7px;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 8px;
   box-sizing: border-box;
-  border-radius: 11px;
+  border-radius: 12px;
   background: var(--mz-muted);
   font-size: 12px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .card {
   box-sizing: border-box;
   padding: 4px 12px;
-  border-radius: var(--mz-radius-card);
-  background: #fff;
+  border-radius: var(--mz-radius-control);
+  background: var(--mz-surface);
   border: 1px solid var(--mz-border);
   box-shadow: var(--mz-shadow);
 }
@@ -105,7 +154,7 @@
 .reminderRow {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-height: 56px;
   min-width: 0;
   padding: 0 4px;
@@ -142,16 +191,16 @@
 
 .reminderPill {
   flex: none;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 13px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
   font-size: 12px;
 }
 
 .clearAll {
   border: 0;
   background: transparent;
-  padding: 6px 0 6px 12px;
+  padding: 0 0 0 12px;
   font-family: inherit;
   font-size: 13px;
   font-weight: 600;
@@ -166,25 +215,53 @@
   gap: 2px;
 }
 
+.groupLabelRow {
+  padding: 8px 12px 4px;
+}
+
+.groupLabelRow .sectionLabel {
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .chatBase {
   display: flex;
   align-items: center;
-  gap: 8px;
   width: 100%;
   box-sizing: border-box;
   min-height: 44px;
   padding: 0 12px;
   border: 0;
-  border-radius: 14px;
+  border-radius: var(--mz-radius-control);
   background: transparent;
   font-family: inherit;
   font-size: 15px;
   color: var(--mz-ink);
   cursor: pointer;
   text-align: left;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  transition: background-color var(--mz-dur-fast) var(--mz-ease);
+}
+
+@media (hover: hover) {
+  .chatBase:hover {
+    background: var(--mz-hover);
+  }
+}
+
+.chatActive {
+  composes: chatBase;
+  background: var(--mz-muted);
+  font-weight: 500;
+}
+
+@media (hover: hover) {
+  .chatActive:hover {
+    background: var(--mz-muted);
+  }
+}
+
+.chatRow {
+  composes: chatBase;
 }
 
 .chatTitle {
@@ -195,98 +272,15 @@
   text-overflow: ellipsis;
 }
 
-.chatArrow {
-  flex: none;
-  color: var(--mz-secondary);
-}
-
-.chatActive .chatArrow {
-  color: var(--mz-ink);
-}
-
-.groupLabelRow {
-  padding: 10px 12px 2px;
-}
-
-.newChatLabel {
-  flex: 1;
-}
-
-.searchRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 44px;
-  margin-top: 10px;
-  padding: 0 12px;
-  border: 1px solid var(--mz-border);
-  border-radius: 14px;
-  background: #fff;
-}
-
-.searchInput {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  font-family: inherit;
-  font-size: 15px;
-  color: var(--mz-ink);
-  height: 42px;
-}
-
-.searchInput::placeholder {
-  color: var(--mz-secondary);
-}
-
-.footer {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 4px 0;
-}
-
-.gearBtn {
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 44px;
-  border-radius: 22px;
-  background: #fff;
-  border: 1px solid var(--mz-border);
-  box-shadow: var(--mz-shadow);
-  cursor: pointer;
-  color: var(--mz-ink);
-}
-
-.chatActive {
-  composes: chatBase;
-  background: var(--mz-muted);
-  font-weight: 500;
-}
-
-.chatRow {
-  composes: chatBase;
-}
-
-.emptyNote {
-  font-size: 13px;
-  color: var(--mz-secondary);
-  padding: 0 12px;
-}
-
 .undoToast {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-top: 8px;
-  padding: 0 6px 0 12px;
+  padding: 0 4px 0 12px;
   min-height: 44px;
-  border-radius: 14px;
-  background: #fff;
+  border-radius: var(--mz-radius-control);
+  background: var(--mz-surface);
   border: 1px solid var(--mz-border);
   box-shadow: var(--mz-shadow);
   font-size: 14px;
@@ -306,58 +300,21 @@
 
 .spacer {
   flex: 1;
+  min-height: 24px;
 }
 
-.bottomCard {
-  box-sizing: border-box;
-  padding: 2px 8px;
-  border-radius: 26px;
-  background: #fff;
-  border: 1px solid var(--mz-border);
-  box-shadow: var(--mz-shadow);
-}
-
-.settingsRow {
+.footer {
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
-  min-height: 52px;
-  padding: 0 6px;
-  border: 0;
-  background: transparent;
-  font-family: inherit;
-  color: var(--mz-ink);
-  cursor: pointer;
-  text-align: left;
-}
-
-.settingsLabel {
-  flex: 1;
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.userRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  min-height: 60px;
-  padding: 0 6px;
-  border: 0;
-  background: transparent;
-  font-family: inherit;
-  color: var(--mz-ink);
-  cursor: pointer;
-  text-align: left;
+  padding: 12px 4px 0;
 }
 
 .avatar {
   flex: none;
-  width: 38px;
-  height: 38px;
-  border-radius: 19px;
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
   background: var(--mz-muted);
   display: flex;
   align-items: center;
@@ -371,17 +328,38 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
 .userName {
   font-size: 16px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .userSub {
   font-size: 13px;
   color: var(--mz-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gearBtn {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background: var(--mz-surface);
+  border: 1px solid var(--mz-border);
+  box-shadow: var(--mz-shadow);
+  cursor: pointer;
+  color: var(--mz-ink);
 }
 
 .saveLink {
@@ -401,52 +379,4 @@
 .saveLink:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-/* Log-out modal: white card, larger shadow, light scrim. */
-.modalScrim {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.24);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 45px;
-  z-index: 70;
-  border: 0;
-  cursor: default;
-}
-
-.modal {
-  width: 100%;
-  max-width: 300px;
-  box-sizing: border-box;
-  padding: 24px 20px 20px;
-  border-radius: var(--mz-radius-card);
-  text-align: center;
-  background: #fff;
-  border: 1px solid var(--mz-border);
-  box-shadow: var(--mz-shadow-large);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.modalTitle {
-  margin: 0;
-  font-size: 20px;
-  line-height: 1.25;
-  font-weight: 700;
-}
-
-.modalSub {
-  margin: 0 0 12px;
-  font-size: 15px;
-  line-height: 1.45;
-  color: var(--mz-secondary);
-}
-
-.modalButton {
-  height: 50px;
-  font-size: 17px;
 }

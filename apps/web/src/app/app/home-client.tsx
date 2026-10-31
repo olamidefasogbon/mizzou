@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Composer } from '@/components/chrome';
 import { useStore } from '@/components/store-context';
@@ -9,8 +10,9 @@ import styles from './home.module.css';
 
 // Home. Matched files: docs/design/html/Chat.html (greeting, Coming up,
 // composer) and docs/design/html/PlusMenu.html (upload overlay, in chrome).
-// Greeting and Coming up render only real store rows: a fresh browser sees
-// "Howdy" and no Coming up card. No demo data in app code.
+// Greeting uses the first name only; a fresh browser sees "Howdy" and no
+// Coming up card. No demo data in app code. No attachment control: uploads
+// are not wired.
 //
 // Coming up (docs/design/UI_CORRECTIONS.md section 3): renders only when at
 // least one reminder exists. The dismissal version arrives as a prop, read
@@ -37,13 +39,14 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
   const [wordIndex, setWordIndex] = useState(0);
   const [wordVisible, setWordVisible] = useState(true);
   const [input, setInput] = useState('');
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [pickedFile, setPickedFile] = useState<string | null>(null);
+  const firstName = name?.trim().split(/\s+/)[0] ?? '';
+  const typing = input.trim().length > 0;
   // Known before first paint: the server read it from the request cookie.
   const [dismissed, setDismissed] = useState<string | null>(dismissedServer);
 
   useEffect(() => {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // The word rotates only while the box is empty and motion is welcome.
+    if (typing || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const timer = setInterval(() => {
       setWordVisible(false);
       setTimeout(() => {
@@ -52,7 +55,7 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
       }, 260);
     }, 2800);
     return () => clearInterval(timer);
-  }, []);
+  }, [typing]);
 
   const send = () => {
     const text = input.trim();
@@ -81,7 +84,7 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
     <>
       <div className={styles.body}>
         <div className={styles.greeting}>
-          <p className={styles.hello}>{name ? `Howdy, ${name}` : 'Howdy'}</p>
+          <p className={styles.hello}>{firstName ? `Howdy, ${firstName}` : 'Howdy'}</p>
           <p className={styles.rotating}>
             What{' '}
             <span className={`mz-fade ${styles.rotatingWord}`} style={{ opacity: wordVisible ? 1 : 0 }}>
@@ -100,9 +103,7 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
                   See all
                 </button>
                 <button type="button" aria-label="Dismiss Coming up" className={styles.comingUpClose} onClick={dismissComingUp}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
-                    <path d="M6 6l12 12M18 6L6 18" />
-                  </svg>
+                  <X size={20} strokeWidth={1.75} aria-hidden="true" />
                 </button>
               </span>
             </div>
@@ -117,22 +118,10 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
             ))}
           </div>
         ) : null}
-        {pickedFile ? <p className={styles.pickedFile}>Attached: {pickedFile} (upload sends in M7)</p> : null}
       </div>
 
       <div className={styles.composer}>
-        <Composer
-          value={input}
-          onChange={setInput}
-          onSend={send}
-          menuOpen={menuOpen}
-          onToggleMenu={() => setMenuOpen((v) => !v)}
-          onPick={(f) => {
-            setPickedFile(f.name);
-            setMenuOpen(false);
-          }}
-          docked={false}
-        />
+        <Composer value={input} onChange={setInput} onSend={send} />
       </div>
     </>
   );

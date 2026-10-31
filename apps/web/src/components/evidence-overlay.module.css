@@ -27,7 +27,7 @@
   max-height: 60dvh;
   overflow-y: auto;
   border-radius: 28px 28px 0 0;
-  background: #fff;
+  background: var(--mz-surface);
   border-top: 1px solid var(--mz-border);
   box-shadow: var(--mz-shadow-large);
   padding: 8px 20px calc(20px + env(safe-area-inset-bottom, 0px));
@@ -72,7 +72,7 @@
   margin: 0;
   font-size: 17px;
   line-height: 1.3;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .close {
@@ -86,7 +86,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: #000;
+  color: var(--mz-ink);
 }
 
 .quote {

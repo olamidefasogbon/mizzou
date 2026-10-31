@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { BudgetExceededError, BudgetGuard, InMemoryUsageStore } from './budget.js';
 import { costForCall } from './pricing.js';
-import { responsesCall } from './responses.js';
+import { responsesCall, streamResponsesCall } from './responses.js';
 
 function freshGuard(): BudgetGuard {
   return new BudgetGuard(new InMemoryUsageStore(), {
@@ -63,6 +63,52 @@ describe('responsesCall budget accounting', () => {
     const a = await responsesCall(opts);
     const b = await responsesCall(opts);
     expect(guard.spendToday('u1')).toBeCloseTo(a.costUsd + b.costUsd, 10);
+  });
+
+  it('emits each output item once when the completed envelope repeats done items', async () => {
+    const reasoning = { type: 'reasoning', id: 'rs_dup:rs_dup', summary: [], status: 'completed' };
+    const message = {
+      type: 'message', id: 'msg_1', role: 'assistant', content: [{ type: 'output_text', text: 'hi' }],
+    };
+    const frames = [
+      { type: 'response.output_item.done', item: reasoning },
+      { type: 'response.output_item.done', item: message },
+      {
+        type: 'response.completed',
+        response: {
+          id: 'resp_1',
+          model: 'muse-spark-1.3',
+          usage: { input_tokens: 10, output_tokens: 5 },
+          output: [reasoning, message],
+        },
+      },
+    ];
+    const text = frames.map((f) => `data: ${JSON.stringify(f)}\n\n`).join('');
+    const body = new ReadableStream({
+      start(c) {
+        c.enqueue(new TextEncoder().encode(text));
+        c.close();
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, body })));
+    const guard = freshGuard();
+    const out = await streamResponsesCall({ model: 'muse-spark-1.3', input: 'hi', budgetGuard: guard, userId: 'u1' });
+    expect(out.items.map((i) => i.id)).toEqual(['rs_dup:rs_dup', 'msg_1']);
+  });
+
+  it('a 400 carries the full provider message and its status', async () => {
+    const providerBody = JSON.stringify({
+      error: {
+        message: 'Duplicate item found with id `rs_x:rs_y`. Remove duplicate items from your input',
+        type: 'invalid_request_error',
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 400, text: async () => providerBody })));
+    const err = await responsesCall({ model: 'muse-spark-1.3', input: 'x', budgetGuard: freshGuard(), userId: 'u1' }).catch(
+      (e: unknown) => e,
+    );
+    expect((err as { status?: number }).status).toBe(400);
+    expect((err as Error).message).toContain('Duplicate item found with id `rs_x:rs_y`');
   });
 
   it('refuses an over-budget user without fetching', async () => {

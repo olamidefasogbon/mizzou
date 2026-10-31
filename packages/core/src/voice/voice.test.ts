@@ -11,6 +11,11 @@ import {
   PACK_TITLE,
   PACK_OPEN_LABEL,
   CHECK_AGAINST_PORTAL,
+  OPENING_CHECK_AGAIN,
+  TALKBACK_DONE_LABEL,
+  TALKBACK_HELP_LABEL,
+  TALKBACK_SNOOZE_LABEL,
+  formatDueMessage,
   FIT_QUESTION,
   SAY_GOT_IT,
   SAY_ON_IT,
@@ -90,5 +95,15 @@ describe('draft and pack voice (PROMPT.md 7.5, 7.6)', () => {
     for (const reply of [DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, PACK_TITLE, PACK_OPEN_LABEL]) {
       expect(hasBannedTerm(reply)).toBe(false);
     }
+  });
+});
+
+describe('talk-back and check-again voice (PROMPT.md 6.5, 7.4)', () => {
+  it('locks the chip labels and the due message shape', () => {
+    expect(TALKBACK_DONE_LABEL).toBe('Done');
+    expect(TALKBACK_SNOOZE_LABEL).toBe('Snooze');
+    expect(TALKBACK_HELP_LABEL).toBe('Help me');
+    expect(formatDueMessage('Statement of purpose', 'due', 'in 6 days')).toBe('Statement of purpose — due in 6 days.');
+    expect(OPENING_CHECK_AGAIN).toContain('check again');
   });
 });

@@ -28,7 +28,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   } catch {
     return badRequest('Invalid JSON body.');
   }
-  const writes = buildPlanWrites((body ?? {}) as { title?: unknown; deadlines?: unknown; items?: unknown });
+  const writes = buildPlanWrites((body ?? {}) as { title?: unknown; deadlines?: unknown; items?: unknown; opens?: unknown });
   if ('error' in writes) return badRequest(writes.error);
   const db = await repo();
   const open = await db.reminders.list(userId);
@@ -43,4 +43,40 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
   await db.syncLedger.upsert(userId, writes.ledger);
   return NextResponse.json({ created, synced: writes.ledger.length });
+}
+
+// PATCH /api/reminders — follow through from a talk-back chip (PROMPT.md
+// 7.4). Body: { id, action: 'done' | 'snooze' }. Done closes the reminder;
+// snooze pushes it out 7 days. Unknown ids fail closed with a 404.
+export async function PATCH(req: Request): Promise<NextResponse> {
+  let userId: string;
+  try {
+    ({ userId } = await resolveUser());
+  } catch (err) {
+    if (err instanceof AuthRequiredError) {
+      return NextResponse.json({ error: 'Give it a minute and try again.' }, { status: 503 });
+    }
+    throw err;
+  }
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body.' }, { status: 400 });
+  }
+  const record = (body ?? {}) as { id?: unknown; action?: unknown };
+  if (typeof record.id !== 'string' || record.id.length === 0) {
+    return NextResponse.json({ error: 'id is required.' }, { status: 400 });
+  }
+  if (record.action !== 'done' && record.action !== 'snooze') {
+    return NextResponse.json({ error: "action must be 'done' or 'snooze'." }, { status: 400 });
+  }
+  const db = await repo();
+  try {
+    if (record.action === 'done') await db.reminders.setDone(userId, record.id);
+    else await db.reminders.snooze(userId, record.id);
+  } catch {
+    return NextResponse.json({ error: 'Could not find that reminder.' }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true });
 }

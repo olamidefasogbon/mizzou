@@ -33,3 +33,12 @@ describe('upgradeToGoogle', () => {
     assert.deepEqual(out, { error: 'Google sign-in did not start. Try again.' });
   });
 });
+
+describe('incremental calendar consent', () => {
+  it('passes the calendar scope only when asked', async () => {
+    const seen: unknown[] = [];
+    const out = await upgradeToGoogle(mockAuth({ url: 'https://accounts.google/x' }, seen), 'https://mizzou.app', '/app/c/1', 'calendar-scope');
+    assert.deepEqual(out, { url: 'https://accounts.google/x' });
+    assert.deepEqual(seen, [{ provider: 'google', options: { redirectTo: 'https://mizzou.app/auth/callback?next=%2Fapp%2Fc%2F1', scopes: 'calendar-scope' } }]);
+  });
+});

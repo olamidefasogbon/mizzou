@@ -112,6 +112,7 @@ export const CONVERSATION_TOOL_DEFS: ResponsesFunctionTool[] = [
         deadlines: { type: 'array', items: { type: 'string' } },
         items: { type: 'array', items: { type: 'string' } },
         portalUrl: { type: ['string', 'null'] },
+        opens: { type: ['string', 'null'] },
       },
       required: ['title', 'deadlines', 'items'],
     },
@@ -834,6 +835,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         deadlines: Array.isArray(args['deadlines']) ? (args['deadlines'] as unknown[]).filter((d): d is string => typeof d === 'string') : [],
         items: Array.isArray(args['items']) ? (args['items'] as unknown[]).filter((d): d is string => typeof d === 'string') : [],
         portalUrl: str(args['portalUrl']),
+        opensIso: str(args['opens']),
       };
       send({ t: 'card', id: `conv-${run.id}-t${run.turnCount}-plan`, kind: 'plan', payload });
       return { output: { proposed: true } };

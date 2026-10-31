@@ -259,6 +259,22 @@ describe('supabase repo behind the interface', () => {
     assert.equal(listed[0]?.dueAt, '2026-11-05T00:00:00.000Z');
   });
 
+  it('marks reminders done and snoozes them a week out', async () => {
+    const { repo } = repoWithSeed();
+    const a = await repo.reminders.create('user-a', { title: 'Passport', sub: 'Not finished', pill: 'in 3d', dueAt: '2026-11-05T00:00:00.000Z' });
+    await repo.reminders.setDone('user-a', a.id);
+    assert.deepEqual(await repo.reminders.list('user-a'), []);
+    const b = await repo.reminders.create('user-a', { title: 'Fees', sub: 'Pay', pill: 'in 2d', dueAt: '2026-11-04T00:00:00.000Z' });
+    const before = Date.now();
+    await repo.reminders.snooze('user-a', b.id);
+    const listed = await repo.reminders.list('user-a');
+    assert.equal(listed.length, 1);
+    const due = Date.parse(listed[0]?.dueAt ?? '');
+    assert.ok(due - before > 6.9 * 86400000 && due - before < 7.1 * 86400000);
+    await assert.rejects(repo.reminders.setDone('user-b', b.id), /Could not update/);
+    await assert.rejects(repo.reminders.snooze('user-a', 'missing-id'), /Could not snooze/);
+  });
+
   it('chats support ensure, rename, clear with undo, and isolation', async () => {
     const { repo } = repoWithSeed();
     await repo.chats.ensure('chat-1', 'user-a', 'First chat');

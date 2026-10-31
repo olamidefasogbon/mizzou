@@ -28,6 +28,10 @@ export interface Repo {
     create(userId: string, input: ReminderInput): Promise<Reminder>;
     /** Delete every reminder for a user. Returns the deleted count. */
     clear(userId: string): Promise<number>;
+    /** Mark one reminder done. Throws when the id is not yours. */
+    setDone(userId: string, id: string): Promise<void>;
+    /** Push one reminder out by N days (default 7). Throws when the id is not yours. */
+    snooze(userId: string, id: string, days?: number): Promise<void>;
   };
   chats: {
     list(userId: string): Promise<ChatSummary[]>;
@@ -217,6 +221,15 @@ export function supabaseRepo(db: DbClient): Repo {
         if (!res.data || res.error) throw new Error('Could not save the reminder.');
         return toReminder(res.data as RunRow, userId);
       },
+      setDone: async (userId, id) => {
+        const res = await db.from('reminders').update({ done: true }).eq('user_id', userId).eq('id', id).select('id');
+        if (res.error || (res.data?.length ?? 0) === 0) throw new Error('Could not update the reminder.');
+      },
+      snooze: async (userId, id, days = 7) => {
+        const due = new Date(Date.now() + days * 86400000).toISOString();
+        const res = await db.from('reminders').update({ due_at: due, snoozed_until: due }).eq('user_id', userId).eq('id', id).select('id');
+        if (res.error || (res.data?.length ?? 0) === 0) throw new Error('Could not snooze the reminder.');
+      },
       clear: async (userId) => {
         const res = await db.from('reminders').delete().eq('user_id', userId).select('id');
         if (res.error) throw new Error('Could not delete reminders.');
@@ -341,6 +354,16 @@ export function memoryRepo(): Repo {
         };
         reminderRows.set(row.id, row);
         return row;
+      },
+      setDone: async (userId, id) => {
+        const row = reminderRows.get(id);
+        if (!row || row.userId !== userId) throw new Error('Could not update the reminder.');
+        reminderRows.set(id, { ...row, done: true });
+      },
+      snooze: async (userId, id, days = 7) => {
+        const row = reminderRows.get(id);
+        if (!row || row.userId !== userId) throw new Error('Could not snooze the reminder.');
+        reminderRows.set(id, { ...row, dueAt: new Date(Date.now() + days * 86400000).toISOString() });
       },
       clear: async (userId) => {
         let n = 0;

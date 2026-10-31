@@ -20,7 +20,8 @@ describe('buildPlanWrites', () => {
   it('writes one dated reminder plus one deterministic ledger row per deadline', () => {
     const out = buildPlanWrites({ title: 'MS', deadlines: ['2026-12-01T00:00:00.000Z'], items: [] });
     assert.ok(!('error' in out));
-    assert.equal(out.reminders.length, 1);
+    assert.equal(out.reminders.length, 2);
+    assert.deepEqual(out.reminders.map((r) => r.kind), ['custom', 'check_again']);
     assert.equal(out.reminders[0]?.dueAt, '2026-12-01T00:00:00.000Z');
     assert.equal(out.reminders[0]?.kind, 'custom');
     assert.equal(out.ledger.length, 1);
@@ -35,7 +36,7 @@ describe('buildPlanWrites', () => {
       items: Array.from({ length: 80 }, (_, i) => `task ${i}`),
     });
     assert.ok(!('error' in out));
-    assert.equal(out.reminders.length, 60);
+    assert.equal(out.reminders.length, 61);
     assert.equal(out.ledger.length, 10);
   });
 
@@ -66,7 +67,7 @@ describe('approve and sync contract', () => {
 
   it('guests link Google at sync time and return to the chat', () => {
     assert.match(page, /isGuest/);
-    assert.match(page, /upgradeToGoogle\(supabaseBrowser\(\)\.auth, window\.location\.origin, `\/app\/c\/\$\{chatId\}`\)/);
+    assert.match(page, /upgradeToGoogle\(supabaseBrowser\(\)\.auth, window\.location\.origin, `\/app\/c\/\$\{chatId\}`, GOOGLE_CALENDAR_SCOPE\)/);
   });
 
   it('the callback returns to the approved chat, same-origin only', () => {
@@ -75,5 +76,31 @@ describe('approve and sync contract', () => {
 
   it('the .ics download has no auth gate: it works for everyone', () => {
     assert.doesNotMatch(ics, /resolveUser|AuthRequired/);
+  });
+});
+
+describe('check-again reminders', () => {
+  it('adds a 7-day check-again row when the opening date is unpublished', () => {
+    const before = Date.now();
+    const out = buildPlanWrites({ title: 'MS', deadlines: ['2026-12-01T00:00:00.000Z'], items: [], opens: null });
+    assert.ok(!('error' in out));
+    const check = out.reminders.filter((r) => r.kind === 'check_again');
+    assert.equal(check.length, 1);
+    assert.match(check[0]?.sub ?? '', /check again/);
+    assert.equal(check[0]?.pill, 'Soon');
+    const due = Date.parse(check[0]?.dueAt ?? '');
+    assert.ok(due - before > 6.9 * 86400000 && due - before < 7.1 * 86400000);
+  });
+
+  it('skips the check-again row when the opening date is known', () => {
+    const out = buildPlanWrites({ title: 'MS', deadlines: ['2026-12-01T00:00:00.000Z'], items: [], opens: '2026-09-01T00:00:00.000Z' });
+    assert.ok(!('error' in out));
+    assert.equal(out.reminders.filter((r) => r.kind === 'check_again').length, 0);
+  });
+
+  it('skips the check-again row when there is nothing dated', () => {
+    const out = buildPlanWrites({ title: 'MS', items: ['Get transcripts'], opens: null });
+    assert.ok(!('error' in out));
+    assert.equal(out.reminders.filter((r) => r.kind === 'check_again').length, 0);
   });
 });

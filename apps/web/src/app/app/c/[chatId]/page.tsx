@@ -3,13 +3,14 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowUp, Check, ChevronDown, Download, Loader2, X } from 'lucide-react';
-import { DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, FIT_APPLY_LABEL, FIT_PARK_LABEL, PACK_OPEN_LABEL, formatG1Prompt } from '@mizzou/core/voice';
+import { DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, FIT_APPLY_LABEL, FIT_PARK_LABEL, PACK_OPEN_LABEL, TALKBACK_DONE_LABEL, TALKBACK_HELP_LABEL, TALKBACK_SNOOZE_LABEL, formatDueMessage, formatG1Prompt } from '@mizzou/core/voice';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { PackOverlay, type PackData, type PackDraft } from '@/components/pack-overlay';
 import { ensureChatAction } from '@/lib/actions';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { upgradeToGoogle } from '@/components/google-upgrade';
+import { GOOGLE_CALENDAR_SCOPE } from '@/lib/google-scopes';
 import { useStore } from '@/components/store-context';
 import { isTightGroup, messageBubble, statusRun, statusRunHead } from './feed';
 import styles from './conversation.module.css';
@@ -84,6 +85,7 @@ interface PlanPayload {
   deadlines: string[];
   items: string[];
   portalUrl: string | null;
+  opensIso: string | null;
 }
 
 interface G2Conflict {
@@ -93,7 +95,7 @@ interface G2Conflict {
 
 interface FeedItem {
   id: string;
-  kind: 'user' | 'message' | 'status' | 'g1' | 'g2' | 'coverage' | 'requirements' | 'plan' | 'fit' | 'draft' | 'rolling' | 'error';
+  kind: 'user' | 'message' | 'status' | 'g1' | 'g2' | 'coverage' | 'requirements' | 'plan' | 'fit' | 'draft' | 'talkback' | 'rolling' | 'error';
   text?: string;
   label?: string;
   state?: StatusState;
@@ -112,6 +114,11 @@ interface FeedItem {
   decided?: 'apply' | 'not_now';
   draft?: DraftPayload;
   kept?: boolean;
+  sync?: 'idle' | 'syncing' | 'synced' | 'needs-consent' | 'blocked' | 'error';
+  calLinks?: Array<{ iso: string; label: string; url: string }>;
+  talkback?: { reminderId: string; title: string; sub: string; pill: string };
+  talkbackState?: 'open' | 'done' | 'snoozed';
+  talkbackNote?: string;
   downloading?: boolean;
   approving?: boolean;
   approved?: boolean;
@@ -311,6 +318,33 @@ function ChatContent(): React.JSX.Element {
     [patch],
   );
 
+  const syncPlan = useCallback(
+    async (itemId: string, plan: PlanPayload): Promise<void> => {
+      patch(itemId, { sync: 'syncing', planError: undefined });
+      try {
+        const res = await fetch('/api/calendar/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: plan.title, deadlines: plan.deadlines, portalUrl: plan.portalUrl }),
+        });
+        const data = (await res.json()) as { ok?: unknown; reason?: unknown; links?: Array<{ iso: string; label: string; url: string }> };
+        const links = Array.isArray(data.links) ? data.links.filter((l) => typeof l.url === 'string') : [];
+        if (data.ok === true) {
+          patch(itemId, { sync: 'synced', calLinks: [] });
+          return;
+        }
+        if (data.reason === 'needs-consent') {
+          patch(itemId, { sync: 'needs-consent', calLinks: links });
+          return;
+        }
+        patch(itemId, { sync: 'blocked', calLinks: links });
+      } catch {
+        patch(itemId, { sync: 'error' });
+      }
+    },
+    [patch],
+  );
+
   const approvePlan = useCallback(
     async (itemId: string, plan: PlanPayload): Promise<void> => {
       patch(itemId, { approving: true, planError: undefined });
@@ -318,7 +352,7 @@ function ChatContent(): React.JSX.Element {
         const res = await fetch('/api/reminders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: plan.title, deadlines: plan.deadlines, items: plan.items }),
+          body: JSON.stringify({ title: plan.title, deadlines: plan.deadlines, items: plan.items, opens: plan.opensIso }),
         });
         if (!res.ok) {
           let detail = 'Could not sync reminders. Give it a minute and try again.';
@@ -332,12 +366,16 @@ function ChatContent(): React.JSX.Element {
         }
         patch(itemId, { approved: true });
         if (isGuest) {
-          // Incremental consent at the moment of sync: the write above is
-          // already stored (idempotently) under the anonymous id, so link
-          // Google now and return to this chat with the same rows.
-          const out = await upgradeToGoogle(supabaseBrowser().auth, window.location.origin, `/app/c/${chatId}`);
+          // No Calendar grant exists yet: ask for it now, with the Calendar
+          // scope (incremental consent). The reminders above are already
+          // stored idempotently under the anonymous id, so linking keeps
+          // every row; the card offers the sync retry on return.
+          patch(itemId, { sync: 'needs-consent' });
+          const out = await upgradeToGoogle(supabaseBrowser().auth, window.location.origin, `/app/c/${chatId}`, GOOGLE_CALENDAR_SCOPE);
           if ('url' in out) window.location.assign(out.url);
           else throw new Error(out.error);
+        } else {
+          await syncPlan(itemId, plan);
         }
       } catch (err) {
         patch(itemId, {
@@ -419,6 +457,7 @@ function ChatContent(): React.JSX.Element {
         title?: string;
         body?: string;
         version?: number;
+        opensIso?: string | null;
       };
       if (event.gate === 'G1' && card.kind === 'program') {
         setFeed((prev) => [
@@ -468,6 +507,7 @@ function ChatContent(): React.JSX.Element {
         deadlines?: string[];
         items?: string[];
         portalUrl?: string | null;
+        opensIso?: string;
         program?: string;
         lines_up?: string[];
         stretch?: string[];
@@ -524,6 +564,7 @@ function ChatContent(): React.JSX.Element {
           deadlines: payload.deadlines as string[],
           items: payload.items as string[],
           portalUrl: typeof payload.portalUrl === 'string' ? payload.portalUrl : null,
+          opensIso: typeof payload.opensIso === 'string' ? payload.opensIso : null,
         };
         if (g1YesRef.current) {
           const id = `plan-${Date.now()}`;
@@ -676,6 +717,77 @@ function ChatContent(): React.JSX.Element {
   const send = useCallback((): void => {
     void sendText(input);
   }, [input, sendText]);
+
+  const actTalkback = useCallback(
+    async (item: FeedItem, action: 'done' | 'snooze' | 'help'): Promise<void> => {
+      const talk = item.talkback;
+      if (!talk) return;
+      if (action === 'help') {
+        patch(item.id, { talkbackState: 'done', talkbackNote: `Helping with ${talk.title} below.` });
+        void sendText(`Help me with ${talk.title} — ${talk.sub}`);
+        return;
+      }
+      try {
+        const res = await fetch('/api/reminders', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: talk.reminderId, action }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        patch(item.id, {
+          talkbackState: action === 'done' ? 'done' : 'snoozed',
+          talkbackNote: action === 'done' ? 'Done — nice.' : 'Snoozed for a week.',
+        });
+        try {
+          await refreshChats();
+        } catch {
+          // The panel keeps its optimistic row; titles refresh on next visit.
+        }
+      } catch {
+        patch(item.id, { talkbackNote: 'Could not update that reminder. Give it a minute and try again.' });
+      }
+    },
+    [patch, sendText, refreshChats],
+  );
+
+  const talkbackShown = useRef<string | null>(null);
+
+  // Reminders that talk back (PROMPT.md 7.4): when the chat opens with a due
+  // reminder, lead with it plus Done / Snooze / Help me chips. Once per chat
+  // open; a courtesy, so failures stay silent.
+  useEffect(() => {
+    if (talkbackShown.current === chatId) return;
+    talkbackShown.current = chatId;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/reminders/due');
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          due?: Array<{ id: string; title: string; sub: string; pill: string; dueAt: string | null }>;
+        };
+        const first = Array.isArray(data.due) ? data.due[0] : undefined;
+        if (!first || cancelled) return;
+        setFeed((prev) => {
+          if (prev.some((entry) => entry.kind === 'talkback')) return prev;
+          return [
+            ...prev,
+            {
+              id: `talk-${Date.now()}`,
+              kind: 'talkback',
+              talkbackState: 'open',
+              talkback: { reminderId: first.id, title: first.title, sub: first.sub, pill: first.pill },
+            },
+          ];
+        });
+      } catch {
+        // Talk-back is a courtesy: silence on failure.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId]);
 
   // Home-composer handoff: submit ?q= once, then strip it so a refresh
   // cannot resend.
@@ -1082,6 +1194,59 @@ function ChatContent(): React.JSX.Element {
                         {item.approving === true ? 'Syncing…' : 'Approve & Sync'}
                       </button>
                     )}
+                      {item.approved === true && item.sync === 'synced' && (
+                        <p className={styles.syncedNote}>
+                          <Check className={styles.checkIcon} aria-label="synced to calendar" /> Synced to Google Calendar
+                        </p>
+                      )}
+                      {item.approved === true && item.sync === 'syncing' && <p className={styles.syncedNote}>Syncing to Google Calendar…</p>}
+                      {item.approved === true && item.sync === 'needs-consent' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void (async () => {
+                              const out = await upgradeToGoogle(
+                                supabaseBrowser().auth,
+                                window.location.origin,
+                                `/app/c/${chatId}`,
+                                GOOGLE_CALENDAR_SCOPE,
+                              );
+                              if ('url' in out) window.location.assign(out.url);
+                              else patch(item.id, { planError: out.error });
+                            })();
+                          }}
+                          className={styles.btnSecondary}
+                        >
+                          Allow calendar access
+                        </button>
+                      )}
+                      {item.approved === true && (item.sync === 'blocked' || item.sync === 'error') && (
+                        <>
+                          <p className={styles.planError} role="alert">
+                            Google Calendar did not take the events. The .ics download and these links still work.
+                          </p>
+                          {(item.calLinks ?? []).map((link) => (
+                            <a
+                              key={link.iso}
+                              href={link.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className={`${styles.link} ${styles.coverageOpen}`}
+                            >
+                              Add {link.label} to Google Calendar
+                            </a>
+                          ))}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (item.plan) void syncPlan(item.id, item.plan);
+                            }}
+                            className={styles.btnSecondary}
+                          >
+                            Try again
+                          </button>
+                        </>
+                      )}
                     {plan.deadlines.length > 0 && (
                       <button
                         type="button"
@@ -1103,6 +1268,30 @@ function ChatContent(): React.JSX.Element {
                   {item.planError ? (
                     <p className={styles.planError} role="alert">{item.planError}</p>
                   ) : null}
+                </div>
+              );
+            }
+            if (item.kind === 'talkback' && item.talkback) {
+              const talk = item.talkback;
+              const talkState = item.talkbackState ?? 'open';
+              return (
+                <div key={item.id} className={`${styles.card} ${styles.gapGroup}`}>
+                  <p className={styles.cardPrompt}>{formatDueMessage(talk.title, talk.sub, talk.pill)}</p>
+                  {talkState === 'open' ? (
+                    <div className={styles.btnRow}>
+                      <button type="button" onClick={() => void actTalkback(item, 'done')} className={styles.btnSecondary}>
+                        {TALKBACK_DONE_LABEL}
+                      </button>
+                      <button type="button" onClick={() => void actTalkback(item, 'snooze')} className={styles.btnSecondary}>
+                        {TALKBACK_SNOOZE_LABEL}
+                      </button>
+                      <button type="button" onClick={() => void actTalkback(item, 'help')} className={styles.btnSecondary}>
+                        {TALKBACK_HELP_LABEL}
+                      </button>
+                    </div>
+                  ) : (
+                    <p className={styles.g1DoneText}>{item.talkbackNote ?? (talkState === 'snoozed' ? 'Snoozed for a week.' : 'Done — nice.')}</p>
+                  )}
                 </div>
               );
             }

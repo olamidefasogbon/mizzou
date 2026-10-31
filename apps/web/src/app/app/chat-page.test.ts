@@ -62,3 +62,32 @@ describe('draft card contract', () => {
     assert.match(src, /<PackOverlay pack=\{pack\} onClose/);
   });
 });
+
+describe('calendar sync contract', () => {
+  it('attempts the calendar write right after reminders approve', () => {
+    assert.match(src, /fetch\('\/api\/calendar\/sync',/);
+    assert.match(src, /await syncPlan\(itemId, plan\)/);
+  });
+
+  it('asks calendar consent with the scope for guests and shows the fallback', () => {
+    assert.match(src, /GOOGLE_CALENDAR_SCOPE/);
+    assert.match(src, /Allow calendar access/);
+    assert.match(src, /Add \{link\.label\} to Google Calendar/);
+    assert.match(src, /Try again/);
+  });
+});
+
+describe('talk-back contract', () => {
+  it('opens due reminders with done, snooze and help chips', () => {
+    assert.match(src, /fetch\('\/api\/reminders\/due'\)/);
+    assert.match(src, /formatDueMessage\(talk\.title, talk\.sub, talk\.pill\)/);
+    assert.match(src, /TALKBACK_DONE_LABEL/);
+    assert.match(src, /TALKBACK_SNOOZE_LABEL/);
+    assert.match(src, /TALKBACK_HELP_LABEL/);
+  });
+
+  it('closes and snoozes through the reminders patch endpoint', () => {
+    assert.match(src, /method: 'PATCH'/);
+    assert.match(src, /Help me with /);
+  });
+});

@@ -4,6 +4,7 @@
 // repeat approvals a no-op instead of duplicates.
 
 import { createHash } from 'node:crypto';
+import { OPENING_CHECK_AGAIN } from '@mizzou/core/voice';
 
 export const MAX_SYNC_DEADLINES = 10;
 export const MAX_SYNC_ITEMS = 50;
@@ -27,6 +28,7 @@ export interface PlanSyncInput {
   title?: unknown;
   deadlines?: unknown;
   items?: unknown;
+  opens?: unknown;
 }
 
 /** Short pill date for a deadline instant; 'Dated' when unparseable. */
@@ -79,6 +81,15 @@ export function buildPlanWrites(input: PlanSyncInput): PlanSyncResult {
   }
   for (const task of items.slice(0, MAX_SYNC_ITEMS)) {
     reminders.push({ title, sub: task, pill: 'Task', dueAt: null, kind: 'custom' });
+  }
+  if ((input.opens === null || input.opens === undefined || input.opens === '') && deadlines.length > 0) {
+    reminders.push({
+      title,
+      sub: OPENING_CHECK_AGAIN,
+      pill: 'Soon',
+      dueAt: new Date(Date.now() + 7 * 86400000).toISOString(),
+      kind: 'check_again',
+    });
   }
   return { reminders, ledger };
 }

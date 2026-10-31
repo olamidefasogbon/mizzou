@@ -11,14 +11,14 @@
   padding: 0 24px 64px;
 }
 
+/* Logo at the far left, Log in at the far right, like the Meta header. */
 .topbar {
   box-sizing: border-box;
   width: 100%;
-  max-width: 1200px;
   height: 72px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
 }
 
 .lead {
@@ -26,7 +26,7 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
-  margin-top: clamp(32px, 8vh, 96px);
+  margin-top: clamp(48px, 12vh, 128px);
   text-align: center;
 }
 
@@ -37,8 +37,9 @@
   gap: 16px;
 }
 
-.wordmark {
-  font-size: clamp(88px, 14vw, 128px);
+/* Brush wordmark in the top bar. */
+.logo {
+  font-size: 36px;
 }
 
 .headline {

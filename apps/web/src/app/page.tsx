@@ -31,12 +31,12 @@ export default async function LandingPage({
     <div className="mz-shell">
       <div className={`mz-fg ${styles.screen}`}>
         <header className={styles.topbar}>
+          <div className={`mz-wordmark ${styles.logo}`}>Mizzou</div>
           <LoginButton className="mz-link-quiet" />
         </header>
 
         <div className={styles.lead}>
           <div className={styles.hero}>
-            <div className={`mz-wordmark ${styles.wordmark}`}>Mizzou</div>
             <h1 className={styles.headline}>From link to executed application</h1>
             <p className={styles.sub}>
               Your opportunity buddy. Tell me what you are going for and I handle the reading,

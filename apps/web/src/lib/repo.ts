@@ -6,6 +6,7 @@
 import 'server-only';
 
 import { newRun, type GateDecision, type RunRecord, type UsageRecord } from '@mizzou/core';
+import { visibleLines, type ChatHistory } from './chat-history.ts';
 import type { ChatSummary, Reminder } from './stores.ts';
 
 export interface RunLedger {
@@ -37,6 +38,8 @@ export interface Repo {
     list(userId: string): Promise<ChatSummary[]>;
     ensure(id: string, userId: string, title: string): Promise<ChatSummary>;
     rename(id: string, userId: string, title: string): Promise<void>;
+    /** Stored messages and latest run of one chat, oldest first. Empty when none. */
+    history(id: string, userId: string): Promise<ChatHistory>;
     clear(userId: string): Promise<ChatSummary[]>;
     restore(userId: string, snapshot: ChatSummary[]): Promise<void>;
   };
@@ -256,6 +259,18 @@ export function supabaseRepo(db: DbClient): Repo {
       rename: async (id, userId, title) => {
         await db.from('chats').update({ title }).eq('id', id).eq('user_id', userId);
       },
+      history: async (id, userId) => {
+        const res = await db
+          .from('runs')
+          .select('id,messages,created_at')
+          .eq('chat_id', id)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: true });
+        const rows = res.data ?? [];
+        const lines = rows.flatMap((r) => visibleLines(Array.isArray(r['messages']) ? (r['messages'] as unknown[]) : []));
+        const last = rows[rows.length - 1];
+        return { runId: last && typeof last['id'] === 'string' ? (last['id'] as string) : null, lines };
+      },
       clear: async (userId) => {
         const res = await db.from('chats').select('*').eq('user_id', userId).is('deleted_at', null);
         const removed = (res.data ?? []).map((r) => toChat(r, userId));
@@ -387,6 +402,12 @@ export function memoryRepo(): Repo {
         const row: ChatSummary = { id, userId, title, updatedAt: new Date().toISOString() };
         chatRows.set(`${userId}:${id}`, row);
         return row;
+      },
+      history: async (id, userId) => {
+        const mine = [...runRows.values()].filter((r) => r.chatId === id && r.userId === userId);
+        mine.sort((a, b) => (a.updatedAt < b.updatedAt ? -1 : 1));
+        const last = mine[mine.length - 1];
+        return { runId: last?.id ?? null, lines: mine.flatMap((r) => visibleLines(r.messages)) };
       },
       rename: async (id, userId, title) => {
         const row = chatRows.get(`${userId}:${id}`);

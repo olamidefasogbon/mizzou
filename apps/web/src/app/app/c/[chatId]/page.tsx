@@ -7,7 +7,7 @@ import { DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, FIT_APPLY_LABEL, FIT_PARK_LAB
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { PackOverlay, type PackData, type PackDraft } from '@/components/pack-overlay';
-import { ensureChatAction } from '@/lib/actions';
+import { ensureChatAction, loadChatHistoryAction } from '@/lib/actions';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { upgradeToGoogle } from '@/components/google-upgrade';
 import { GOOGLE_CALENDAR_SCOPE } from '@/lib/google-scopes';
@@ -833,6 +833,36 @@ function ChatContent(): React.JSX.Element {
       cancelled = true;
     };
   }, [chatId]);
+
+  // Reopening a stored chat: bring back its conversation and continue its
+  // latest run. Skipped for a brand-new chat that arrives with ?q=.
+  useEffect(() => {
+    if (initialQ) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const history = await loadChatHistoryAction(chatId);
+        if (cancelled) return;
+        if (history.runId && !runIdRef.current) runIdRef.current = history.runId;
+        if (history.lines.length === 0) return;
+        setFeed((prev) => {
+          if (prev.some((entry) => entry.kind === 'user' || entry.kind === 'message')) return prev;
+          const restored = history.lines.map((line, i) => ({
+            id: `hist-${chatId}-${i}`,
+            kind: line.role === 'user' ? ('user' as const) : ('message' as const),
+            text: line.text,
+          }));
+          return [...restored, ...prev];
+        });
+        requestAnimationFrame(() => feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight }));
+      } catch {
+        // An empty chat is better than an error wall; the composer still works.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chatId, initialQ]);
 
   // Home-composer handoff: submit ?q= once, then strip it so a refresh
   // cannot resend.

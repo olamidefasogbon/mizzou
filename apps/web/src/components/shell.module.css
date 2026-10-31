@@ -32,7 +32,7 @@
 /* 40px type with 8px of clearance top and bottom. Left aligned. */
 .wordmark {
   margin-right: auto;
-  font-size: 40px;
+  font-size: 32px;
   color: var(--mz-wordmark-color);
   pointer-events: none;
   line-height: 1;

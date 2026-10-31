@@ -19,7 +19,7 @@
   --mz-error: #E41E3F;
   --mz-amber: #D97706;
 
-  --mz-wordmark-font: var(--font-pinyon, "Pinyon Script"), "Pinyon Script", cursive;
+  --mz-wordmark-font: var(--font-kaushan, "Kaushan Script"), "Kaushan Script", cursive;
   --mz-wordmark-color: #0064E0;
 
   --mz-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.06);
@@ -36,7 +36,7 @@
   --mz-dur-enter: 240ms;
 
   --mz-font:
-    "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    var(--font-figtree, "Figtree"), "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 /* App shell: white canvas, single column. */

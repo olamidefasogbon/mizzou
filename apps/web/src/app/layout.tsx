@@ -1,15 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Pinyon_Script } from "next/font/google";
+import { Figtree, Kaushan_Script } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+// UI face: Figtree, a clean geometric sans close to the Muse page. Falls back to Inter/system.
+const figtree = Figtree({ subsets: ["latin"], variable: "--font-figtree", display: "swap" });
 
 // Wordmark face (user instruction + docs/design/README.md). The PNGs show a
 // serif stand-in; the shipped wordmark is Pinyon Script.
-const pinyon = Pinyon_Script({
+const kaushan = Kaushan_Script({
   subsets: ["latin"],
   weight: "400",
-  variable: "--font-pinyon",
+  variable: "--font-kaushan",
   display: "swap",
 });
 
@@ -26,7 +27,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${pinyon.variable}`}>
+    <html lang="en" className={`${figtree.variable} ${kaushan.variable}`}>
       <body>{children}</body>
     </html>
   );

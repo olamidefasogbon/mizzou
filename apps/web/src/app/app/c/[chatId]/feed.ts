@@ -38,6 +38,11 @@ export function statusRun(feed: FeedEntry[], index: number): FeedEntry[] {
   return run;
 }
 
+/** End-of-stream sweep: any status row left active is closed, so no spinner survives the turn. */
+export function settleActiveStatuses<T extends { kind: string; state?: string }>(feed: T[], state: 'done' | 'failed'): T[] {
+  return feed.map((item) => (item.kind === 'status' && item.state === 'active' ? { ...item, state } : item));
+}
+
 /** Same-sender bubbles sit 4px apart; a new group gets 12px. */
 export function isTightGroup(feed: FeedEntry[], index: number): boolean {
   if (index <= 0) return false;

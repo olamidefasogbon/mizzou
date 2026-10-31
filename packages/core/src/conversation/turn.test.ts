@@ -858,6 +858,26 @@ describe('run state carry-over', () => {
     expect(input).toContain('When do you graduate?');
   });
 
+  it('closes the step row as failed when the page will not open', async () => {
+    const h = makeHarness([
+      callResult('read_page', { url: 'https://example.edu/a' }, 'resp-1'),
+      textResult('That page would not open.', 'resp-2'),
+    ]);
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'https://example.edu/a',
+      userId: 'user-1',
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+      fetchPage: async () => { throw new Error('blocked'); },
+    });
+    const states = h.events.filter((e) => e.t === 'status').map((e) => (e as { state: string }).state);
+    expect(states.length).toBeGreaterThan(0);
+    expect(states[states.length - 1]).toBe('failed');
+    expect(states[0]).toBe('active');
+  });
+
   it('stores a one-line summary per page read', async () => {
     const h = makeHarness([
       callResult('read_page', { url: 'https://example.edu/a' }, 'resp-1'),

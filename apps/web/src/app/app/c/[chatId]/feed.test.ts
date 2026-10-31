@@ -1,7 +1,7 @@
 // Run: node --test src/app/app/c/[chatId]/feed.test.ts (from apps/web).
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { isTightGroup, messageBubble, statusRun, statusRunHead } from './feed.ts';
+import { isTightGroup, messageBubble, settleActiveStatuses, statusRun, statusRunHead } from './feed.ts';
 
 const msg = (id: string) => ({ id, kind: 'message' as const });
 const user = (id: string) => ({ id, kind: 'user' as const });
@@ -66,6 +66,25 @@ describe('live stream bubbles', () => {
     r = messageBubble(feed, idA);
     assert.equal(r.append, false);
     assert.equal(r.id.startsWith(idA + '#'), true);
+  });
+});
+
+describe('settleActiveStatuses', () => {
+  it('closes active rows at stream end and leaves the rest alone', () => {
+    const feed = [
+      { id: 'm1', kind: 'message' },
+      { id: 's1', kind: 'status', state: 'active' },
+      { id: 's2', kind: 'status', state: 'done' },
+      { id: 's3', kind: 'status', state: 'failed' },
+    ];
+    assert.deepEqual(
+      settleActiveStatuses(feed, 'done').map((e) => e.state),
+      [undefined, 'done', 'done', 'failed'],
+    );
+    assert.deepEqual(
+      settleActiveStatuses(feed, 'failed').map((e) => e.state),
+      [undefined, 'failed', 'done', 'failed'],
+    );
   });
 });
 

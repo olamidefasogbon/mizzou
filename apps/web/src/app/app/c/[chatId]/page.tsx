@@ -15,7 +15,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 import { upgradeToGoogle } from '@/components/google-upgrade';
 import { GOOGLE_CALENDAR_SCOPE } from '@/lib/google-scopes';
 import { useStore } from '@/components/store-context';
-import { isTightGroup, messageBubble, statusRun, statusRunHead } from './feed';
+import { isTightGroup, messageBubble, settleActiveStatuses, statusRun, statusRunHead } from './feed';
 import styles from './conversation.module.css';
 
 function g1Title(program: { name: string; unit: string; institution: string }, opportunityType?: string): {
@@ -674,11 +674,13 @@ function ChatContent(): React.JSX.Element {
       }
     } else if (event.t === 'done') {
       if (typeof event.runId === 'string') runIdRef.current = event.runId;
+      setFeed((prev) => settleActiveStatuses(prev, 'done'));
     } else if (event.t === 'continue') {
       runIdRef.current = event.runId;
       void resumeRef.current({ opId: crypto.randomUUID() });
     } else if (event.t === 'error') {
       setFeed((prev) => [...prev, { id: `err-${Date.now()}`, kind: 'error', text: event.friendly, link: event.link }]);
+      setFeed((prev) => settleActiveStatuses(prev, 'failed'));
     }
   };
 

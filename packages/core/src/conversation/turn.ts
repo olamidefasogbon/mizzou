@@ -792,15 +792,18 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       if (!url) return { output: { error: 'url is required' } };
       const statusId = `conv-${run.id}-t${run.turnCount}-fetch`;
       send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'active' });
+      let settled = false;
       try {
         const page = await getPage(url);
         send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'done' });
+        settled = true;
         return { output: { url, title: page.title, size: page.text.length, snippet: page.text.slice(0, 2000) } };
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'fetch failed';
-        send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'failed' });
         if (!mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason });
         return { output: { error: reason } };
+      } finally {
+        if (!settled) send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'failed' });
       }
     }
     if (name === 'read_pdf') {
@@ -825,20 +828,26 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       const url = str(args['url'])?.trim() || null;
       if (!url) return { output: { error: 'url is required' } };
       const statusId = `conv-${run.id}-t${run.turnCount}-read`;
-      send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'active' });
+      let statusLabel = formatFindingStatus(url);
+      send({ t: 'status', id: statusId, label: statusLabel, state: 'active' });
+      let settled = false;
       try {
         const page = await getPage(url);
-        send({ t: 'status', id: statusId, label: formatReadingStatus('generic_opportunity'), state: 'active' });
+        statusLabel = formatReadingStatus('generic_opportunity');
+        send({ t: 'status', id: statusId, label: statusLabel, state: 'active' });
         const read = await readPageText({ url, title: page.title, text: page.text }, { programHint: mem.programHint, userId });
-        send({ t: 'status', id: statusId, label: formatReadingStatus(read.extraction.opportunity_type, read.extraction.program.institution.value || undefined), state: 'done' });
+        statusLabel = formatReadingStatus(read.extraction.opportunity_type, read.extraction.program.institution.value || undefined);
+        send({ t: 'status', id: statusId, label: statusLabel, state: 'done' });
+        settled = true;
         const merged = await mergeAndReconcile(url, page.title, read.extraction, { costUsd: read.costUsd, model: read.model, inputTokens: read.inputTokens, outputTokens: read.outputTokens });
         if (merged.gate) return { output: { gated: true, summary: merged.summary }, gate: merged.gate };
         return { output: { summary: merged.summary } };
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'read failed';
-        send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'failed' });
         if (!mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason });
         return { output: { error: reason } };
+      } finally {
+        if (!settled) send({ t: 'status', id: statusId, label: statusLabel, state: 'failed' });
       }
     }
     if (name === 'web_search') {

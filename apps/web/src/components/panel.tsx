@@ -3,6 +3,8 @@
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from './store-context';
+import { supabaseBrowser } from '@/lib/supabase/client';
+import { upgradeToGoogle } from './google-upgrade';
 import { groupChatsByRecency } from '@/lib/chat-groups';
 import {
   activeChatIdFromPath,
@@ -30,7 +32,23 @@ export function Panel({
   const router = useRouter();
   const pathname = usePathname();
   const activeId = activeChatIdFromPath(pathname);
-  const { name, email, reminders, chats, clearChats, undoClearChats, undoArmed, expireUndo } = useStore();
+  const { isGuest, name, email, reminders, chats, clearChats, undoClearChats, undoArmed, expireUndo } = useStore();
+  const [upgradeBusy, setUpgradeBusy] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+
+  const upgrade = (): void => {
+    if (upgradeBusy) return;
+    setUpgradeBusy(true);
+    setUpgradeError(null);
+    void (async () => {
+      const out = await upgradeToGoogle(supabaseBrowser().auth, window.location.origin);
+      if ('url' in out) window.location.assign(out.url);
+      else {
+        setUpgradeError(out.error);
+        setUpgradeBusy(false);
+      }
+    })();
+  };
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -215,12 +233,22 @@ export function Panel({
 
       <div className={styles.footer}>
         <span aria-hidden="true" className={styles.avatar}>
-          {(name ?? email ?? '?').slice(0, 1).toUpperCase()}
+          {isGuest ? '?' : (name ?? email ?? '?').slice(0, 1).toUpperCase()}
         </span>
-        <span className={styles.userText}>
-          <span className={styles.userName}>{name ?? email ?? 'Signed in'}</span>
-          <span className={styles.userSub}>{email ?? 'Signed in with Google'}</span>
-        </span>
+        {isGuest ? (
+          <span className={styles.userText}>
+            <span className={styles.userName}>Guest</span>
+            <button type="button" className={styles.saveLink} onClick={upgrade} disabled={upgradeBusy}>
+              {upgradeBusy ? 'Connecting…' : 'Save your chats, continue with Google'}
+            </button>
+            {upgradeError ? <span className={styles.userSub}>{upgradeError}</span> : null}
+          </span>
+        ) : (
+          <span className={styles.userText}>
+            <span className={styles.userName}>{name ?? email ?? 'Signed in'}</span>
+            <span className={styles.userSub}>{email ?? 'Signed in with Google'}</span>
+          </span>
+        )}
         <button
           type="button"
           aria-label="Open settings"

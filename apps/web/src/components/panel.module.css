@@ -384,6 +384,25 @@
   color: var(--mz-secondary);
 }
 
+.saveLink {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mz-blue);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.saveLink:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* Log-out modal: white card, larger shadow, light scrim. */
 .modalScrim {
   position: fixed;

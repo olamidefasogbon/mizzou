@@ -30,6 +30,15 @@ describe('settings dialog contract', () => {
     assert.match(src, /role="status"/);
   });
 
+  it('shows Guest with a save-through-Google upgrade for guests', () => {
+    const src = readFileSync(new URL('./settings-modal.tsx', import.meta.url), 'utf8');
+    assert.match(src, /isGuest/);
+    assert.match(src, />Guest</);
+    assert.match(src, /Save your chats, continue with Google/);
+    assert.match(src, /Continue with Google to keep chats and sync Calendar/);
+    assert.match(src, /upgradeToGoogle/);
+  });
+
   it('closes on Escape and on backdrop click', () => {
     const src = readFileSync(new URL('./settings-modal.tsx', import.meta.url), 'utf8');
     assert.match(src, /e\.key === 'Escape'/);

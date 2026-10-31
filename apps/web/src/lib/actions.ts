@@ -10,6 +10,7 @@ import type { ChatSummary, Reminder } from './stores';
 
 export interface AppData {
   userId: string;
+  isGuest: boolean;
   name: string | null;
   email: string | null;
   reminders: Reminder[];
@@ -17,10 +18,10 @@ export interface AppData {
 }
 
 export async function getAppData(): Promise<AppData> {
-  const { userId, name, email } = await resolveUser();
+  const { userId, isGuest, name, email } = await resolveUser();
   const db = await repo();
   const [reminders, chats] = await Promise.all([db.reminders.list(userId), db.chats.list(userId)]);
-  return { userId, name, email, reminders, chats };
+  return { userId, isGuest, name, email, reminders, chats };
 }
 
 export async function ensureChatAction(id: string, title: string): Promise<ChatSummary> {

@@ -159,6 +159,20 @@
   line-height: 1.5;
 }
 
+.linkButton {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.linkButton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .linkRow {
   display: inline-flex;
   align-items: center;

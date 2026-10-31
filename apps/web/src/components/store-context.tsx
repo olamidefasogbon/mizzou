@@ -17,6 +17,7 @@ import type { ChatSummary, Reminder } from '@/lib/stores';
 // chats are created when a chat starts. Until then every list is empty.
 
 interface StoreState {
+  isGuest: boolean;
   name: string | null;
   email: string | null;
   reminders: Reminder[];
@@ -33,6 +34,7 @@ interface StoreState {
 const StoreContext = createContext<StoreState | null>(null);
 
 export function StoreProvider({ initial, children }: { initial: AppData; children: ReactNode }) {
+  const [isGuest] = useState<boolean>(initial.isGuest);
   const [name] = useState<string | null>(initial.name);
   const [email] = useState<string | null>(initial.email);
   const [reminders, setReminders] = useState<Reminder[]>(initial.reminders);
@@ -106,7 +108,7 @@ export function StoreProvider({ initial, children }: { initial: AppData; childre
   }, []);
 
   return (
-    <StoreContext.Provider value={{ name, email, reminders, chats, ensureChat, refreshChats, deleteMyData, clearChats, undoClearChats, expireUndo, undoArmed }}>
+    <StoreContext.Provider value={{ isGuest, name, email, reminders, chats, ensureChat, refreshChats, deleteMyData, clearChats, undoClearChats, expireUndo, undoArmed }}>
       {children}
     </StoreContext.Provider>
   );

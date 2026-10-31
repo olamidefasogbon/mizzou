@@ -7,6 +7,7 @@ import { openReminderCount } from './panel-helpers';
 import { SETTINGS_NAV, type SettingsSection } from './settings-sections';
 import { useStore } from './store-context';
 import { supabaseBrowser } from '@/lib/supabase/client';
+import { upgradeToGoogle } from './google-upgrade';
 import styles from './settings-modal.module.css';
 
 // Settings dialog (P2-14). General / Help & support / Legal & safety on
@@ -19,7 +20,23 @@ const NAV = SETTINGS_NAV;
 
 export function SettingsModal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
-  const { name, email, reminders, clearChats, deleteMyData } = useStore();
+  const { isGuest, name, email, reminders, clearChats, deleteMyData } = useStore();
+  const [upgradeBusy, setUpgradeBusy] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+
+  const upgrade = (): void => {
+    if (upgradeBusy) return;
+    setUpgradeBusy(true);
+    setUpgradeError(null);
+    void (async () => {
+      const out = await upgradeToGoogle(supabaseBrowser().auth, window.location.origin);
+      if ('url' in out) window.location.assign(out.url);
+      else {
+        setUpgradeError(out.error);
+        setUpgradeBusy(false);
+      }
+    })();
+  };
   const [section, setSection] = useState<Section>('general');
   const [deleted, setDeleted] = useState(false);
   const closeRef = useRef<HTMLButtonElement | null>(null);
@@ -99,15 +116,35 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
           {section === 'general' ? (
             <>
               <p className={styles.heading}>Account</p>
-              <div className={styles.accountCard}>
-                <span aria-hidden="true" className={styles.avatar}>
-                  {(name ?? email ?? '?').slice(0, 1).toUpperCase()}
-                </span>
-                <span className={styles.accountText}>
-                  <span className={styles.accountName}>{name ?? email ?? 'Signed in'}</span>
-                  <span className={styles.accountSub}>{email ?? 'Signed in with Google'}</span>
-                </span>
-              </div>
+              {isGuest ? (
+                <>
+                  <div className={styles.accountCard}>
+                    <span aria-hidden="true" className={styles.avatar}>?</span>
+                    <span className={styles.accountText}>
+                      <span className={styles.accountName}>Guest</span>
+                      <span className={styles.accountSub}>Continue with Google to keep chats and sync Calendar</span>
+                    </span>
+                  </div>
+                  <button type="button" className={`${styles.linkRow} ${styles.linkButton}`} onClick={upgrade} disabled={upgradeBusy}>
+                    {upgradeBusy ? 'Connecting…' : 'Save your chats, continue with Google'}
+                  </button>
+                  {upgradeError ? (
+                    <p className={styles.helpLine} role="alert">
+                      {upgradeError}
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <div className={styles.accountCard}>
+                  <span aria-hidden="true" className={styles.avatar}>
+                    {(name ?? email ?? '?').slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className={styles.accountText}>
+                    <span className={styles.accountName}>{name ?? email ?? 'Signed in'}</span>
+                    <span className={styles.accountSub}>{email ?? 'Signed in with Google'}</span>
+                  </span>
+                </div>
+              )}
               <div className={styles.kvRow}>
                 <span>Calendar (.ics export)</span>
                 <span className={styles.kvValue}>Ready</span>

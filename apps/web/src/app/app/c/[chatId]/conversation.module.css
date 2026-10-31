@@ -567,3 +567,35 @@
     animation: none;
   }
 }
+
+/* Draft card: kept body text plus the chat-edit input. Same type scale
+   as the cards above; 44px touch target on the input. */
+.draftBody {
+  margin: 8px 0 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--mz-ink);
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.draftEdit {
+  margin-top: 12px;
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  border-radius: var(--mz-radius-pill);
+  background: var(--mz-muted);
+  padding: 0 8px 0 16px;
+}
+
+.draftEdit input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--mz-ink);
+}

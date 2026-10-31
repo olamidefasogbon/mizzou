@@ -3,9 +3,10 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { ArrowUp, Check, ChevronDown, Download, Loader2, X } from 'lucide-react';
-import { FIT_APPLY_LABEL, FIT_PARK_LABEL, formatG1Prompt } from '@mizzou/core/voice';
+import { DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, FIT_APPLY_LABEL, FIT_PARK_LABEL, PACK_OPEN_LABEL, formatG1Prompt } from '@mizzou/core/voice';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
+import { PackOverlay, type PackData, type PackDraft } from '@/components/pack-overlay';
 import { ensureChatAction } from '@/lib/actions';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { upgradeToGoogle } from '@/components/google-upgrade';
@@ -71,6 +72,13 @@ interface FitPayload {
   options: string[];
 }
 
+interface DraftPayload {
+  draftKind: string;
+  title: string;
+  body: string;
+  version: number;
+}
+
 interface PlanPayload {
   title: string;
   deadlines: string[];
@@ -85,7 +93,7 @@ interface G2Conflict {
 
 interface FeedItem {
   id: string;
-  kind: 'user' | 'message' | 'status' | 'g1' | 'g2' | 'coverage' | 'requirements' | 'plan' | 'fit' | 'rolling' | 'error';
+  kind: 'user' | 'message' | 'status' | 'g1' | 'g2' | 'coverage' | 'requirements' | 'plan' | 'fit' | 'draft' | 'rolling' | 'error';
   text?: string;
   label?: string;
   state?: StatusState;
@@ -102,6 +110,8 @@ interface FeedItem {
   plan?: PlanPayload;
   fit?: FitPayload;
   decided?: 'apply' | 'not_now';
+  draft?: DraftPayload;
+  kept?: boolean;
   downloading?: boolean;
   approving?: boolean;
   approved?: boolean;
@@ -182,6 +192,51 @@ function ToolSteps({ items, grouped }: { items: Array<{ id: string; label?: stri
   );
 }
 
+function DraftCard({ item, onKeep, onEdit }: { item: FeedItem; onKeep: () => void; onEdit: (text: string) => void }): React.JSX.Element | null {
+  const [edit, setEdit] = useState('');
+  const draft = item.draft;
+  if (!draft) return null;
+  const kept = item.kept === true;
+  return (
+    <div className={`${styles.card} ${styles.gapGroup}`}>
+      <p className={styles.cardPrompt}>{draft.title}</p>
+      <p className={styles.cardSub}>
+        Version {draft.version}
+        {kept ? ' · kept' : ''}
+      </p>
+      <p className={styles.draftBody}>{draft.body}</p>
+      {kept ? (
+        <p className={styles.g1DoneText}>Kept. It lives in your Application Pack now.</p>
+      ) : (
+        <>
+          <form
+            className={styles.draftEdit}
+            onSubmit={(e) => {
+              e.preventDefault();
+              const text = edit.trim();
+              if (!text) return;
+              setEdit('');
+              onEdit(text);
+            }}
+          >
+            <input
+              value={edit}
+              onChange={(e) => setEdit(e.target.value)}
+              placeholder={DRAFT_EDIT_PLACEHOLDER}
+              aria-label="Tell me what to change"
+            />
+          </form>
+          <div className={styles.btnRow}>
+            <button type="button" onClick={onKeep} className={styles.btnPrimary}>
+              {DRAFT_KEEP_LABEL}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function ChatContent(): React.JSX.Element {
   const params = useParams<{ chatId: string }>();
   const router = useRouter();
@@ -204,6 +259,9 @@ function ChatContent(): React.JSX.Element {
     fit?: FitPayload;
     rolling?: { text: string };
   } | null>(null);
+
+  const [packReady, setPackReady] = useState(false);
+  const [pack, setPack] = useState<PackData | null>(null);
 
   const patch = useCallback((id: string, update: Partial<FeedItem>): void => {
     setFeed((prev) => prev.map((item) => (item.id === id ? { ...item, ...update } : item)));
@@ -357,6 +415,10 @@ function ChatContent(): React.JSX.Element {
         portal_url?: string | null;
         what?: string;
         conflicts?: G2Conflict[];
+        draftKind?: string;
+        title?: string;
+        body?: string;
+        version?: number;
       };
       if (event.gate === 'G1' && card.kind === 'program') {
         setFeed((prev) => [
@@ -383,6 +445,20 @@ function ChatContent(): React.JSX.Element {
             conflicts: card.conflicts as G2Conflict[],
           },
         ]);
+      } else if (event.gate === 'G5' && card.kind === 'draft') {
+        const draft: DraftPayload = {
+          draftKind: typeof card.draftKind === 'string' ? card.draftKind : 'statement',
+          title: typeof card.title === 'string' ? card.title : 'Draft',
+          body: typeof card.body === 'string' ? card.body : '',
+          version: typeof card.version === 'number' ? card.version : 1,
+        };
+        setFeed((prev) => {
+          const known = prev.some(
+            (item) => item.kind === 'draft' && item.draft?.title === draft.title && item.draft?.version === draft.version,
+          );
+          if (known) return prev;
+          return [...prev, { id: `draft-${Date.now()}`, kind: 'draft', draft }];
+        });
       }
     } else if (event.t === 'card') {
       const payload = (event.payload ?? {}) as {
@@ -399,6 +475,9 @@ function ChatContent(): React.JSX.Element {
         biggest_risk?: string;
         question?: string;
         options?: string[];
+        draftKind?: string;
+        body?: string;
+        version?: number;
         text?: string;
         lines?: string[];
         unreadable?: Array<{ url: string; reason: string }>;
@@ -413,6 +492,16 @@ function ChatContent(): React.JSX.Element {
         evidenceQuote: typeof e.evidence_quote === 'string' ? e.evidence_quote : undefined,
         sourceUrl: typeof e.source_url === 'string' ? e.source_url : null,
       });
+      if (event.kind === 'draft' && typeof payload.title === 'string' && typeof payload.body === 'string') {
+        const built: DraftPayload = {
+          draftKind: typeof payload.draftKind === 'string' ? payload.draftKind : 'statement',
+          title: payload.title as string,
+          body: payload.body as string,
+          version: typeof payload.version === 'number' ? payload.version : 1,
+        };
+        const id = `draft-${Date.now()}`;
+        setFeed((prev) => [...prev, { id, kind: 'draft', draft: built }]);
+      }
       if (event.kind === 'requirements' && Array.isArray(payload.documents) && Array.isArray(payload.eligibility)) {
         const built = {
           documents: (payload.documents ?? []).map(toDoc),
@@ -559,6 +648,31 @@ function ChatContent(): React.JSX.Element {
     [busy, chatId, enterStream, leaveStream, pump, refreshChats],
   );
 
+  const openPack = useCallback((): void => {
+    let requirements: PackData['requirements'] | null = null;
+    let portalUrl: string | null = null;
+    let program = '';
+    const drafts = new Map<string, PackDraft>();
+    for (const entry of feed) {
+      if (entry.kind === 'requirements' && entry.requirements) requirements = entry.requirements;
+      if (entry.kind === 'plan' && entry.plan?.portalUrl) portalUrl = entry.plan.portalUrl;
+      if (entry.kind === 'g1' && entry.program) {
+        program = entry.program.name;
+        if (!portalUrl) portalUrl = entry.program.portal_url;
+      }
+      if (entry.kind === 'draft' && entry.draft) {
+        drafts.set(`${entry.draft.draftKind}::${entry.draft.title}`, {
+          kind: entry.draft.draftKind,
+          title: entry.draft.title,
+          body: entry.draft.body,
+          kept: entry.kept === true,
+        });
+      }
+    }
+    if (!requirements) return;
+    setPack({ program, portalUrl, requirements, drafts: [...drafts.values()] });
+  }, [feed]);
+
   const send = useCallback((): void => {
     void sendText(input);
   }, [input, sendText]);
@@ -624,6 +738,7 @@ function ChatContent(): React.JSX.Element {
                         onClick={() => {
                           patch(item.id, { decision: 'yes' });
                           g1YesRef.current = true;
+                          setPackReady(true);
                           void resumeRef.current({ gate: 'G1', decision: { confirmed: true }, opId: crypto.randomUUID() });
                           setFeed((prev) => {
                             const extra: FeedItem[] = [];
@@ -806,6 +921,27 @@ function ChatContent(): React.JSX.Element {
                   {item.decided === 'apply' && <p className={styles.g1DoneText}>You&apos;re going for it. Good — let&apos;s get you ready.</p>}
                   {item.decided === 'not_now' && <p className={styles.g1DoneText}>Parked. Your reminders stay where they are.</p>}
                 </div>
+              );
+            }
+            if (item.kind === 'draft' && item.draft) {
+              return (
+                <DraftCard
+                  key={item.id}
+                  item={item}
+                  onKeep={() => {
+                    const draft = item.draft;
+                    if (!draft) return;
+                    patch(item.id, { kept: true });
+                    void resumeRef.current({
+                      gate: 'G5',
+                      decision: { kept: true, kind: draft.draftKind, version: draft.version },
+                      opId: crypto.randomUUID(),
+                    });
+                  }}
+                  onEdit={(text) => {
+                    void sendText(text);
+                  }}
+                />
               );
             }
             if (item.kind === 'requirements' && item.requirements) {
@@ -1025,6 +1161,14 @@ function ChatContent(): React.JSX.Element {
             <ArrowUp className={styles.sendIcon} />
           </button>
         </div>
+        {packReady && feed.some((entry) => entry.kind === 'requirements' || entry.kind === 'plan' || entry.kind === 'draft') && (
+          <div className={styles.btnRow}>
+            <button type="button" onClick={openPack} className={styles.btnSecondary}>
+              {PACK_OPEN_LABEL}
+            </button>
+          </div>
+        )}
+        {pack && <PackOverlay pack={pack} onClose={() => setPack(null)} />}
         <EvidenceOverlay />
     </div>
   );

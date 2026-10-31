@@ -53,7 +53,11 @@ Tool discipline:
   question blocks fit or drafts; it returns the user's answer next turn.
 - propose_plan when the requirements are confirmed and the user wants
   next steps; draft_document only when the user explicitly asks for a
-  draft, and it only ever returns a draft payload, never a sent thing.
+  draft: the writer drafts it from confirmed profile facts with
+  [PLACEHOLDER] for gaps, and every draft ends at G5 for keep.
+  edit_draft rewrites the open draft from one chat edit ("make it more
+  academic") and keeps a new version. Once the statement is kept, prepare
+  the pack: copy-ready answers plus recommender and registrar email drafts.
 - finish ends the turn when there is nothing left worth doing. A short
   text reply with no tool calls also ends the turn.
 

@@ -25,6 +25,7 @@ import { readPdfText } from '../deepscan/pdf.js';
 import { READER_SYSTEM_PROMPT, buildReaderPrompt } from '../prompts/reader.js';
 import { JUDGE_SYSTEM_PROMPT, buildJudgePrompt } from '../prompts/judge.js';
 import { FIT_JUDGE_SYSTEM_PROMPT, FitAssessmentSchema, buildFitPrompt, type FitAssessment, type FitAssessmentInput } from '../prompts/fit.js';
+import { DraftSchema, WRITER_SYSTEM_PROMPT, buildWriterEditPrompt, buildWriterPrompt, isDraftKind, type DraftKind, type WriterCreateInput } from '../prompts/writer.js';
 import { verifyExtractionEvidence } from '../extract/evidence.js';
 import { ExtractionSchema, type Extraction } from '../schemas/extraction.js';
 import {
@@ -123,16 +124,28 @@ export const CONVERSATION_TOOL_DEFS: ResponsesFunctionTool[] = [
   },
   {
     type: 'function',
+    name: 'edit_draft',
+    description: 'Rewrite the open draft following one edit instruction. Keeps a new version, emits the updated card, stops at G5 again.',
+    parameters: {
+      type: 'object',
+      properties: {
+        instruction: { type: 'string' },
+      },
+      required: ['instruction'],
+    },
+  },
+  {
+    type: 'function',
     name: 'draft_document',
-    description: 'Return a draft payload for review. It is never sent anywhere; the user approves at G5.',
+    description: 'Draft a statement, email or answer with the writer role from the confirmed profile facts. Emits a draft card and stops at G5 for keep. Missing facts become [PLACEHOLDER]; it is never sent anywhere.',
     parameters: {
       type: 'object',
       properties: {
         kind: { type: 'string' },
         title: { type: 'string' },
-        body: { type: 'string' },
+        instructions: { type: 'string' },
       },
-      required: ['kind', 'title', 'body'],
+      required: ['kind', 'title'],
     },
   },
   {
@@ -188,10 +201,12 @@ export interface ConversationMemory {
   /** Fit read asked at most once per run; the answer is recorded once in decisions. */
   fitAsked: boolean;
   fitDecision: 'apply' | 'not_now' | null;
+  /** Draft versions, oldest first. Each chat edit keeps a new row; latest wins. */
+  drafts: Array<{ kind: string; title: string; body: string; version: number; kept: boolean }>;
 }
 
 function blankMemory(): ConversationMemory {
-  return { programUrl: null, programHint: null, pages: [], unreadable: [], languages: [], extractions: [], usage: [], lastReply: null, gateContext: null, profile: [], pendingProfileQuestion: null, fitAsked: false, fitDecision: null };
+  return { programUrl: null, programHint: null, pages: [], unreadable: [], languages: [], extractions: [], usage: [], lastReply: null, gateContext: null, profile: [], pendingProfileQuestion: null, fitAsked: false, fitDecision: null, drafts: [] };
 }
 
 function readMemory(run: RunRecord): ConversationMemory {
@@ -216,6 +231,11 @@ function readMemory(run: RunRecord): ConversationMemory {
     pendingProfileQuestion: typeof m.pendingProfileQuestion === 'string' ? m.pendingProfileQuestion : null,
     fitAsked: m.fitAsked === true,
     fitDecision: m.fitDecision === 'apply' || m.fitDecision === 'not_now' ? m.fitDecision : null,
+    drafts: Array.isArray(m.drafts)
+      ? (m.drafts as unknown[])
+          .filter((d): d is { kind: string; title: string; body: string; version: number; kept: boolean } => !!d && typeof d === 'object' && typeof (d as { body?: unknown }).body === 'string')
+          .map((d) => ({ kind: typeof (d as { kind?: unknown }).kind === 'string' ? (d as { kind: string }).kind : 'statement', title: typeof (d as { title?: unknown }).title === 'string' ? (d as { title: string }).title : 'Draft', body: (d as { body: string }).body, version: typeof (d as { version?: unknown }).version === 'number' ? (d as { version: number }).version : 1, kept: (d as { kept?: unknown }).kept === true }))
+      : [],
   };
 }
 
@@ -237,12 +257,26 @@ export interface ReadPageTextResult {
   outputTokens: number;
 }
 
+export interface WriterCreateRequest {
+  mode: 'create';
+  kind: DraftKind;
+  title: string;
+  instructions: string | null;
+}
+
+export interface WriterEditRequest {
+  mode: 'edit';
+  instruction: string;
+}
+
 export interface ConversationTurnDeps {
   fetchPage?: (url: string) => Promise<FetchPageResult>;
   readPageText?: (page: { url: string; title: string; text: string }, ctx: { programHint: string | null; userId: string }) => Promise<ReadPageTextResult>;
   judge?: JudgeTransport;
   /** Judge-role fit read. Defaults to a callModel judge call; tests inject a mock (no paid runs). */
   assessFit?: (input: FitAssessmentInput) => Promise<FitAssessment>;
+  /** Writer-role draft create/rewrite. Defaults to a callModel writer call; tests inject a mock (no paid runs). */
+  writeDraft?: (input: WriterCreateRequest | WriterEditRequest) => Promise<string>;
   listReminders?: () => Promise<ReminderRow[]>;
   streamCall?: (opts: StreamCallOptions) => Promise<ResponsesCallResult>;
   sleepMs?: (ms: number) => Promise<void>;
@@ -416,6 +450,25 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       mem.fitDecision = choice;
     }
   }
+  // Kept drafts (PROMPT.md 7.5, G5). The resume route continues halted chat
+  // runs with its own fixed-format control string; matching that exact
+  // prefix decodes a structured Keep reply, not free text.
+  const G5_KEEP_PREFIX = 'The user answered G5: ';
+  let controlConsumed = false;
+  if (opts.userText.startsWith(G5_KEEP_PREFIX)) {
+    try {
+      const keep = JSON.parse(opts.userText.slice(G5_KEEP_PREFIX.length)) as { kept?: unknown; kind?: unknown; version?: unknown };
+      if (keep.kept === true) {
+        const target = [...mem.drafts].reverse().find((d) => !d.kept && (typeof keep.kind !== 'string' || d.kind === keep.kind) && (typeof keep.version !== 'number' || d.version === keep.version));
+        if (target) {
+          target.kept = true;
+          controlConsumed = true;
+        }
+      }
+    } catch {
+      // Not our control string: leave the text to the model.
+    }
+  }
   let fitDecidedThisTurn: 'apply' | 'not_now' | null = null;
   if (!mem.fitDecision && mem.fitAsked) {
     const choice = fitChoiceFromText(opts.userText);
@@ -429,7 +482,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       }
     }
   }
-  if (!fitDecidedThisTurn && mem.pendingProfileQuestion && opts.userText.trim().length > 0) {
+  if (!controlConsumed && !fitDecidedThisTurn && mem.pendingProfileQuestion && opts.userText.trim().length > 0) {
     mem.profile.push({ question: mem.pendingProfileQuestion, answer: opts.userText.slice(0, 2000) });
     mem.pendingProfileQuestion = null;
   }
@@ -543,6 +596,43 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     }
   };
 
+  // Writer-role draft create/rewrite (PROMPT.md 7.5). A throwing writer
+  // returns null so the tool reports a structured error; like any tool
+  // failure it never ends the run.
+  const runWriter = async (input: WriterCreateRequest | WriterEditRequest): Promise<string | null> => {
+    try {
+      if (opts.writeDraft) return await opts.writeDraft(input);
+      const program = mem.programHint ?? mem.programUrl ?? 'this opportunity';
+      if (input.mode === 'edit') {
+        const current = [...mem.drafts].reverse().find((d) => !d.kept) ?? mem.drafts[mem.drafts.length - 1];
+        if (!current) return null;
+        const result = await callModel({
+          role: 'writer',
+          systemPrompt: WRITER_SYSTEM_PROMPT,
+          prompt: buildWriterEditPrompt({ kind: current.kind as DraftKind, title: current.title, profile: mem.profile, program, current: current.body, instruction: input.instruction }),
+          schema: DraftSchema,
+          temperature: 0,
+          userId,
+          budgetGuard,
+        });
+        logUsage({ kind: 'model', tool: null, role: 'writer', model: result.model, inputTokens: result.usage?.prompt_tokens ?? 0, outputTokens: result.usage?.completion_tokens ?? 0, costUsd: result.costUsd });
+        return DraftSchema.parse(result.data).body;
+      }
+      const result = await callModel({
+        role: 'writer',
+        systemPrompt: WRITER_SYSTEM_PROMPT,
+        prompt: buildWriterPrompt({ kind: input.kind, title: input.title, profile: mem.profile, program, instructions: input.instructions }),
+        schema: DraftSchema,
+        temperature: 0,
+        userId,
+        budgetGuard,
+      });
+      logUsage({ kind: 'model', tool: null, role: 'writer', model: result.model, inputTokens: result.usage?.prompt_tokens ?? 0, outputTokens: result.usage?.completion_tokens ?? 0, costUsd: result.costUsd });
+      return DraftSchema.parse(result.data).body;
+    } catch {
+      return null;
+    }
+  };
   /**
    * Plain-words fit card (PROMPT.md 7.2). Fires at most once per run, only
    * when the user has stated profile facts (never invent them) and the fit
@@ -755,9 +845,30 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       return { output: { asked: true, note: 'the question is already shown to the user; do not repeat it verbatim in your reply' } };
     }
     if (name === 'draft_document') {
-      const payload = { kind: str(args['kind']) ?? 'draft', title: str(args['title']) ?? 'Draft', body: str(args['body']) ?? '' };
-      send({ t: 'card', id: `conv-${run.id}-t${run.turnCount}-draft`, kind: 'draft', payload: { ...payload, deferred: true, note: 'For review only — nothing is sent without your G5 approval.' } });
-      return { output: { deferred: true } };
+      const kindRaw = str(args['kind']) ?? '';
+      if (!isDraftKind(kindRaw)) return { output: { error: 'kind must be one of statement, email, answer' } };
+      const title = str(args['title'])?.trim() || 'Draft';
+      const instructions = str(args['instructions']);
+      const body = await runWriter({ mode: 'create', kind: kindRaw, title, instructions });
+      if (!body) return { output: { error: 'the writer is unavailable right now' } };
+      const version = mem.drafts.filter((d) => d.kind === kindRaw).length + 1;
+      mem.drafts.push({ kind: kindRaw, title, body, version, kept: false });
+      const card = { kind: 'draft', draftKind: kindRaw, title, body, version };
+      send({ t: 'card', id: `conv-${run.id}-t${run.turnCount}-draft-${kindRaw}-v${version}`, kind: 'draft', payload: card });
+      return { output: { version }, gate: { gate: 'G5', what: `Keep this ${title}?`, evidence: { origin: 'chat', card }, options: null } };
+    }
+    if (name === 'edit_draft') {
+      const instruction = str(args['instruction'])?.trim() || '';
+      if (!instruction) return { output: { error: 'instruction is required' } };
+      const open = [...mem.drafts].reverse().find((d) => !d.kept);
+      if (!open) return { output: { error: 'no open draft to edit' } };
+      const body = await runWriter({ mode: 'edit', instruction });
+      if (!body) return { output: { error: 'the writer is unavailable right now' } };
+      const version = mem.drafts.filter((d) => d.kind === open.kind).length + 1;
+      mem.drafts.push({ kind: open.kind, title: open.title, body, version, kept: false });
+      const card = { kind: 'draft', draftKind: open.kind, title: open.title, body, version };
+      send({ t: 'card', id: `conv-${run.id}-t${run.turnCount}-draft-${open.kind}-v${version}`, kind: 'draft', payload: card });
+      return { output: { version }, gate: { gate: 'G5', what: `Keep this ${open.title}?`, evidence: { origin: 'chat', card }, options: null } };
     }
     if (name === 'request_approval') {
       const gate = str(args['gate']);

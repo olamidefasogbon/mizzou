@@ -6,6 +6,11 @@ import {
   FIT_APPLY_LABEL,
   FIT_CARD_TITLE,
   FIT_PARK_LABEL,
+  DRAFT_EDIT_PLACEHOLDER,
+  DRAFT_KEEP_LABEL,
+  PACK_TITLE,
+  PACK_OPEN_LABEL,
+  CHECK_AGAINST_PORTAL,
   FIT_QUESTION,
   SAY_GOT_IT,
   SAY_ON_IT,
@@ -67,6 +72,22 @@ describe('fit card voice (PROMPT.md 7.2)', () => {
 
   it('keeps system words out of the fit strings', () => {
     for (const reply of [FIT_CARD_TITLE, FIT_QUESTION, FIT_APPLY_LABEL, FIT_PARK_LABEL]) {
+      expect(hasBannedTerm(reply)).toBe(false);
+    }
+  });
+});
+
+describe('draft and pack voice (PROMPT.md 7.5, 7.6)', () => {
+  it('locks the edit placeholder, keep label, pack title and portal mark', () => {
+    expect(DRAFT_EDIT_PLACEHOLDER).toContain('make it more academic');
+    expect(DRAFT_KEEP_LABEL).toBe('Keep');
+    expect(PACK_TITLE).toBe('Application Pack');
+    expect(PACK_OPEN_LABEL).toBe('View Application Pack');
+    expect(CHECK_AGAINST_PORTAL).toBe('check against the portal');
+  });
+
+  it('keeps system words out of the draft and pack strings', () => {
+    for (const reply of [DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, PACK_TITLE, PACK_OPEN_LABEL]) {
       expect(hasBannedTerm(reply)).toBe(false);
     }
   });

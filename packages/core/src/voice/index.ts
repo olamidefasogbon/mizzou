@@ -76,6 +76,12 @@ export const FIT_CARD_TITLE = 'How you match up';
 export const FIT_QUESTION = 'Want to go for it anyway?';
 export const FIT_APPLY_LABEL = "Yes, let's apply";
 export const FIT_PARK_LABEL = 'Not now';
+/** Draft card + Application Pack strings (PROMPT.md 7.5, 7.6, 8 screen 10). */
+export const DRAFT_EDIT_PLACEHOLDER = 'Tell me what to change, like "make it more academic"';
+export const DRAFT_KEEP_LABEL = 'Keep';
+export const PACK_TITLE = 'Application Pack';
+export const PACK_OPEN_LABEL = 'View Application Pack';
+export const CHECK_AGAINST_PORTAL = 'check against the portal';
 
 export function formatG1Prompt(opportunityType: string): string {
   switch (opportunityType) {

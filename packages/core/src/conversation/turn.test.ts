@@ -646,3 +646,147 @@ describe('fit read (M5, PROMPT.md 7.2)', () => {
     expect(memOf(h.run).pendingProfileQuestion).toBeNull();
   });
 });
+
+describe('drafts and versions (M6, PROMPT.md 7.5)', () => {
+  interface DraftPayload { kind: string; draftKind: string; title: string; body: string; version: number }
+
+  function draftsOf(run: RunRecord): Array<{ kind: string; title: string; body: string; version: number; kept: boolean }> {
+    return ((run.state as Record<string, unknown>)['conversation'] as { drafts: Array<{ kind: string; title: string; body: string; version: number; kept: boolean }> }).drafts;
+  }
+  function draftPayloads(events: RunEvent[]): DraftPayload[] {
+    return events
+      .filter((e) => e.t === 'card' && (e as { kind: string }).kind === 'draft')
+      .map((e) => (e as unknown as { payload: DraftPayload }).payload);
+  }
+
+  async function draftTurn(script: ResponsesCallResult[], over: { run?: RunRecord; userText?: string; writeDraft?: (input: unknown) => Promise<string> } = {}): Promise<{ events: RunEvent[]; run: RunRecord; gated: boolean }> {
+    const h = makeHarness(script);
+    const run = over.run ?? h.run;
+    const events: RunEvent[] = [];
+    const result = await runConversationTurn({
+      run,
+      save: async () => {},
+      userText: over.userText ?? 'draft my statement',
+      userId: 'user-1',
+      send: (e) => events.push(e),
+      streamCall: h.streamCall,
+      writeDraft: over.writeDraft ?? (async () => 'Dear committee, [PLACEHOLDER].'),
+    });
+    return { events, run, gated: result.gated };
+  }
+
+  it('draft_document writes v1 through the writer and halts at G5', async () => {
+    const seen: unknown[] = [];
+    const { events, run, gated } = await draftTurn(
+      [callResult('draft_document', { kind: 'statement', title: 'Statement of purpose' }, 'resp-1')],
+      { writeDraft: async (input: unknown) => { seen.push(input); return 'Dear committee, [PLACEHOLDER].'; } },
+    );
+    expect(gated).toBe(true);
+    expect((seen[0] as { mode: string }).mode).toBe('create');
+    const cards = draftPayloads(events);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].version).toBe(1);
+    expect(cards[0].body).toContain('[PLACEHOLDER]');
+    expect(draftsOf(run)).toEqual([{ kind: 'statement', title: 'Statement of purpose', body: 'Dear committee, [PLACEHOLDER].', version: 1, kept: false }]);
+    expect(run.pendingGate?.gate).toBe('G5');
+    expect((run.pendingGate?.evidence as { origin: string }).origin).toBe('chat');
+    expect(run.status).toBe('needs_approval');
+  });
+
+  it('edit_draft rewrites in place and keeps v2, halting at G5 again', async () => {
+    const bodies = ['First version here.', 'More academic second version.'];
+    let n = 0;
+    const first = await draftTurn(
+      [callResult('draft_document', { kind: 'statement', title: 'Statement of purpose' }, 'resp-1')],
+      { writeDraft: async () => bodies[n++] as string },
+    );
+    expect(first.gated).toBe(true);
+    const second = await draftTurn(
+      [callResult('edit_draft', { instruction: 'make it more academic' }, 'resp-2'), textResult('Revised.', 'resp-3')],
+      { run: first.run, userText: 'make it more academic', writeDraft: async () => bodies[n++] as string },
+    );
+    expect(second.gated).toBe(true);
+    const versions = draftsOf(second.run);
+    expect(versions.map((d) => d.version)).toEqual([1, 2]);
+    expect(versions.map((d) => d.body)).toEqual(bodies);
+    const cards = draftPayloads(second.events);
+    expect(cards).toHaveLength(1);
+    expect(cards[0].version).toBe(2);
+  });
+
+  it('edit_draft with no open draft returns a structured error and the turn continues', async () => {
+    const h = makeHarness([
+      callResult('edit_draft', { instruction: 'make it shorter' }, 'resp-1'),
+      textResult('There is no draft yet.', 'resp-2'),
+    ]);
+    const result = await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'make it shorter',
+      userId: 'user-1',
+      send: () => {},
+      streamCall: h.streamCall,
+      writeDraft: async () => 'unused',
+    });
+    expect(result.gated).toBe(false);
+    expect(JSON.stringify(h.seen[1]?.input)).toContain('no open draft');
+  });
+
+  it('a throwing writer returns a structured error and the turn continues', async () => {
+    const h = makeHarness([
+      callResult('draft_document', { kind: 'statement', title: 'Statement of purpose' }, 'resp-1'),
+      textResult('The writer is down.', 'resp-2'),
+    ]);
+    const events: RunEvent[] = [];
+    const result = await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'draft my statement',
+      userId: 'user-1',
+      send: (e) => events.push(e),
+      streamCall: h.streamCall,
+      writeDraft: async () => { throw new Error('writer down'); },
+    });
+    expect(result.gated).toBe(false);
+    expect(draftPayloads(events)).toHaveLength(0);
+    expect(JSON.stringify(h.seen[1]?.input)).toContain('writer is unavailable');
+  });
+
+  it('rejects draft kinds outside statement, email and answer', async () => {
+    const h = makeHarness([
+      callResult('draft_document', { kind: 'tweet', title: 'Shout' }, 'resp-1'),
+      textResult('No tweet drafts.', 'resp-2'),
+    ]);
+    const result = await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'draft something',
+      userId: 'user-1',
+      send: () => {},
+      streamCall: h.streamCall,
+      writeDraft: async () => { throw new Error('must not be called'); },
+    });
+    expect(result.gated).toBe(false);
+    expect(JSON.stringify(h.seen[1]?.input)).toContain('kind must be');
+  });
+
+  it('marks the draft kept from the G5 keep control string', async () => {
+    const first = await draftTurn([callResult('draft_document', { kind: 'statement', title: 'Statement of purpose' }, 'resp-1')]);
+    expect(draftsOf(first.run)[0].kept).toBe(false);
+    ((first.run.state as Record<string, unknown>)['conversation'] as { pendingProfileQuestion: string | null }).pendingProfileQuestion = 'What is your degree?';
+    const keep = makeHarness([textResult('Kept. Good luck.', 'resp-2')]);
+    const result = await runConversationTurn({
+      run: first.run,
+      save: async () => {},
+      userText: 'The user answered G5: {"kept":true,"kind":"statement","version":1}',
+      userId: 'user-1',
+      send: () => {},
+      streamCall: keep.streamCall,
+      writeDraft: async () => 'unused',
+    });
+    expect(result.gated).toBe(false);
+    expect(draftsOf(first.run)[0].kept).toBe(true);
+    expect(draftsOf(first.run)).toHaveLength(1);
+    expect(((first.run.state as Record<string, unknown>)['conversation'] as { pendingProfileQuestion: string | null }).pendingProfileQuestion).toBe('What is your degree?');
+  });
+});

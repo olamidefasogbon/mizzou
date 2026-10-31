@@ -42,3 +42,23 @@ describe('fit card contract', () => {
     assert.doesNotMatch(src, /[0-9]\s*%/);
   });
 });
+
+describe('draft card contract', () => {
+  it('defines a versioned draft payload and renders draft cards', () => {
+    assert.match(src, /interface DraftPayload/);
+    assert.match(src, /kind === 'draft'/);
+    assert.match(src, /Version \{draft\.version\}/);
+  });
+
+  it('shows the edit box and keep button, ending each draft at G5', () => {
+    assert.match(src, /DRAFT_EDIT_PLACEHOLDER/);
+    assert.match(src, /DRAFT_KEEP_LABEL/);
+    assert.match(src, /gate: 'G5'/);
+    assert.match(src, /decision: \{ kept: true/);
+  });
+
+  it('opens the pack from a settled chat', () => {
+    assert.match(src, /PACK_OPEN_LABEL/);
+    assert.match(src, /<PackOverlay pack=\{pack\} onClose/);
+  });
+});

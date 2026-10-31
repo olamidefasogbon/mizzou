@@ -9,10 +9,14 @@ import { createServerClient } from '@supabase/ssr';
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
+  // Optional return path from an incremental link (approve-and-sync):
+  // same-origin /app paths only, never an open redirect.
+  const next = url.searchParams.get('next');
+  const dest = next !== null && next.startsWith('/app') ? next : '/app';
   if (!code) {
     return NextResponse.redirect(new URL('/?error=missing-code', request.url));
   }
-  const response = NextResponse.redirect(new URL('/app', request.url));
+  const response = NextResponse.redirect(new URL(dest, request.url));
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',

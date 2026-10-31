@@ -7,6 +7,8 @@ import { formatG1Prompt } from '@mizzou/core/voice';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { ensureChatAction } from '@/lib/actions';
+import { supabaseBrowser } from '@/lib/supabase/client';
+import { upgradeToGoogle } from '@/components/google-upgrade';
 import { useStore } from '@/components/store-context';
 import { isTightGroup, messageBubble, statusRun, statusRunHead } from './feed';
 import styles from './conversation.module.css';
@@ -179,7 +181,7 @@ function ChatContent(): React.JSX.Element {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
-  const { refreshChats } = useStore();
+  const { isGuest, refreshChats } = useStore();
   const feedRef = useRef<HTMLDivElement>(null);
   // Cards streamed with the run stay hidden until the G1 "Yes" —
   // the deep scan still waits for approval.
@@ -257,6 +259,14 @@ function ChatContent(): React.JSX.Element {
           throw new Error(detail);
         }
         patch(itemId, { approved: true });
+        if (isGuest) {
+          // Incremental consent at the moment of sync: the write above is
+          // already stored (idempotently) under the anonymous id, so link
+          // Google now and return to this chat with the same rows.
+          const out = await upgradeToGoogle(supabaseBrowser().auth, window.location.origin, `/app/c/${chatId}`);
+          if ('url' in out) window.location.assign(out.url);
+          else throw new Error(out.error);
+        }
       } catch (err) {
         patch(itemId, {
           planError: err instanceof Error ? err.message : 'Could not sync reminders. Give it a minute and try again.',
@@ -265,7 +275,7 @@ function ChatContent(): React.JSX.Element {
         patch(itemId, { approving: false });
       }
     },
-    [patch],
+    [patch, isGuest, chatId],
   );
 
   const runIdRef = useRef<string | null>(null);

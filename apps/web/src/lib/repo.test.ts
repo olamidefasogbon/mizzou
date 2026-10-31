@@ -296,4 +296,17 @@ describe('supabase repo behind the interface', () => {
     );
     assert.deepEqual(await mem.usage.snapshot('user-c'), { userSpend: 0.001, globalSpend: 0.001 });
   });
+
+  it('upserts sync-ledger events idempotently on user plus event', async () => {
+    const { repo, tables } = repoWithSeed();
+    const row = { eventId: 'ev-1', provider: 'google', status: 'synced', payload: { title: 'MS' } };
+    await repo.syncLedger.upsert('user-a', [row]);
+    await repo.syncLedger.upsert('user-a', [row]);
+    assert.equal((tables['sync_ledger'] ?? []).length, 1);
+    await repo.syncLedger.upsert('user-b', [row]);
+    assert.equal((tables['sync_ledger'] ?? []).length, 2);
+    const mem = memoryRepo();
+    await mem.syncLedger.upsert('user-c', [row]);
+    await mem.syncLedger.upsert('user-c', [row]);
+  });
 });

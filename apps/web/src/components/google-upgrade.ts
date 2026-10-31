@@ -13,9 +13,14 @@ export interface LinkAuth {
 
 export type UpgradeResult = { url: string } | { error: string };
 
-/** Start the Google link flow. Returns the OAuth url or a friendly error. */
-export async function upgradeToGoogle(auth: LinkAuth, origin: string): Promise<UpgradeResult> {
-  const redirectTo = `${origin}/auth/callback`;
+/**
+ * Start the Google link flow. Returns the OAuth url or a friendly error.
+ * `next` is an optional /app return path the callback redirects to after
+ * linking (validated there), so an approval can resume where it started.
+ */
+export async function upgradeToGoogle(auth: LinkAuth, origin: string, next?: string): Promise<UpgradeResult> {
+  const redirectTo =
+    typeof next === 'string' && next.startsWith('/app') ? `${origin}/auth/callback?next=${encodeURIComponent(next)}` : `${origin}/auth/callback`;
   try {
     const res = await auth.linkIdentity({ provider: 'google', options: { redirectTo } });
     if (res.error) return { error: 'Google sign-in did not start. Try again.' };

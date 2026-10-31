@@ -42,6 +42,13 @@ export interface Repo {
     /** Persist completed model calls (usage table, PROMPT 9.3). */
     flush(rows: UsageRecord[], runId?: string): Promise<void>;
   };
+  syncLedger: {
+    /** Idempotent calendar-event write (unique on user_id + event_id). */
+    upsert(
+      userId: string,
+      rows: Array<{ eventId: string; provider: string; status: string; payload: unknown }>,
+    ): Promise<void>;
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -278,6 +285,21 @@ export function supabaseRepo(db: DbClient): Repo {
         );
       },
     },
+    syncLedger: {
+      upsert: async (userId, rows) => {
+        if (rows.length === 0) return;
+        await db.from('sync_ledger').upsert(
+          rows.map((r) => ({
+            user_id: userId,
+            event_id: r.eventId,
+            provider: r.provider,
+            status: r.status,
+            payload: r.payload,
+          })),
+          { onConflict: 'user_id,event_id' },
+        );
+      },
+    },
   };
 }
 
@@ -296,6 +318,7 @@ export function memoryRepo(): Repo {
   const reminderRows = new Map<string, Reminder>();
   const chatRows = new Map<string, ChatSummary>();
   const usageRows: UsageRecord[] = [];
+  const ledgerRows = new Map<string, { eventId: string; userId: string }>();
   return {
     runs: {
       load: async (id) => runRows.get(id) ?? null,
@@ -369,6 +392,11 @@ export function memoryRepo(): Repo {
       },
       flush: async (rows) => {
         usageRows.push(...rows.map((r) => ({ ...r })));
+      },
+    },
+    syncLedger: {
+      upsert: async (userId, rows) => {
+        for (const r of rows) ledgerRows.set(`${userId}:${r.eventId}`, { ...r, userId });
       },
     },
   };

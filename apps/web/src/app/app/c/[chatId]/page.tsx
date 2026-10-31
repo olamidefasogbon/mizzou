@@ -562,6 +562,8 @@ function ChatContent(): React.JSX.Element {
         text?: string;
         lines?: string[];
         unreadable?: Array<{ url: string; reason: string }>;
+        pages?: Array<{ url: string; title: string }>;
+        languages?: string[];
       };
       const toDoc = (d: RequirementDoc & { evidence_quote?: string; source_url?: string }): RequirementDoc => ({
         ...d,

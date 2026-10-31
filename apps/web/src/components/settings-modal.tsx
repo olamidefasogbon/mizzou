@@ -119,7 +119,7 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
               setLogoutFailed(false);
               void supabaseBrowser()
                 .auth.signOut()
-                .then(({ error }) => {
+                .then(({ error }: { error: Error | null }) => {
                   if (error) throw error;
                   onClose();
                   router.push('/');

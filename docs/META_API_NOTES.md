@@ -122,3 +122,24 @@ Only if M9 is built.
 
 Base URL: `https://api.meta.ai/v1`. Auth: bearer key in `MODEL_API_KEY`
 (`META_API_KEY` accepted as a local fallback).
+
+## 9. Reasoning items are NOT replayed — VERIFIED (duplicate-id fix, Oct 31)
+
+Ref `emvw9313r7nmok`: the Responses API returned HTTP 400
+`Duplicate item found with id rs_...`. Root cause was client-side: the
+stream transport appended every reasoning/message item twice
+(`output_item.done` plus the `response.completed` envelope), and the turn
+thread replayed those copies on round two.
+
+Probe (estimate stated BEFORE the run: <$0.01 for two minimal-effort
+calls; actual ≈ $0.0021 — 547+100 and 601+55 tokens): round 1 forced a
+function call with `reasoning: {effort: "minimal"}`; round 2 sent
+`[function_call, function_call_output]` with NO reasoning item.
+Result: HTTP 200 — accepted.
+
+Turn policy from this probe: never replay `reasoning` items. Round input
+is `buildInput(history, newItems)` over persisted messages plus per-round
+`message`, `function_call`, and `function_call_output` items only, with
+id/`call_id` dedupe as the backstop so a replayed item can never appear
+twice. If the provider ever rejects a reasoning-free continuation, replay
+the reasoning item exactly once (deduped) instead of dropping it.

@@ -730,7 +730,9 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       await persist();
       return { gated: true, gate: gateHit.gate, text: fullText, usageUsd: run.usageUsd };
     }
-    thread = buildInput(thread, [...result.items, ...outputs]);
+        // META_API_NOTES section 9: the API accepts function_call pairs without their reasoning item, so it is never replayed.
+    const replayable = result.items.filter((item) => item.type !== 'reasoning');
+    thread = buildInput(thread, [...replayable, ...outputs]);
   }
   mem.lastReply = fullText || mem.lastReply;
 

@@ -15,12 +15,17 @@ const SCAN_DIRS = ['apps/web/src', 'packages/core/src'];
 const SKIP_DIRS = new Set(['node_modules', '.next', 'dist', 'fixtures']);
 const SKIP_FILES = [/\.test\.[jt]sx?$/, /\.spec\.[jt]sx?$/, /^\.tmp-/, /^guard-.*\.test\.[jt]sx?$/];
 
+// Legitimate chat-group interface labels, not demo data. Stripped by exact
+// string before scanning so the pill rule never flags panel group headers.
+const ALLOWLISTED_LABELS = ['Today', 'Yesterday', 'Previous 7 days', 'Older'];
+
 const BANNED: Array<{ label: string; pattern: RegExp }> = [
   { label: 'hardcoded first name', pattern: /\bJohn\b/ },
   { label: 'hardcoded program', pattern: /Fulbright/ },
   { label: 'hardcoded school', pattern: /\bYale\b/ },
   { label: 'hardcoded program', pattern: /Chevening/ },
-  { label: 'hardcoded day count', pattern: /\b\d+\s+days?\b/ },
+  // Fake reminder pills hardcode a bare day count as the whole pill value.
+  { label: 'hardcoded day-count pill', pattern: /['"`]\d+\s+days?['"`]/ },
 ];
 
 function* walk(dir: string): Generator<string> {
@@ -39,7 +44,8 @@ describe('no hardcoded demo data in app code', () => {
     const hits: string[] = [];
     for (const rel of SCAN_DIRS) {
       for (const file of walk(join(ROOT, rel))) {
-        const text = readFileSync(file, 'utf-8');
+        let text = readFileSync(file, 'utf-8');
+        for (const label of ALLOWLISTED_LABELS) text = text.split(label).join('');
         for (const { label, pattern } of BANNED) {
           if (pattern.test(text)) hits.push(`${file.replace(ROOT + '/', '')}: ${label}`);
         }

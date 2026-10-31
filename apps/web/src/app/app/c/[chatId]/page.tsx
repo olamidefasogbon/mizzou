@@ -722,6 +722,7 @@ function ChatContent(): React.JSX.Element {
           message: text,
           chatId,
           runId: runIdRef.current ?? undefined,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Africa/Lagos',
           ...(seed && seed.length > 0 ? { vision: seed } : {}),
         }),
       });

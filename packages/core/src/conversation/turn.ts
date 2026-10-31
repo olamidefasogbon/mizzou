@@ -303,8 +303,10 @@ userText: string;
   budgetGuard?: BudgetGuard;
   send: (event: RunEvent) => void;
   maxRounds?: number;
-  /** Observability hook (tests, probes). Routes leave it unset. */
+  /** Observability hook (tests, probes). Routes leave it unset. Timezone defaults to Africa/Lagos; today defaults to server date. */
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
+  timezone?: string;
+  todayIso?: string;
 }
 
 export interface ConversationTurnResult {
@@ -400,6 +402,12 @@ function fitChoiceFromText(text: string): 'apply' | 'not_now' | null {
   if (norm === FIT_APPLY_LABEL.toLowerCase()) return 'apply';
   if (norm === FIT_PARK_LABEL.toLowerCase()) return 'not_now';
   return null;
+}
+
+export function buildDateContext(timezone?: string | null, todayIso?: string | null): string {
+  const tz = timezone && timezone.trim().length > 0 ? timezone.trim().slice(0, 80) : 'Africa/Lagos';
+  const today = todayIso && todayIso.trim().length > 0 ? todayIso.trim().slice(0, 10) : new Date().toISOString().slice(0, 10);
+  return `Today is ${today} in ${tz}. Classify every deadline as upcoming (on or after today) or passed (before today); never present a passed deadline as the next one. If the only date shown has passed, say so in plain words and look for the next intake, or say it is not posted.`;
 }
 
 export async function runConversationTurn(opts: ConversationTurnOptions): Promise<ConversationTurnResult> {
@@ -922,7 +930,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       `read ${seed.name || url}; ${seed.extraction.deadlines.length} ${noun} extracted, no conflicts: ${merged.summary}`,
     );
   }
-  let firstInput = opts.userText;
+  let firstInput = `${buildDateContext(opts.timezone, opts.todayIso)}\n${opts.userText}`;
   if (seedNotes.length > 0) {
     firstInput =
       `An uploaded flyer or screenshot was read this turn with the vision role ` +
@@ -959,7 +967,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       {
         model: ROLE_MODEL_MAP.orchestrator,
         effort: 'medium',
-        systemPrompt: loadConversationPrompt(),
+        systemPrompt: `${loadConversationPrompt()}\n\n${buildDateContext(opts.timezone, opts.todayIso)}`,
         input: thread,
         tools,
         previousResponseId: null,

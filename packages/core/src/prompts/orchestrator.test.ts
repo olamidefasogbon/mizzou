@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { hasLayoutReference } from '../voice/index.js';
-import { CONVERSATION_MAX_ROUNDS } from '../conversation/turn.js';
+import { CONVERSATION_MAX_ROUNDS, buildDateContext } from '../conversation/turn.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const prompt = readFileSync(join(here, 'orchestrator.md'), 'utf8');
@@ -36,6 +36,9 @@ describe('card order rule', () => {
     expect(CONVERSATION_MAX_ROUNDS).toBeGreaterThanOrEqual(10);
     expect(CONVERSATION_MAX_ROUNDS).toBeLessThanOrEqual(12);
     expect(prompt).toMatch(/read-only steps/i);
+    expect(prompt).toMatch(/upcoming or passed/i);
+    expect(buildDateContext('Africa/Lagos', '2026-10-31')).toContain('2026-10-31');
+    expect(buildDateContext('', '')).toContain('Africa/Lagos');
   });
 
   it('fails sample bubbles that point above or below', () => {

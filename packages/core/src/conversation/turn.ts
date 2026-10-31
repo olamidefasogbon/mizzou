@@ -575,16 +575,36 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
    * Portfolio, academic programs surface Transcripts/SOP/LORs, and funding
    * calls surface Proposal/Budget Deck with no hardcoded lists. The plan
    * card goes out only when valid ISO deadlines exist; otherwise the UI
-   * gets a rolling notice only when the page explicitly says rolling.
+   * gets a rolling notice only when the page explicitly says rolling. Requirements cards need evidenced items from real reading, never one trivial sentence.
    */
-  const emitExtractionCards = (extraction: Extraction): void => {
+  const emitExtractionCards = (extraction: Extraction): boolean => {
     const cardId = `conv-${run.id}-t${run.turnCount}`;
-    send({
-      t: 'card',
-      id: `${cardId}-requirements`,
-      kind: 'requirements',
-      payload: {
-        documents: extraction.documents.map((d) => ({
+    const seenReq = new Set<string>();
+    const docs = [];
+    for (const d of extraction.documents) {
+      if (!d.checked || d.evidence_quote.trim().length === 0) continue;
+      const key = `${d.value.name}||${d.evidence_quote}`.toLowerCase();
+      if (seenReq.has(key)) continue;
+      seenReq.add(key);
+      docs.push(d);
+    }
+    const elig = [];
+    for (const e of extraction.eligibility) {
+      if (!e.checked || e.evidence_quote.trim().length === 0) continue;
+      const key = `${e.value.rule}||${e.evidence_quote}`.toLowerCase();
+      if (seenReq.has(key)) continue;
+      seenReq.add(key);
+      elig.push(e);
+    }
+    const substantial =
+      docs.length + elig.length >= 1 && (mem.pages.length >= 2 || (docs.length >= 1 && elig.length >= 1));
+    if (substantial) {
+      send({
+        t: 'card',
+        id: `${cardId}-requirements`,
+        kind: 'requirements',
+        payload: {
+          documents: docs.map((d) => ({
           name: d.value.name,
           limit: d.value.limit,
           optional: d.value.optional,
@@ -593,7 +613,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
           evidence_quote: d.evidence_quote,
           source_url: d.source_url,
         })),
-        eligibility: extraction.eligibility.map((e) => ({
+        eligibility: elig.map((e) => ({
           rule: e.value.rule,
           hard: e.value.hard,
           confidence: e.confidence,
@@ -603,6 +623,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         })),
       },
     });
+    }
     const deadlines = validIsoDeadlines(extraction);
     const explicitRolling = extraction.deadlines.some((d) => d.field.checked && d.field.value.rolling === true);
     if (deadlines.length > 0) {
@@ -625,6 +646,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         payload: { text: ROLLING_NOTICE_TEXT },
       });
     }
+    return substantial;
   };
 
   // Writer-role draft create/rewrite (PROMPT.md 7.5). A throwing writer
@@ -718,9 +740,13 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     if (rec.conflicts.length === 0) {
       const deadlines = rec.merged?.deadlines.length ?? 0;
       const noDateNote = deadlines === 0 ? '. With no date on this page, read the apply and dates pages next; never show a rolling card for a page that never says rolling' : '';
-      if (rec.merged) emitExtractionCards(rec.merged);
+      let reqNote = '';
+      if (rec.merged) {
+        const shown = emitExtractionCards(rec.merged);
+        if (!shown) reqNote = '. Requirements card held back: read the Apply and eligibility pages before showing it';
+      }
       if (rec.merged) await emitFitCard(rec.merged);
-      return { gate: null, summary: `read ${title || url}; ${deadlines} deadline(s) extracted, no conflicts${noDateNote}` };
+      return { gate: null, summary: `read ${title || url}; ${deadlines} deadline(s) extracted, no conflicts${noDateNote}${reqNote}` };
     }
     let remaining = rec.conflicts;
     let settled: Extraction | null = rec.merged;
@@ -733,7 +759,9 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       // Judge unreachable: fall through with code-detected conflicts.
     }
     if (remaining.length === 0) {
-      if (settled) emitExtractionCards(settled);
+      if (settled && !emitExtractionCards(settled)) {
+        return { gate: null, summary: `read ${title || url}; conflicts resolved by judge. Requirements card held back: read the Apply and eligibility pages before showing it` };
+      }
       if (settled) await emitFitCard(settled);
       return { gate: null, summary: `read ${title || url}; conflicts resolved by judge` };
     }

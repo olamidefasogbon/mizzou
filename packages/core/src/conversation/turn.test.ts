@@ -367,6 +367,33 @@ describe('settled extraction card guards', () => {
     expect(kinds).not.toContain('plan');
   });
 
+  it('holds back the requirements card from one trivial page', async () => {
+    const events = await readOnce(stubExtraction());
+    const kinds = cardKinds(events);
+    expect(kinds).not.toContain('requirements');
+  });
+
+  it('shows the requirements card once docs and eligibility carry evidence', async () => {
+    const events = await readOnce(jobExtraction([isoDeadline('Apply by', '2026-12-01T04:59:59Z')]));
+    const req = events.find((e) => e.t === 'card' && (e as { kind: string }).kind === 'requirements') as unknown as {
+      payload: { documents: Array<{ name: string; evidence_quote: string }>; eligibility: Array<{ rule: string; evidence_quote: string }> };
+    };
+    expect(req.payload.documents).toHaveLength(2);
+    expect(req.payload.eligibility).toHaveLength(1);
+    for (const d of req.payload.documents) expect(d.evidence_quote.length).toBeGreaterThan(0);
+  });
+
+  it('dedupes repeated requirement rows', async () => {
+    const dup = jobExtraction([]);
+    dup.documents = [doc('Resume'), doc('Resume')];
+    dup.eligibility = [rule('US work authorization required')];
+    const events = await readOnce(dup);
+    const req = events.find((e) => e.t === 'card' && (e as { kind: string }).kind === 'requirements') as unknown as {
+      payload: { documents: Array<{ name: string }> };
+    };
+    expect(req.payload.documents.map((d) => d.name)).toEqual(['Resume']);
+  });
+
   it('treats unchecked deadlines as neither planned nor rolling', async () => {
     const unchecked = isoDeadline('Apply by', '2026-12-01T04:59:59Z');
     unchecked.field.checked = false;

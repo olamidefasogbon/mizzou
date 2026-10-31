@@ -359,26 +359,20 @@ describe('settled extraction card guards', () => {
     expect(plan.payload.deadlines).toEqual(['2026-12-01T04:59:59Z']);
   });
 
-  it('emits a rolling notice and no plan card when no deadlines exist', async () => {
+  it('emits no rolling notice and no plan card when no date is found', async () => {
     const events = await readOnce(jobExtraction([]));
     const kinds = cardKinds(events);
     expect(kinds).toContain('requirements');
-    expect(kinds).toContain('rolling_notice');
+    expect(kinds).not.toContain('rolling_notice');
     expect(kinds).not.toContain('plan');
-    const rolling = events.find((e) => e.t === 'card' && (e as { kind: string }).kind === 'rolling_notice') as unknown as {
-      payload: { text: string };
-    };
-    expect(rolling.payload.text).toBe(
-      'No fixed closing date found on this listing. Applications may be reviewed on a rolling basis.',
-    );
   });
 
-  it('treats unchecked deadlines as rolling, not planned', async () => {
+  it('treats unchecked deadlines as neither planned nor rolling', async () => {
     const unchecked = isoDeadline('Apply by', '2026-12-01T04:59:59Z');
     unchecked.field.checked = false;
     const events = await readOnce(jobExtraction([unchecked]));
     const kinds = cardKinds(events);
-    expect(kinds).toContain('rolling_notice');
+    expect(kinds).not.toContain('rolling_notice');
     expect(kinds).not.toContain('plan');
   });
 });
@@ -788,5 +782,45 @@ describe('drafts and versions (M6, PROMPT.md 7.5)', () => {
     expect(draftsOf(first.run)[0].kept).toBe(true);
     expect(draftsOf(first.run)).toHaveLength(1);
     expect(((first.run.state as Record<string, unknown>)['conversation'] as { pendingProfileQuestion: string | null }).pendingProfileQuestion).toBe('What is your degree?');
+  });
+
+  it('shows a rolling notice only when the page explicitly says rolling', async () => {
+    const runOne = async (extraction: Extraction): Promise<RunEvent[]> => {
+      const h = makeHarness([
+        callResult('read_page', { url: 'https://example.edu/a' }, 'resp-1'),
+        textResult('Checked the page.', 'resp-2'),
+      ]);
+      await runConversationTurn({
+        run: h.run,
+        save: async () => {},
+        userText: 'https://example.edu/a',
+        userId: 'user-1',
+        send: (e) => h.events.push(e),
+        streamCall: h.streamCall,
+        fetchPage: async () => stubPage,
+        readPageText: async () => ({ extraction, costUsd: 0.002, model: 'muse-spark-1.3', inputTokens: 80, outputTokens: 40 }),
+      });
+      return h.events;
+    };
+    const noDates = await runOne(stubExtraction());
+    expect(noDates.some((e) => e.t === 'card' && (e as { kind: string }).kind === 'rolling_notice')).toBe(false);
+    const rolling: Extraction = {
+      ...stubExtraction(),
+      deadlines: [
+        {
+          label: 'Review',
+          field: {
+            value: { iso_utc: null, original_tz: null, all_day: true, rolling: true },
+            evidence_quote: 'Applications are reviewed on a rolling basis.',
+            source_url: 'https://example.edu/a',
+            confidence: 'high',
+            needs_human: false,
+            checked: true,
+          },
+        },
+      ],
+    };
+    const rollingEvents = await runOne(rolling);
+    expect(rollingEvents.some((e) => e.t === 'card' && (e as { kind: string }).kind === 'rolling_notice')).toBe(true);
   });
 });

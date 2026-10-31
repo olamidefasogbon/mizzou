@@ -39,6 +39,7 @@ describe('card order rule', () => {
     expect(prompt).toMatch(/upcoming or passed/i);
     expect(buildDateContext('Africa/Lagos', '2026-10-31')).toContain('2026-10-31');
     expect(buildDateContext('', '')).toContain('Africa/Lagos');
+    expect(prompt).toMatch(/never showing a rolling notice/i);
   });
 
   it('fails sample bubbles that point above or below', () => {

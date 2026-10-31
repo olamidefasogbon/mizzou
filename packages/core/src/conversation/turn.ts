@@ -565,7 +565,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
    * Portfolio, academic programs surface Transcripts/SOP/LORs, and funding
    * calls surface Proposal/Budget Deck with no hardcoded lists. The plan
    * card goes out only when valid ISO deadlines exist; otherwise the UI
-   * gets a rolling notice instead of an empty plan.
+   * gets a rolling notice only when the page explicitly says rolling.
    */
   const emitExtractionCards = (extraction: Extraction): void => {
     const cardId = `conv-${run.id}-t${run.turnCount}`;
@@ -594,6 +594,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       },
     });
     const deadlines = validIsoDeadlines(extraction);
+    const explicitRolling = extraction.deadlines.some((d) => d.field.checked && d.field.value.rolling === true);
     if (deadlines.length > 0) {
       send({
         t: 'card',
@@ -606,7 +607,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
           portalUrl: extraction.program.portal_url,
         },
       });
-    } else {
+    } else if (explicitRolling) {
       send({
         t: 'card',
         id: `${cardId}-rolling`,
@@ -704,9 +705,10 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     const rec = reconcileExtractions(mem.extractions, mem.programUrl);
     if (rec.conflicts.length === 0) {
       const deadlines = rec.merged?.deadlines.length ?? 0;
+      const noDateNote = deadlines === 0 ? '. With no date on this page, read the apply and dates pages next; never show a rolling card for a page that never says rolling' : '';
       if (rec.merged) emitExtractionCards(rec.merged);
       if (rec.merged) await emitFitCard(rec.merged);
-      return { gate: null, summary: `read ${title || url}; ${deadlines} deadline(s) extracted, no conflicts` };
+      return { gate: null, summary: `read ${title || url}; ${deadlines} deadline(s) extracted, no conflicts${noDateNote}` };
     }
     let remaining = rec.conflicts;
     let settled: Extraction | null = rec.merged;

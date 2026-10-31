@@ -165,6 +165,18 @@ export async function streamResponsesCall(opts: StreamCallOptions): Promise<Resp
     const items: ResponsesItem[] = [];
     const argBuffers = new Map<string, string>();
     const callItemById = new Map<string, ResponsesItem>();
+    // Every item id pushed below is recorded here. The provider sends each
+    // output item twice on the wire (once as output_item.done, once inside
+    // the response.completed envelope); without this set the second copy
+    // lands in `items` and the next turn 400s on duplicate ids.
+    const seenIds = new Set<string>();
+    const pushItem = (item: ResponsesItem): void => {
+      if (item.id) {
+        if (seenIds.has(item.id)) return;
+        seenIds.add(item.id);
+      }
+      items.push(item);
+    };
     const done = { value: false };
     // eslint-disable-next-line no-constant-condition
     while (true) {
@@ -190,7 +202,7 @@ export async function streamResponsesCall(opts: StreamCallOptions): Promise<Resp
         if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') {
           opts.onText?.(event.delta);
         } else if (event.type === 'response.output_item.added' && event.item && (event.item.type === 'function_call' || event.item.type === 'function_call_output')) {
-          items.push(event.item);
+          pushItem(event.item);
           if (event.item.type === 'function_call' && event.item.id) callItemById.set(event.item.id, event.item);
         } else if (event.type === 'response.function_call_arguments.delta' && event.item_id) {
           argBuffers.set(event.item_id, (argBuffers.get(event.item_id) ?? '') + (event.delta ?? ''));
@@ -201,7 +213,7 @@ export async function streamResponsesCall(opts: StreamCallOptions): Promise<Resp
             existing.arguments = buffered;
             opts.onFunctionCall?.(existing.name ?? '', buffered);
           } else {
-            items.push(event.item);
+            pushItem(event.item);
           }
         } else if (event.type === 'response.completed' && event.response) {
           responseId = event.response.id ?? responseId;
@@ -216,7 +228,8 @@ export async function streamResponsesCall(opts: StreamCallOptions): Promise<Resp
                 }
                 continue;
               }
-              items.push(item);
+              if (item.id && seenIds.has(item.id)) continue;
+              pushItem(item);
             }
           }
           const usage = event.response.usage;

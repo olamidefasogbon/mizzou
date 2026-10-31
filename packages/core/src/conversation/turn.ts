@@ -259,7 +259,39 @@ function messageText(items: ResponsesItem[]): string {
   return parts.join('').trim();
 }
 
-/** Map one persisted run message to a Responses input item for stateless replay. */
+/**
+ * Single choke point for Responses input assembly. The ONLY place that
+ * appends round output to the turn thread: replayed items keep their first
+ * position and are never duplicated by id. `function_call_output` items
+ * carry no `id`, so they dedupe on `call_id`; plain history messages pass
+ * through untouched.
+ */
+export function buildInput(history: unknown[], newItems: unknown[]): unknown[] {
+  const keyOf = (item: unknown): string | null => {
+    if (typeof item !== 'object' || item === null) return null;
+    const record = item as { id?: unknown; call_id?: unknown };
+    if (typeof record.id === 'string' && record.id.length > 0) return `id:${record.id}`;
+    if (typeof record.call_id === 'string' && record.call_id.length > 0) return `call:${record.call_id}`;
+    return null;
+  };
+  const out: unknown[] = [...history];
+  const seen = new Set<string>();
+  for (const item of out) {
+    const key = keyOf(item);
+    if (key !== null) seen.add(key);
+  }
+  for (const item of newItems) {
+    const key = keyOf(item);
+    if (key !== null) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+    }
+    out.push(item);
+  }
+  return out;
+}
+
+/** Map one persisted run message to Responses input for stateless replay. */
 function historyItem(message: unknown): unknown {
   const m = (message ?? {}) as { role?: unknown; text?: unknown };
   const text = typeof m.text === 'string' ? m.text : '';
@@ -643,10 +675,9 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   // Stateless replay: every round sends the persisted message history plus
   // this turn's thread so far. previous_response_id is never used, so turns
   // survive serverless with no chained responses.
-  const thread: unknown[] = [
-    ...run.messages.map(historyItem),
+  let thread: unknown[] = buildInput(run.messages.map(historyItem), [
     { type: 'message', role: 'user', content: [{ type: 'input_text', text: firstInput }] },
-  ];
+  ]);
   for (let round = 0; round < maxRounds; round += 1) {
     const result = await callWithRetry(
       {
@@ -699,7 +730,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       await persist();
       return { gated: true, gate: gateHit.gate, text: fullText, usageUsd: run.usageUsd };
     }
-    thread.push(...result.items, ...outputs);
+    thread = buildInput(thread, [...result.items, ...outputs]);
   }
   mem.lastReply = fullText || mem.lastReply;
 

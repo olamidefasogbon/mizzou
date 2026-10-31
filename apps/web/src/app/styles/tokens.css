@@ -36,7 +36,7 @@
   --mz-dur-enter: 240ms;
 
   --mz-font:
-    "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    var(--font-figtree, "Figtree"), "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 /* App shell: white canvas, single column. */

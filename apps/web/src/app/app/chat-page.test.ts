@@ -77,6 +77,20 @@ describe('calendar sync contract', () => {
   });
 });
 
+describe('vision seed contract', () => {
+  it('posts stashed uploads with the first message and clears the stash once', () => {
+    assert.match(src, /takeStashedVision\(chatId\)/);
+    assert.match(src, /void sendText\(initialQ, takeStashedVision\(chatId\) \?\? undefined\)/);
+    assert.match(src, /vision: seed/);
+  });
+
+  it('renders the attach control and ships the seed with the message', () => {
+    assert.match(src, /<AttachButton state=\{attach\}/);
+    assert.match(src, /downscaleImage\(file\)/);
+    assert.match(src, /void sendText\(outgoing, payload \?\? undefined\)/);
+  });
+});
+
 describe('talk-back contract', () => {
   it('opens due reminders with done, snooze and help chips', () => {
     assert.match(src, /fetch\('\/api\/reminders\/due'\)/);

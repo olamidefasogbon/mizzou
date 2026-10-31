@@ -7,6 +7,8 @@ import { DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, FIT_APPLY_LABEL, FIT_PARK_LAB
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { PackOverlay, type PackData, type PackDraft } from '@/components/pack-overlay';
+import { AttachButton, type AttachState } from '@/components/attach-button';
+import { downscaleImage, takeStashedVision, uploadImage, type VisionPayload } from '@/components/attach-image';
 import { ensureChatAction, loadChatHistoryAction } from '@/lib/actions';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { upgradeToGoogle } from '@/components/google-upgrade';
@@ -317,6 +319,11 @@ function ChatContent(): React.JSX.Element {
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  // Flyer/screenshot attach (upload D): uploads through /api/upload,
+  // then ships with the message as a vision seed for the G1 card.
+  const [attach, setAttach] = useState<AttachState>({ status: 'idle' });
+  const [vision, setVision] = useState<VisionPayload[] | null>(null);
+  const [attaching, setAttaching] = useState(false);
   const { isGuest, refreshChats } = useStore();
   const feedRef = useRef<HTMLDivElement>(null);
   // Cards streamed with the run stay hidden until the G1 "Yes" —
@@ -698,7 +705,7 @@ function ChatContent(): React.JSX.Element {
   };
 
   const sendText = useCallback(
-    async (raw: string): Promise<void> => {
+    async (raw: string, seed?: VisionPayload[]): Promise<void> => {
       const text = raw.trim();
       if (!text || busy) return;
       setInput('');
@@ -711,7 +718,12 @@ function ChatContent(): React.JSX.Element {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, chatId, runId: runIdRef.current ?? undefined }),
+        body: JSON.stringify({
+          message: text,
+          chatId,
+          runId: runIdRef.current ?? undefined,
+          ...(seed && seed.length > 0 ? { vision: seed } : {}),
+        }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await pump(res);
@@ -759,9 +771,43 @@ function ChatContent(): React.JSX.Element {
     setPack({ program, portalUrl, requirements, drafts: [...drafts.values()] });
   }, [feed]);
 
+  const pickImage = (file: File): void => {
+    if (attaching) return;
+    setAttaching(true);
+    setAttach({ status: 'uploading', name: file.name.slice(0, 60) });
+    void (async () => {
+      try {
+        const dataUrl = await downscaleImage(file);
+        const payload = await uploadImage(dataUrl, file.name.slice(0, 120));
+        setVision([payload]);
+        setAttach({ status: 'ready', name: payload.name });
+      } catch (err) {
+        setVision(null);
+        setAttach({
+          status: 'error',
+          message: err instanceof Error ? err.message : 'I could not read that image. Try again in a moment.',
+        });
+      } finally {
+        setAttaching(false);
+      }
+    })();
+  };
+
+  const removeAttach = (): void => {
+    setVision(null);
+    setAttach({ status: 'idle' });
+  };
+
   const send = useCallback((): void => {
-    void sendText(input);
-  }, [input, sendText]);
+    if (attaching) return;
+    const text = input.trim();
+    const payload = vision;
+    if (!text && !payload) return;
+    const outgoing = text || `I attached ${payload?.[0]?.name ?? 'an image'} — what is it?`;
+    setVision(null);
+    setAttach({ status: 'idle' });
+    void sendText(outgoing, payload ?? undefined);
+  }, [input, vision, attaching, sendText]);
 
   const actTalkback = useCallback(
     async (item: FeedItem, action: 'done' | 'snooze' | 'help'): Promise<void> => {
@@ -871,7 +917,9 @@ function ChatContent(): React.JSX.Element {
     sentInitial.current = true;
     router.replace(`/app/c/${chatId}`, { scroll: false });
     void ensureChatAction(chatId, initialQ);
-    void sendText(initialQ);
+    // Home attach handoff: a stashed upload ships once with the first
+    // message, then the stash is gone so a refresh cannot resend it.
+    void sendText(initialQ, takeStashedVision(chatId) ?? undefined);
   }, [initialQ, chatId, router, sendText]);
 
   const { select, clear } = useEvidence();
@@ -1385,6 +1433,7 @@ function ChatContent(): React.JSX.Element {
         </div>
 
         <div className={styles.composer}>
+          <AttachButton state={attach} disabled={busy || attaching} onPick={pickImage} onRemove={removeAttach} />
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -1398,7 +1447,7 @@ function ChatContent(): React.JSX.Element {
           <button
             type="button"
             onClick={() => void send()}
-            disabled={busy || input.trim().length === 0}
+            disabled={busy || attaching || (input.trim().length === 0 && !vision)}
             aria-label="Send"
             className={styles.sendBtn}
           >

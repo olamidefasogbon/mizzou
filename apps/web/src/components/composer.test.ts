@@ -31,11 +31,21 @@ describe('composer (P2-15)', () => {
   });
 
   it('send button is blue only when there is text (shared composer)', () => {
-    assert.match(chromeSrc, /background:\s*hasText \? "var\(--mz-blue\)"/);
+    assert.match(chromeSrc, /background:\s*canSend \? "var\(--mz-blue\)"/);
+  });
+
+  it('attach control is quiet: tokens only, lucide icon at 1.75 stroke', () => {
+    assert.match(globalsCss, /\.mz-composer-attach\s*\{[^}]*color:\s*var\(--mz-secondary\)/);
+    assert.match(globalsCss, /\.mz-composer-chip\s*\{[^}]*background:\s*var\(--mz-muted\)/);
+    const attachSrc = readFileSync(new URL('./attach-button.tsx', import.meta.url), 'utf8');
+    assert.match(attachSrc, /ImagePlus size=\{20\} strokeWidth=\{1\.75\}/);
+    assert.match(attachSrc, /aria-label="Attach a flyer or screenshot"/);
+    assert.doesNotMatch(attachSrc, /#[0-9a-fA-F]{3,6}/);
+    assert.match(chromeSrc, /<AttachButton/);
   });
 
   it('send button is blue only when there is text (conversation)', () => {
-    assert.match(convoSrc, /disabled=\{busy \|\| input\.trim\(\)\.length === 0\}/);
+    assert.match(convoSrc, /disabled=\{busy \|\| attaching \|\| \(input\.trim\(\)\.length === 0 && !vision\)\}/);
     assert.match(convoCss, /\.sendBtn:disabled\s*\{[^}]*background:\s*var\(--mz-muted\)/);
   });
 });

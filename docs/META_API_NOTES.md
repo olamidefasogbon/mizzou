@@ -112,9 +112,21 @@ Two tiny probes (echo tool, then `previous_response_id` continuation).
 No streaming or 429 encountered yet. `callModel` backs off on 429 (max 3
 attempts); the exact 429 body is unrecorded.
 
-## 7. Image input format — PENDING
+## 7. Image input format — VERIFIED (vision probe, Oct 31)
 
-Needed for the vision role (flyers, M5). Not yet attempted.
+Chat-completions `content` array with `{type:"text",...}` plus
+`{type:"image_url", image_url:{url:<data URL>}}` on `muse-spark-1.3`:
+accepted, schema-valid `ExtractionSchema` JSON returned (`json_object`
+response format works with image parts).
+
+Probe (estimate stated BEFORE the run: <$0.05 for one extraction): one
+673,799-byte PNG (`docs/design/9-plan-and-draft.png`, a reference-UI
+screenshot — real pixels, NOT a flyer), sent full-size as a data URL
+through `readImageExtraction`. Result: HTTP 200 in 109s wall, 2,532 in /
+3,373 out tokens, **$0.01750025**. `opportunity_type: academic_program`,
+0 deadlines, 1 document — thin because the image is a UI mockup, not a
+flyer. Image-input mechanics are verified; real-flyer extraction quality
+is a live-URL human retest, not claimed here.
 
 ## 8. SAM 3.1 + speech endpoint shapes — PENDING
 

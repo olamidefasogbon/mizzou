@@ -3,11 +3,13 @@ import {
   BudgetGuard,
   budgetFriendlyMessage,
   encodeSseEvent,
+  ExtractionSchema,
   generateChatTitle,
   limitsFromEnv,
   newRun,
   runConversationTurn,
   type RunEvent,
+  type VisionSeed,
 } from '@mizzou/core';
 import { AuthRequiredError, resolveUser } from '@/lib/auth';
 import { logServerError, userErrorWithRef } from '@/lib/errors';
@@ -29,6 +31,14 @@ export async function POST(req: Request): Promise<Response> {
   let message = '';
   let chatId: string | null = null;
   let requestedRunId: string | null = null;
+  let visionSeeds: VisionSeed[] = [];
+  let timezone = 'Africa/Lagos';
+  const HEX = '0123456789abcdef';
+  const isUploadId = (v: unknown): v is string =>
+    typeof v === 'string' &&
+    v.length === 21 &&
+    v.startsWith('upl-') &&
+    v.slice(4).split('').every((c) => HEX.includes(c));
   try {
     const body: unknown = await req.json();
     if (typeof (body as { message?: unknown }).message === 'string') {
@@ -39,6 +49,25 @@ export async function POST(req: Request): Promise<Response> {
     }
     if (typeof (body as { runId?: unknown }).runId === 'string') {
       requestedRunId = (body as { runId: string }).runId;
+    }
+    if (typeof (body as { timezone?: unknown }).timezone === 'string' && (body as { timezone: string }).timezone.trim().length > 0) {
+      timezone = (body as { timezone: string }).timezone.slice(0, 80);
+    }
+    // Vision-role extraction from /api/upload (schema-validated, never
+    // trusted blind): enters the turn as a merge-only seed for G1.
+    const vision = (body as { vision?: unknown }).vision;
+    if (Array.isArray(vision)) {
+      for (const seed of vision.slice(0, 3)) {
+        const s = seed as { id?: unknown; name?: unknown; extraction?: unknown };
+        if (!isUploadId(s.id)) continue;
+        const parsed = ExtractionSchema.safeParse(s.extraction);
+        if (!parsed.success) continue;
+        visionSeeds.push({
+          id: s.id,
+          name: typeof s.name === 'string' ? s.name.slice(0, 120) : 'upload',
+          extraction: parsed.data,
+        });
+      }
     }
   } catch {
     message = '';
@@ -126,6 +155,8 @@ export async function POST(req: Request): Promise<Response> {
             run,
             save: (r) => store.save(r),
             userText: message,
+            seedExtractions: visionSeeds,
+            timezone,
             userId: run.userId ?? userId,
             budgetGuard,
             send,

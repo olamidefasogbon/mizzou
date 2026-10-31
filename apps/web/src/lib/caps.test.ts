@@ -8,6 +8,7 @@ import {
   checkHitRate,
   checkMessageLength,
   checkNewRun,
+  checkUploadCount,
   checkUploadSize,
   clientIp,
   dayStamp,
@@ -41,6 +42,7 @@ describe('abuse limits from env', () => {
       maxHitsPerIpPerMinute: 20,
       maxPagesPerRun: 25,
       maxUploadBytes: 8 * 1024 * 1024,
+      maxUploadsPerIpPerDay: 20,
     });
   });
 
@@ -51,6 +53,7 @@ describe('abuse limits from env', () => {
       MAX_HITS_PER_IP_PER_MINUTE: '3',
       MAX_PAGES_PER_RUN: '7',
       MAX_UPLOAD_BYTES: '1024',
+      MAX_UPLOADS_PER_IP_PER_DAY: '4',
     });
     assert.deepEqual(limits, {
       maxMessageChars: 100,
@@ -58,6 +61,7 @@ describe('abuse limits from env', () => {
       maxHitsPerIpPerMinute: 3,
       maxPagesPerRun: 7,
       maxUploadBytes: 1024,
+      maxUploadsPerIpPerDay: 4,
     });
   });
 });
@@ -113,6 +117,18 @@ describe('hit and run verdicts', () => {
     if (!blocked.ok) {
       assert.equal(blocked.message, 'I need a minute.');
       assert.deepEqual(blocked.detail, { scope: 'hits-per-minute', amount: 3, limit: 2 });
+    }
+  });
+
+  it('names tomorrow when the per-IP daily upload budget is hit', async () => {
+    const store = memoryStore();
+    const limits = abuseLimitsFromEnv({ MAX_UPLOADS_PER_IP_PER_DAY: '1' });
+    assert.deepEqual(await checkUploadCount(store, '9.9.9.9', limits), { ok: true });
+    const blocked = await checkUploadCount(store, '9.9.9.9', limits);
+    assert.equal(blocked.ok, false);
+    if (!blocked.ok) {
+      assert.match(blocked.message, /today/);
+      assert.deepEqual(blocked.detail, { scope: 'uploads-per-day-per-ip', amount: 2, limit: 1 });
     }
   });
 

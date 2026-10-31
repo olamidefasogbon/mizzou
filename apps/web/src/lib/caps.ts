@@ -20,6 +20,7 @@ export interface AbuseLimits {
   maxHitsPerIpPerMinute: number;
   maxPagesPerRun: number;
   maxUploadBytes: number;
+  maxUploadsPerIpPerDay: number;
 }
 
 export function abuseLimitsFromEnv(env: NodeJS.ProcessEnv = process.env): AbuseLimits {
@@ -33,6 +34,7 @@ export function abuseLimitsFromEnv(env: NodeJS.ProcessEnv = process.env): AbuseL
     maxHitsPerIpPerMinute: num(env.MAX_HITS_PER_IP_PER_MINUTE, 20),
     maxPagesPerRun: num(env.MAX_PAGES_PER_RUN, 25),
     maxUploadBytes: num(env.MAX_UPLOAD_BYTES, 8 * 1024 * 1024),
+    maxUploadsPerIpPerDay: num(env.MAX_UPLOADS_PER_IP_PER_DAY, 20),
   };
 }
 
@@ -132,6 +134,19 @@ export async function checkHitRate(store: CounterStore, ip: string, limits: Abus
   const count = await store.increment(`ip:${hashIp(ip)}:hit`, minuteStamp());
   if (count > limits.maxHitsPerIpPerMinute) {
     return { ok: false, message: 'I need a minute.', detail: { scope: 'hits-per-minute', amount: count, limit: limits.maxHitsPerIpPerMinute } };
+  }
+  return { ok: true };
+}
+
+/** Per-IP daily upload budget: names tomorrow. Checked on every upload. */
+export async function checkUploadCount(store: CounterStore, ip: string, limits: AbuseLimits = abuseLimitsFromEnv()): Promise<CapVerdict> {
+  const count = await store.increment(`ip:${hashIp(ip)}:upload`, dayStamp());
+  if (count > limits.maxUploadsPerIpPerDay) {
+    return {
+      ok: false,
+      message: "You've uploaded enough images for today. Try again tomorrow.",
+      detail: { scope: 'uploads-per-day-per-ip', amount: count, limit: limits.maxUploadsPerIpPerDay },
+    };
   }
   return { ok: true };
 }

@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
+import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
 import { getMetaClient } from './client.js';
 import { ModelRole, ROLE_MODEL_MAP } from './registry.js';
 import { BudgetExceededError, BudgetGuard, defaultBudgetGuard } from './budget.js';
@@ -10,6 +11,8 @@ interface CallModelOptions<T extends z.ZodTypeAny> {
   role: ModelRole;
   prompt: string;
   systemPrompt?: string;
+  /** Image data URLs for image-input roles (vision). Sent as image_url parts. */
+  images?: string[];
   schema?: T;
   temperature?: number;
   /** Owning user for budget accounting. Defaults to 'dev'. */
@@ -39,6 +42,7 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
   role,
   prompt,
   systemPrompt,
+  images,
   schema,
   temperature = 0.2,
   userId = 'dev',
@@ -50,11 +54,18 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
   // BudgetExceededError with the friendly message; never retried.
   budgetGuard.checkBeforeCall({ userId, model, promptText: systemPrompt ? `${systemPrompt}\n${prompt}` : prompt });
 
-  const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
+  const messages: ChatCompletionMessageParam[] = [];
   if (systemPrompt) {
     messages.push({ role: 'system', content: systemPrompt });
   }
-  messages.push({ role: 'user', content: prompt });
+  if (images && images.length > 0) {
+    messages.push({
+      role: 'user',
+      content: [{ type: 'text', text: prompt }, ...images.map((url) => ({ type: 'image_url' as const, image_url: { url } }))],
+    });
+  } else {
+    messages.push({ role: 'user', content: prompt });
+  }
 
   const record = (usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number }) => {
     const costUsd = budgetGuard.recordCall({

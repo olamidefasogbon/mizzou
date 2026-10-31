@@ -5,6 +5,9 @@
 export const READER_SYSTEM_PROMPT =
   'You read one official admissions page into the extraction schema. Return only JSON matching the schema.';
 
+export const VISION_SYSTEM_PROMPT =
+  'You read one flyer or screenshot image into the extraction schema. Return only JSON matching the schema.';
+
 export function buildReaderPrompt(pageText: string, sourceUrl: string, programHint?: string | null): string {
   return (
     `Extract application facts from the page text below. Return ONLY one JSON object with EXACTLY this structure ` +
@@ -23,5 +26,27 @@ export function buildReaderPrompt(pageText: string, sourceUrl: string, programHi
     `where EV_STR = {"value": string, "evidence_quote": string (max 400 chars, copied verbatim from the page text, must support the value), "source_url": string (always "${sourceUrl}"), "confidence": CONF, "needs_human": boolean, "checked": boolean},\n` +
     `CONF = "high"|"medium"|"low", and DATEFIELD = {"value": {"iso_utc": string|null (UTC as YYYY-MM-DDTHH:MM:SSZ), "original_tz": string|null, "all_day": boolean, "rolling": boolean}, "evidence_quote": string, "source_url": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}.\n` +
     `PAGE TEXT:\n${pageText}`
+  );
+}
+
+// Vision role (PROMPT.md 4, flyers): the SAME extraction schema, read from
+// the attached image. Every evidence_quote is copied character-for-character
+// from text visible in the image (max 400 chars) and must support the value;
+// the source_url is always the upload id. Never invent a date: a date value
+// needs its year visible in its own quote.
+export function buildVisionPrompt(sourceUrl: string): string {
+  return (
+    `Extract application facts from the attached flyer or screenshot image. Return ONLY one JSON object with EXACTLY this structure ` +
+    `(all keys present; null or [] where nothing is found; never guess a date):\n` +
+    `{"opportunity_type": one of [academic_program|job|fellowship|grant|competition|hackathon|scholarship|incubator|generic_opportunity] — classify what the image offers,\n` +
+    ` "program": {"name": EV_STR, "unit": EV_STR, "institution": EV_STR, "portal_url": string|null, "language_read": string},\n` +
+    ` "opens": DATEFIELD|null,\n` +
+    ` "deadlines": [{"label": string, "field": DATEFIELD}],\n` +
+    ` "documents": [{"value": {"name": string, "limit": string|null, "optional": boolean}, "evidence_quote": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}],\n` +
+    ` "eligibility": [{"value": {"rule": string, "hard": boolean}, "evidence_quote": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}],\n` +
+    ` "people": [EV_STR], "tests": [EV_STR], "money": [EV_STR], "unusual_rules": [EV_STR]}\n` +
+    `where EV_STR = {"value": string, "evidence_quote": string (max 400 chars, copied verbatim from text visible in the image, must support the value), "source_url": string (always "${sourceUrl}"), "confidence": CONF, "needs_human": boolean, "checked": boolean},\n` +
+    `CONF = "high"|"medium"|"low", and DATEFIELD = {"value": {"iso_utc": string|null (UTC as YYYY-MM-DDTHH:MM:SSZ), "original_tz": string|null, "all_day": boolean, "rolling": boolean}, "evidence_quote": string, "source_url": string, "confidence": CONF, "needs_human": boolean, "checked": boolean}.\n` +
+    `Copy quotes from the image text exactly; when the year is not visible, leave the date value null rather than guessing.`
   );
 }

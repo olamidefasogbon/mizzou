@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Composer } from '@/components/chrome';
+import type { AttachState } from '@/components/attach-button';
+import { downscaleImage, stashVision, uploadImage, type VisionPayload } from '@/components/attach-image';
 import { useStore } from '@/components/store-context';
 import { dedupeReminders, newChatHref, reminderQuestion } from '@/components/panel-helpers';
 import { DISMISS_COOKIE, remindersVersion, shouldShowComingUp } from './coming-up';
@@ -40,6 +42,11 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
   const [wordIndex, setWordIndex] = useState(0);
   const [wordVisible, setWordVisible] = useState(true);
   const [input, setInput] = useState('');
+  // Flyer/screenshot attach (upload D): uploads through /api/upload,
+  // then ships with the first message as a vision seed for G1.
+  const [attach, setAttach] = useState<AttachState>({ status: 'idle' });
+  const [vision, setVision] = useState<VisionPayload | null>(null);
+  const [attaching, setAttaching] = useState(false);
   const firstName = name?.trim().split(/\s+/)[0] ?? '';
   const typing = input.trim().length > 0;
   // Known before first paint: the server read it from the request cookie.
@@ -58,11 +65,43 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
     return () => clearInterval(timer);
   }, [typing]);
 
+  const pickImage = (file: File): void => {
+    if (attaching) return;
+    setAttaching(true);
+    setAttach({ status: 'uploading', name: file.name.slice(0, 60) });
+    void (async () => {
+      try {
+        const dataUrl = await downscaleImage(file);
+        const payload = await uploadImage(dataUrl, file.name.slice(0, 120));
+        setVision(payload);
+        setAttach({ status: 'ready', name: payload.name });
+      } catch (err) {
+        setVision(null);
+        setAttach({
+          status: 'error',
+          message: err instanceof Error ? err.message : 'I could not read that image. Try again in a moment.',
+        });
+      } finally {
+        setAttaching(false);
+      }
+    })();
+  };
+
+  const removeImage = (): void => {
+    setVision(null);
+    setAttach({ status: 'idle' });
+  };
+
   const send = () => {
-    const text = input.trim();
-    if (!text) return;
+    if (attaching) return;
+    let text = input.trim();
+    if (!text && !vision) return;
+    if (!text && vision) text = `I attached ${vision.name} — what is it?`;
     // Hand the message to a fresh chat; the conversation screen posts it.
-    router.push(`/app/c/${crypto.randomUUID()}?q=${encodeURIComponent(text)}`);
+    // A vision seed travels in session storage, consumed once on arrival.
+    const id = crypto.randomUUID();
+    if (vision) stashVision(id, [vision]);
+    router.push(`/app/c/${id}?q=${encodeURIComponent(text)}`);
   };
 
   const version = useMemo(() => remindersVersion(reminders), [reminders]);
@@ -127,7 +166,12 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
       </div>
 
       <div className={styles.composer}>
-        <Composer value={input} onChange={setInput} onSend={send} />
+        <Composer
+          value={input}
+          onChange={setInput}
+          onSend={send}
+          attach={{ state: attach, disabled: attaching, onPick: pickImage, onRemove: removeImage }}
+        />
       </div>
     </>
   );

@@ -103,6 +103,55 @@ function checkField(
  * are supported by their quote. Mismatches set confidence to low and checked
  * to false.
  */
+/**
+ * Vision post-check (code, no model): no page text exists to match quotes
+ * against, so quote presence cannot be proven here — the prompt demands
+ * verbatim copies and the same schema. What code CAN prove is date honesty:
+ * a carried ISO date needs its year inside its own quote (no heading-text
+ * fallback without a corpus). Anything else is marked low/unchecked for
+ * the judge reconcile step. Empty quotes always fail.
+ */
+export function verifyVisionEvidence(extraction: Extraction): Extraction {
+  const result = JSON.parse(JSON.stringify(extraction)) as Extraction;
+  const checkVisionField = (field: EvidencedField, value?: DateValue): void => {
+    const quote = typeof field.evidence_quote === 'string' ? field.evidence_quote : '';
+    const quoteOk = normalize(quote).length > 0;
+    const valueOk = value === undefined ? true : quoteSupportsDate(quote, value, '');
+    const valid = quoteOk && valueOk;
+    field.checked = valid;
+    if (!valid) field.confidence = 'low';
+  };
+
+  checkVisionField(result.program.name);
+  checkVisionField(result.program.unit);
+  checkVisionField(result.program.institution);
+  if (result.opens !== null) {
+    checkVisionField(result.opens, result.opens.value);
+  }
+  for (const item of result.deadlines) {
+    checkVisionField(item.field, item.field.value);
+  }
+  for (const item of result.documents) {
+    checkVisionField(item);
+  }
+  for (const item of result.eligibility) {
+    checkVisionField(item);
+  }
+  for (const item of result.people) {
+    checkVisionField(item);
+  }
+  for (const item of result.tests) {
+    checkVisionField(item);
+  }
+  for (const item of result.money) {
+    checkVisionField(item);
+  }
+  for (const item of result.unusual_rules) {
+    checkVisionField(item);
+  }
+  return result;
+}
+
 export function verifyExtractionEvidence(rawSourceText: string, extraction: Extraction): Extraction {
   const result = JSON.parse(JSON.stringify(extraction)) as Extraction;
 

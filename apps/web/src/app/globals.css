@@ -77,3 +77,60 @@ input::placeholder {
 .mz-composer-input:focus-visible {
   box-shadow: none;
 }
+
+/* Attach control (upload D): quiet icon button, name chip, plain status
+   text. Tokens only — no new colors, fonts or effects. */
+.mz-composer-attach {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: transparent;
+  color: var(--mz-secondary);
+}
+.mz-composer-attach:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+.mz-composer-chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 180px;
+  padding: 6px 4px 6px 12px;
+  border-radius: var(--mz-radius-control);
+  border: 1px solid var(--mz-border);
+  background: var(--mz-muted);
+  font-size: 13px;
+  color: var(--mz-ink);
+}
+.mz-composer-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mz-composer-chip-remove {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: transparent;
+  color: var(--mz-secondary);
+}
+.mz-composer-progress {
+  flex: none;
+  font-size: 13px;
+  color: var(--mz-secondary);
+  white-space: nowrap;
+}

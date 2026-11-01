@@ -36,7 +36,7 @@ export function TryButton({ className }: { className: string }) {
     let live = true;
     supabaseBrowser()
       .auth.getSession()
-      .then(({ data }) => {
+      .then(({ data }: { data: { session: unknown } }) => {
         if (live) setNeedsCheck(!data.session);
       })
       .catch(() => {

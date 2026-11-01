@@ -88,6 +88,13 @@
   flex: none;
 }
 
+.btnIcon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  stroke-width: 1.75;
+}
+
 .failIcon {
   width: 16px;
   height: 16px;
@@ -130,6 +137,10 @@
 }
 
 .btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border: 0;
   border-radius: var(--mz-radius-pill);
   background: var(--mz-blue);
@@ -157,6 +168,10 @@
 }
 
 .btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border: 0;
   border-radius: var(--mz-radius-pill);
   background: var(--mz-muted);

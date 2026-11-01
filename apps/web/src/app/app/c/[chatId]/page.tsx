@@ -8,6 +8,7 @@ import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { PackOverlay, type PackData, type PackDraft } from '@/components/pack-overlay';
 import { AttachButton, type AttachState } from '@/components/attach-button';
+import { upcomingDeadlines } from '@/lib/plan-dates';
 import { VoiceButton } from '@/components/voice-button';
 import { downscaleImage, takeStashedVision, uploadImage, type VisionPayload } from '@/components/attach-image';
 import { ensureChatAction, loadChatHistoryAction } from '@/lib/actions';
@@ -18,6 +19,19 @@ import { useStore } from '@/components/store-context';
 import { isTightGroup, messageBubble, settleActiveStatuses, statusRun, statusRunHead } from './feed';
 import styles from './conversation.module.css';
 
+// Subtitle parts worth showing: not blank, not a repeat of the title, not a
+// placeholder the reader filled in when the picture had no institution.
+function subtitleParts(title: string, parts: string[]): string[] {
+  const seen = new Set<string>([title.trim().toLowerCase()]);
+  return parts.filter((p) => {
+    const t = p.trim();
+    const k = t.toLowerCase();
+    if (!t || seen.has(k) || /^(from (the |a |your )?(user|upload|screenshot|image)|unknown|n\/a|not stated)/.test(k)) return false;
+    seen.add(k);
+    return true;
+  });
+}
+
 function g1Title(program: { name: string; unit: string; institution: string }, opportunityType?: string): {
   title: string;
   subtitle: string;
@@ -27,7 +41,7 @@ function g1Title(program: { name: string; unit: string; institution: string }, o
     case 'academic_program':
       return {
         title: program.name,
-        subtitle: [program.institution, program.unit].filter(Boolean).join(' \u2022 '),
+        subtitle: subtitleParts(program.name, [program.institution, program.unit]).join(' \u2022 '),
       };
     case 'grant':
     case 'scholarship':
@@ -35,11 +49,11 @@ function g1Title(program: { name: string; unit: string; institution: string }, o
     case 'hackathon':
     case 'fellowship':
     case 'incubator':
-      return { title: program.name, subtitle: program.institution };
+      return { title: program.name, subtitle: subtitleParts(program.name, [program.institution]).join(', ') };
     default:
       return {
         title: program.name,
-        subtitle: [program.unit, program.institution].filter(Boolean).join(', '),
+        subtitle: subtitleParts(program.name, [program.unit, program.institution]).join(', '),
       };
   }
 }
@@ -145,6 +159,10 @@ type ClientEvent =
  * instants, so the muted zone reads UTC; date-only values show the date
  * alone with no zone guess. (Replaces the old day-only formatter.)
  */
+function hasRequirementContent(entry: FeedItem): boolean {
+  return entry.kind === 'requirements' && !!entry.requirements && entry.requirements.documents.length + entry.requirements.eligibility.length > 0;
+}
+
 function formatDeadline(iso: string): { main: string; sub: string | null } {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return { main: iso, sub: null };
@@ -262,7 +280,12 @@ function Sources({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const count = pages.length;
-  const summary = count > 0 ? `Read ${count} ${count === 1 ? 'page' : 'pages'}` : (fallback ?? 'No page could be read');
+  const fromImages = count > 0 && pages.every((p) => p.url.startsWith('upload:'));
+  const summary = fromImages
+    ? `Read your ${count === 1 ? 'screenshot' : 'screenshots'}`
+    : count > 0
+      ? `Read ${count} ${count === 1 ? 'page' : 'pages'}`
+      : (fallback ?? 'No page could be read');
   return (
     <div className={grouped ? `${styles.progress} ${styles.gapGroup}` : styles.progress}>
       <button
@@ -345,6 +368,9 @@ function ChatContent(): React.JSX.Element {
   // composer, and only renders then.
   const lastPackIndex = (() => {
     let last = -1;
+    // The Application Pack needs real requirements; without them the button
+    // would open nothing.
+    if (!feed.some(hasRequirementContent)) return -1;
     feed.forEach((entry, i) => {
       if (entry.kind === 'requirements' || entry.kind === 'plan' || entry.kind === 'draft') last = i;
     });
@@ -625,7 +651,8 @@ function ChatContent(): React.JSX.Element {
       ) {
         const built: PlanPayload = {
           title: payload.title as string,
-          deadlines: payload.deadlines as string[],
+          // Passed deadlines are said in words, never offered for the calendar.
+          deadlines: upcomingDeadlines(payload.deadlines as string[]),
           items: payload.items as string[],
           portalUrl: typeof payload.portalUrl === 'string' ? payload.portalUrl : null,
           opensIso: typeof payload.opensIso === 'string' ? payload.opensIso : null,
@@ -773,7 +800,7 @@ function ChatContent(): React.JSX.Element {
     let program = '';
     const drafts = new Map<string, PackDraft>();
     for (const entry of feed) {
-      if (entry.kind === 'requirements' && entry.requirements) requirements = entry.requirements;
+      if (hasRequirementContent(entry) && entry.requirements) requirements = entry.requirements;
       if (entry.kind === 'plan' && entry.plan?.portalUrl) portalUrl = entry.plan.portalUrl;
       if (entry.kind === 'g1' && entry.program) {
         program = entry.program.name;
@@ -1410,12 +1437,12 @@ function ChatContent(): React.JSX.Element {
                         onClick={() => {
                           if (item.plan) void downloadPlan(item.id, item.plan);
                         }}
-                        className={styles.btnPrimary}
+                        className={styles.btnSecondary}
                       >
                         {item.downloading === true ? (
                           <Loader2 className={styles.spin} aria-label="working" />
                         ) : (
-                          <Download className={styles.checkIcon} />
+                          <Download className={styles.btnIcon} aria-hidden="true" />
                         )}
                         Download .ics
                       </button>

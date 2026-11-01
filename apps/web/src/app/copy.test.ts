@@ -22,8 +22,8 @@ describe('landing and entry copy (no signup)', () => {
     assert.match(actions, /router\.push\('\/app'\)/);
   });
 
-  it('Log in is Google for returning users, linking an existing session', () => {
-    assert.match(actions, /linkIdentity/);
+  it('Log in is plain Google sign-in for returning users (linking fails for accounts that exist)', () => {
+    assert.doesNotMatch(actions, /linkIdentity\(/);
     assert.match(actions, /signInWithOAuth/);
     assert.match(actions, /Log in/);
   });

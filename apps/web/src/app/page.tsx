@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Check, Quote } from "lucide-react";
 import styles from "./landing.module.css";
 import { LoginButton, TryButton } from "./landing-actions";
+import { AuthNoticeSlot } from "./auth-notice-slot";
 
 // Landing. No signup: "Try it for free" opens the app straight away; "Log in" is
 // a quiet text link for returning Google users. White canvas, centered hero,
@@ -44,11 +45,7 @@ export default async function LandingPage({
             </p>
           </div>
 
-          {error ? (
-            <p className={styles.notice} role="alert">
-              Google sign-in did not finish. Try again
-            </p>
-          ) : null}
+          <AuthNoticeSlot serverError={error} />
 
           <div className={styles.cta}>
             <TryButton className={`mz-btn mz-btn-primary ${styles.tryButton}`} />

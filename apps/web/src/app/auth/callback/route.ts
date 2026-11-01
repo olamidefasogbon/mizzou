@@ -14,7 +14,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const next = url.searchParams.get('next');
   const dest = next !== null && next.startsWith('/app') ? next : '/app';
   if (!code) {
-    return NextResponse.redirect(new URL('/?error=missing-code', request.url));
+    // Supabase reports a failed link (e.g. identity_already_exists) or a
+    // cancelled consent screen as error params instead of a code. Pass a
+    // short, sanitised code to the landing, which words it for the person.
+    const reported = url.searchParams.get('error_code') ?? url.searchParams.get('error') ?? '';
+    const safe = /^[a-z_-]{1,40}$/.test(reported) ? reported : 'missing-code';
+    return NextResponse.redirect(new URL(`/?error=${safe}`, request.url));
   }
   const response = NextResponse.redirect(new URL(dest, request.url));
   const supabase = createServerClient(

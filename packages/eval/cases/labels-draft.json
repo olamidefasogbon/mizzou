@@ -1,0 +1,187 @@
+{
+  "status": "DRAFT - human must verify each line against the live pages before use",
+  "rule": "Every value cites the exact fixture text it came from. null plus needs_human where the fixture does not state it. Sheet claims never override fixtures.",
+  "cases": {
+    "case-02": {
+      "fixture": "packages/eval/fixtures/case-02.html",
+      "program": { "value": "CaCTuS - Computation and Cognition Tubingen Summer Internship (Max Planck Institutes, Tubingen)", "line": "CaCTuS — Computation and Cognition Tübingen Summer Internship", "needs_human": false },
+      "opens": { "value": "Oct 21, 2026 (Application portal opens)", "original_tz": null, "utc": null, "line": "Oct 21, 2026 | Application portal opens", "needs_human": true },
+      "deadlines": [
+        { "label": "Application deadline", "value": "Nov 16, 2026", "original_tz": null, "utc": null, "line": "Nov 16, 2026 | Application deadline", "needs_human": true },
+        { "label": "Interviews held", "value": "Jan 2027 (month precision)", "original_tz": null, "utc": null, "line": "Jan 2027 | Interviews held", "needs_human": true },
+        { "label": "Acceptance notifications", "value": "Feb 2027 (month precision)", "original_tz": null, "utc": null, "line": "Feb 2027 | Acceptance notifications", "needs_human": true },
+        { "label": "Internship begins", "value": "Jul 1, 2027", "original_tz": null, "utc": null, "line": "Jul 1, 2027 | Internship begins", "needs_human": true },
+        { "label": "Internship ends", "value": "Sep 30, 2027", "original_tz": null, "utc": null, "line": "Sep 30, 2027 | Internship ends", "needs_human": true }
+      ],
+      "documents": { "value": null, "line": null, "needs_human": true },
+      "hard_rules": [
+        { "value": "Bachelor or Master level students", "line": "offer up to 12 students at the Bachelor or Master level paid three-months internships during the summer of 2026" },
+        { "value": "Currently enrolled or recently graduated", "line": "Currently enrolled or recently graduated, with a passion for research." }
+      ],
+      "fee": { "value": null, "line": null, "needs_human": true },
+      "buried_rules": [
+        { "value": "12 internship spots per year", "line": "12 Internship spots per year" },
+        { "value": "Paid: full stipend for three months plus travel and accommodation assistance", "line": "Full stipend for three months in Tübingen | Travel and accommodation assistance" },
+        { "value": "LMIC applicants especially encouraged; support for those held back by personal, financial, regional or societal constraints", "line": "We specifically encourage applications from students living in low- and middle-income countries" }
+      ]
+    },
+    "case-03": {
+      "fixture": "packages/eval/fixtures/case-03.html + case-03-faq.html",
+      "program": { "value": "EPFL E3 Summer Program (Excellence in Engineering; BSc/MSc engineering, science and technology)", "line": "The E3 Program offers international BSc and MSc students in engineering, science and technology a summer research experience at EPFL", "needs_human": false },
+      "opens": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true },
+      "deadlines": [
+        { "label": "Application deadline", "value": "November 1, 2026", "original_tz": null, "utc": null, "line": "The application deadline is November 1, 2026", "needs_human": true }
+      ],
+      "documents": [
+        { "value": "Transcripts covering whole academic career, in the university's own format", "line": "Transcripts can be in any form your university provides them and should cover the whole of your academic career" },
+        { "value": "GPA exactly as the school provides it (no rescaling); write NA when no Master GPA yet", "line": "GPA at the time of application exactly in the format provided by your school on your transcripts" },
+        { "value": "Statement of purpose / motivation letter", "line": "transcripts, your statement of purpose (i.e. research statement/motivation letter), and a scan of your passpo[rt]" },
+        { "value": "Passport scan", "line": "and a scan of your passpo[rt]" }
+      ],
+      "hard_rules": [
+        { "value": "Completed at least first two years of Bachelor at application, with those transcripts and GPA", "line": "you must have completed at least your first two years of Bachelor at the time of the application, i.e., you have to provide the transcripts and GPA of your two years" },
+        { "value": "Enrolled in a Bachelor or Master program during the entire internship", "line": "Bachelor or a Master program) during the entire duration of the summer internship" }
+      ],
+      "fee": { "value": null, "line": "fees when retrieving the visa: this will be at the student's charge (visa fees only; no application fee stated)", "needs_human": true },
+      "buried_rules": [
+        { "value": "No offer by mid-March means no host lab match (email follows)", "line": "Around mid-March, if you have not received an internship offer from a host laboratory, you will receive an email" },
+        { "value": "Internships May-October, never before May 1; longer than 3 months only with ECTS recognition and host professor agreement", "line": "Internships may begin between May and October, but cannot start before May 1" }
+      ]
+    },
+    "case-04": {
+      "fixture": "packages/eval/fixtures/case-04.html",
+      "program": { "value": "ETH Student Summer Research Fellowship (ETH SSRF), Computer Science Department", "line": "The ETH Student Summer Research Fellowship (ETH SSRF) programme offers undergraduate and graduate students the opportunity to gain their first research experience", "needs_human": false },
+      "opens": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true },
+      "deadlines": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true, "note": "Sheet claims Nov 1 opens / Dec 16 deadline; neither appears in the fixture. News dates (11.09.2026 etc.) are article dates, not program dates." },
+      "documents": { "value": null, "line": null, "needs_human": true },
+      "hard_rules": [
+        { "value": "Undergraduate and graduate students; first research experience", "line": "offers undergraduate and graduate students the opportunity to gain their first research experience in an area of their choice" },
+        { "value": "Open worldwide EXCEPT students enrolled at ETH Zurich", "line": "is open to all students worldwide, except for students enrolled at ETH Zurich" }
+      ],
+      "fee": { "value": null, "line": null, "needs_human": true },
+      "buried_rules": [
+        { "value": "Two summer months duration", "line": "takes place during two summer months" },
+        { "value": "Research areas: ML, InfoSec, Systems, Robotics, PL/SE, Bio/Med informatics, HCI, Theory, Visual Computing", "line": "Machine Learning | Information Security | Computer Systems | Robotics | Programming Languages and Software Engineering" }
+      ]
+    },
+    "case-05": {
+      "fixture": "packages/eval/fixtures/case-05.html",
+      "program": { "value": "CMU Robotics Institute Summer Scholars (RISS)", "line": "Robotics Institute Summer Scholars | RISS Fuels Your Future", "needs_human": false },
+      "opens": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true },
+      "deadlines": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true, "note": "Sheet claims Nov 1 opens / Jan 17 deadline; neither appears in the fixture. 2025-11-17T11:50:30-05:00 is a post timestamp." },
+      "documents": { "value": null, "line": "Review the FAQ page before applying (FAQ page is not in the fixtures)", "needs_human": true },
+      "hard_rules": [
+        { "value": "Undergraduate students; 11-week research immersion", "line": "provides undergraduate students with opportunities to participate in a 11-week research immersion" }
+      ],
+      "fee": { "value": null, "line": "Scholarships will fund your exploration (support, not a fee)", "needs_human": true },
+      "buried_rules": [
+        { "value": "Review the FAQ page before applying", "line": "Review the FAQ page before applying." },
+        { "value": "Mentorship, talks, workshops, lab visits; present and publish research", "line": "You will be mentored by world-renowned scientists | present and publish your research" }
+      ]
+    },
+    "case-06": {
+      "fixture": "packages/eval/fixtures/case-06.html + case-06-faqs.html",
+      "program": { "value": "KAUST project listing: Machine Learning for Biological and Medical Imaging (VSRP project page per URL hint)", "line": "Machine Learning for Biological and Medical Imaging", "needs_human": false },
+      "opens": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true },
+      "deadlines": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true, "note": "Sheet claims rolling; the word rolling never appears in either fixture. No deadline of any kind is stated." },
+      "rolling": { "value": null, "line": null, "needs_human": true, "note": "Unconfirmed: rolling/first-come, 4.375 CGPA, and third-year rules from the sheet appear nowhere in the fixtures." },
+      "documents": [
+        { "value": "Transcripts in original format (team evaluates any scale)", "line": "transcripts including your overall grade in it's original format, and our team will be able to evaluate it", "note": "General KAUST admissions FAQ, not VSRP-specific" },
+        { "value": "Official English translation when transcripts are not in English", "line": "you must provide an official translation of your transcript into English" }
+      ],
+      "hard_rules": [
+        { "value": "VSRP year/CGPA rules: not stated (sheet claims 3rd year and 4.375 CGPA; absent)", "line": null, "needs_human": true },
+        { "value": "General fellowship reference only: typically above 3.5, minimum 3.0 on 4.0 scale", "line": "Typically, 90% of admitted applicants have a GPA above 3.5 on a 4-point scale (or equivalent). The minimum permitted GPA is 3.0.", "note": "Fellowship admission, not VSRP" }
+      ],
+      "fee": { "value": null, "line": "$1,320 is monthly living cost, not a fee", "needs_human": true },
+      "buried_rules": [
+        { "value": "Living costs average $1,320/month, covered by the fellowship stipend", "line": "On average, our students spend around $1,320 per month, which the stipend of the KAUST Fellowship more than covers." },
+        { "value": "Second MS only rarely, in a different program", "line": "In rare cases, students may be eligible for a second MS in a different program from their first masters." }
+      ]
+    },
+    "case-07": {
+      "fixture": "packages/eval/fixtures/case-07.html (Apply page) + case-07-program.html (JS challenge shell, no dates)",
+      "program": { "value": "OIST Research Internship", "line": "Apply to Research Internship | Okinawa Institute of Science and Technology OIST", "needs_human": false },
+      "opens": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true },
+      "deadlines": [
+        { "label": "Spring 2027 Internship", "value": "October 15, 2026, 23:59 (JST UTC+9)", "original_tz": "JST (UTC+9)", "utc": "2026-10-15T14:59:00Z", "line": "Spring 2027 Internship | October 15, 2026, 23:59 (JST UTC+9) | Mid-December | Between April 1, 2027 - September 30, 2027", "needs_human": false },
+        { "label": "Fall 2027 Internship", "value": "April 15, 2027, 23:59 (JST UTC+9)", "original_tz": "JST (UTC+9)", "utc": "2027-04-15T14:59:00Z", "line": "Fall 2027 Internship | April 15, 2027, 23:59 (JST UTC+9) | Mid-June 2027 | Between October 1, 2027 - March 31, 2028", "needs_human": false }
+      ],
+      "documents": [
+        { "value": "Current transcript plus past-degree transcripts (BSc, MSc) with diploma, PDF; unofficial scans accepted at upload", "line": "Scanned copies of your current academic transcript and any other transcript from your past degree (BSc, MSc, etc.) along with completed diploma (BSc, MSc, etc.) in PDF format." },
+        { "value": "English explanation for non-English transcripts", "line": "English explanation is required for transcripts that are not written in English." },
+        { "value": "Certificate of enrollment with expected graduation date if diploma not yet held", "line": "please upload a certificate of enrollment from your institution, preferably indicating your expected graduation date" },
+        { "value": "Statement of Purpose, max 250 words / 1500 characters, two prompts", "line": "This should be no more than 250 words (1500 characters) and should address the following points:" },
+        { "value": "Current CV", "line": "Please provide a current CV summarizing your academic background, research experience, skills, and accomplishments." },
+        { "value": "1 to 3 recommendation letters in English from professorial-level faculty; lab members and postdocs not eligible; at least one must arrive before submission; no direct applicant submissions", "line": "Applicants must submit 1 to 3 letters of recommendation in English from professorial-level faculty" },
+        { "value": "Passport details (or other government ID if no passport); recent ID photo", "line": "Ensure that you include your passport details during the application process." }
+      ],
+      "hard_rules": [
+        { "value": "Last two years of a bachelor's degree, or enrolled in any year of a master's", "line": "last two years of a bachelor's degree, enrolled in any year of a master's degree in universities, colleges, junior" },
+        { "value": "Bachelor's or master's holders eligible; near-graduates by internship start eligible", "line": "bachelor's degree by the start of the proposed internship duration, you are also eligible to apply." },
+        { "value": "Project/supervisor pre-matching rule: not stated in fixture", "line": null, "needs_human": true }
+      ],
+      "fee": { "value": "5,000 JPY, non-refundable, no waivers", "line": "The application fee for the Research Internship Program is 5,000 JPY . It is not refundable on any circumstances, nor are fee waivers offered", "needs_human": false },
+      "buried_rules": [
+        { "value": "Internship 4 months (120 days) minimum to 6 months maximum within one period", "line": "An internship duration can be a minimum of 4 months (120 days) to a maximum of 6 months within one Period of Internship." },
+        { "value": "English test (IELTS/TOEFL) optional", "line": "An English Proficiency Score (iELTS/TOEFL) is not required for the Research Internship application." },
+        { "value": "Schedule tentative and subject to change", "line": "The schedule is tentative and subject to change" },
+        { "value": "Sanctions-blocked payers contact OIST with reason Research Internship", "line": "If you have trouble paying due to international sanctions on your country, please use our Contact Us page" }
+      ]
+    },
+    "case-08": {
+      "fixture": "packages/eval/fixtures/case-08.html",
+      "program": { "value": "Taiwan International Internship Program (TIIP), Academia Sinica (intensive pre-doctoral training)", "line": "The Taiwan International Internship Program is an intensive pre-doctoral research training program for overseas students", "needs_human": false },
+      "opens": { "value": "15th Dec. (no year stated)", "original_tz": null, "utc": null, "line": "Application opens from 15th Dec. - 15th Jan.", "needs_human": true },
+      "deadlines": [
+        { "label": "Application close", "value": "15th Jan. (no year stated)", "original_tz": null, "utc": null, "line": "Application opens from 15th Dec. - 15th Jan.", "needs_human": true }
+      ],
+      "documents": { "value": null, "line": null, "needs_human": true },
+      "hard_rules": [
+        { "value": "Final-year undergraduates; Master students; BS/MS holders", "line": "Undergraduate students in their final year | Master Students | Individuals holding a B.S. or Master's degree" },
+        { "value": "NOT eligible: PhD pursuers; prior TIIP attendees; current Academia Sinica employees/RAs", "line": "Students pursuing a Ph.D. degree program. | Students/ Individuals who have attended the TIIP program before. | The current employees or research assistants at Academia Sinica." }
+      ],
+      "fee": { "value": null, "line": "No application fee stated; NTD 30,000/month stipend is support", "needs_human": true },
+      "buried_rules": [
+        { "value": "NTD 30,000/month stipend (before tax) plus half cheapest round-trip economy airfare", "line": "NTD 30,000/month stipend (before tax) and half of the cheapest route round-trip airfare of an economy class" },
+        { "value": "Same-location batch airfare capped at lowest price, max NTD 15,000", "line": "reimbursement will be based on the lowest price (Max. NTD 15,000)" },
+        { "value": "On-campus accommodation arranged at affordable price", "line": "On-campus accommodation will be arranged with affordable price." },
+        { "value": "2-month duration; three cohorts May 1 - Aug 31", "line": "Internship Duration: 2 months | 1 st cohort: 1 st May - 30 th Jun. | 2 nd cohort: 1 st Jun. - 31 st Jul. | 3 rd cohort: 1 st Jul. - 31 st Aug." }
+      ]
+    },
+    "case-09": {
+      "fixture": "packages/eval/fixtures/case-09.html + case-09-recruitment.html (generic hiring process, no dates)",
+      "program": { "value": "CERN Summer Student Programme (Non-Member State track per sheet; track label not in fixture)", "line": "Have completed their Summer Studentship", "needs_human": true },
+      "opens": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true },
+      "deadlines": { "value": null, "original_tz": null, "utc": null, "line": "complete the online application before the deadline (no date stated anywhere in either fixture)", "needs_human": true },
+      "documents": [
+        { "value": "CV in English or French", "line": "Apply with your CV (in English or French)" },
+        { "value": "Academic reference letter", "line": "Add an academic reference letter and your official transcripts." },
+        { "value": "Official transcripts", "line": "Add an academic reference letter and your official transcripts." }
+      ],
+      "hard_rules": [
+        { "value": "Pursuing a Bachelor's or Master's (not PhD) in Physics, Engineering, CS or Mathematics by summer start", "line": "you are pursuing a Bachelor's or Master's degree (not a PhD) in Physics, Engineering, Computer Science or Mathematics" },
+        { "value": "At least 6 semesters of full-time study in one of these fields", "line": "have completed at least 6 semesters of full-time university studies in one of these fields" },
+        { "value": "Enrolled full-time at least until the studentship starts", "line": "You remain enrolled as a full-time student at least until the start of the summer studentship." },
+        { "value": "No CERN work over 3 months under any status; no prior Summer Student Programme", "line": "You have not worked at CERN for more than 3 months under any other status, and you have not previously participated in the Summer Student Programme at CERN." },
+        { "value": "Good knowledge of English", "line": "You have a good knowledge of English." }
+      ],
+      "fee": { "value": null, "line": null, "needs_human": true },
+      "buried_rules": [
+        { "value": "8 to 13 weeks on a scientific or technical project; possible online interview", "line": "of 8 to 13 weeks to work on a scientific or technical project." },
+        { "value": "Help finding accommodation on the CERN site or nearby", "line": "Assistance to find accommodation on the CERN site or nearby." }
+      ]
+    },
+    "case-10": {
+      "fixture": "packages/eval/fixtures/case-10.html (6 chars: JavaScript shell, no readable text)",
+      "program": { "value": null, "line": null, "needs_human": true },
+      "opens": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true },
+      "deadlines": { "value": null, "original_tz": null, "utc": null, "line": null, "needs_human": true },
+      "documents": { "value": null, "line": null, "needs_human": true },
+      "hard_rules": [],
+      "fee": { "value": null, "line": null, "needs_human": true },
+      "buried_rules": [],
+      "note": "Paste-text case: the page renders nothing without JavaScript, so every value is null until the user pastes one listing."
+    }
+  }
+}

@@ -68,6 +68,22 @@
   margin-top: 32px;
 }
 
+.tryWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.noticeSlot {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 24px;
+}
+
 .tryButton {
   width: 100%;
   max-width: 320px;
@@ -238,12 +254,6 @@
   text-underline-offset: 3px;
 }
 
-.notice {
-  margin: 24px 0 0;
-  font-size: 14px;
-  line-height: 20px;
-  color: var(--mz-error);
-}
 
 .point {
   min-width: 0;

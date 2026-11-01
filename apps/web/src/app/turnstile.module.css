@@ -1,0 +1,17 @@
+/* The human check stays out of sight. In interaction-only mode Cloudflare
+   shows the widget only when a visitor really has to do something; then it
+   sits under the button at the button's width. */
+
+.captcha {
+  width: 100%;
+  max-width: 320px;
+}
+
+.captcha:empty {
+  display: none;
+}
+
+.captcha iframe {
+  max-width: 100%;
+  border-radius: var(--mz-radius-control);
+}

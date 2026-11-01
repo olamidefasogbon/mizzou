@@ -1,0 +1,82 @@
+/* One calm message style for sign-in and start-up problems. Inline on the
+   landing page, floating under the top bar for the Log in button. */
+
+.notice {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  padding: 12px 8px 12px 16px;
+  border-radius: var(--mz-radius-control);
+  background: var(--mz-surface);
+  border: 1px solid var(--mz-border);
+  box-shadow: var(--mz-shadow-large);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mz-ink);
+  text-align: left;
+}
+
+.floating {
+  position: fixed;
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  z-index: 20;
+}
+
+.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  stroke-width: 1.75;
+}
+
+.error .icon {
+  color: var(--mz-error);
+}
+
+.info .icon {
+  color: var(--mz-blue);
+}
+
+.text {
+  flex: 1;
+  min-width: 0;
+  padding: 0 4px 0 0;
+}
+
+.close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: -6px 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--mz-secondary);
+  cursor: pointer;
+  transition: background var(--mz-dur-fast) var(--mz-ease);
+}
+
+.close:hover {
+  background: var(--mz-hover);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--mz-blue);
+  outline-offset: 2px;
+}
+
+.closeIcon {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}

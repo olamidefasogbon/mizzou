@@ -42,8 +42,9 @@ describe('landing and entry copy (no signup)', () => {
     assert.match(landing, /Recorded runs/);
     assert.match(landing, /recorded=boren-link/);
     assert.match(landing, /recorded=pasted-fit/);
-    assert.match(landing, /Recorded run: Boren fellowship, link to plan/);
-    assert.match(landing, /Recorded run: pasted text to fit read and draft/);
+    assert.match(landing, /Boren fellowship, link to plan/);
+    assert.match(landing, /Recorded run<\/span>/);
+    assert.match(landing, /Pasted text to fit read and draft/);
     assert.match(landing, /no live model/);
   });
 });

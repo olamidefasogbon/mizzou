@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Check, Quote } from "lucide-react";
+import { ArrowRight, Check, Quote } from "lucide-react";
 import styles from "./landing.module.css";
 import { LoginButton, TryButton } from "./landing-actions";
 import { AuthNoticeSlot } from "./auth-notice-slot";
@@ -13,6 +13,19 @@ const POINTS: Array<[string, string]> = [
   ["Tell me what you want", "Start with a link to the program, or describe what you are chasing."],
   ["I read the whole official site", "Dates and requirements come with the exact quote they were read from."],
   ["You approve every step", "Nothing moves without your yes: the program, your profile, every draft."],
+];
+
+const RECORDED = [
+  {
+    href: "/app/c/recorded?recorded=boren-link",
+    title: "Boren fellowship, link to plan",
+    desc: "From the official link to dates, requirements and a plan.",
+  },
+  {
+    href: "/app/c/recorded?recorded=pasted-fit",
+    title: "Pasted text to fit read and draft",
+    desc: "From a pasted posting to an honest fit read and a first draft.",
+  },
 ];
 
 const EXAMPLE_REQUIREMENTS = [
@@ -91,20 +104,24 @@ export default async function LandingPage({
           ))}
         </div>
 
-        <div className={styles.recorded}>
-          <p className={styles.recordedLabel}>Recorded runs</p>
+        <section className={styles.recorded} aria-labelledby="recorded-title">
+          <h2 id="recorded-title" className={styles.recordedLabel}>
+            Recorded runs
+          </h2>
           <p className={styles.recordedBody}>
             Watch a real run with no live model behind it: the same screens, no charges.
           </p>
-          <p className={styles.recordedLinks}>
-            <Link href="/app/c/recorded?recorded=boren-link" className={styles.recordedLink}>
-              Recorded run: Boren fellowship, link to plan
-            </Link>
-            <Link href="/app/c/recorded?recorded=pasted-fit" className={styles.recordedLink}>
-              Recorded run: pasted text to fit read and draft
-            </Link>
-          </p>
-        </div>
+          <div className={styles.recordedCards}>
+            {RECORDED.map((r) => (
+              <Link key={r.href} href={r.href} className={styles.recordedCard}>
+                <span className={styles.recordedTag}>Recorded run</span>
+                <span className={styles.recordedTitle}>{r.title}</span>
+                <span className={styles.recordedDesc}>{r.desc}</span>
+                <ArrowRight className={styles.recordedArrow} aria-hidden="true" />
+              </Link>
+            ))}
+          </div>
+        </section>
 
         <p className={styles.footer}>
           <Link href="/terms">Terms</Link>

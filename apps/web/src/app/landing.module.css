@@ -259,39 +259,97 @@
   min-width: 0;
 }
 
-/* Recorded runs: a quiet labelled list under the points, tokens only. */
+/* Recorded runs: two quiet cards under the points, tokens only. Stacked on
+   phones, side by side from 640px. */
 .recorded {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  margin-top: 48px;
+  width: 100%;
+  max-width: 720px;
+  margin-top: 64px;
   text-align: center;
 }
 .recordedLabel {
   margin: 0;
-  font-size: 15px;
+  font-size: 20px;
+  line-height: 28px;
   font-weight: 600;
   color: var(--mz-ink);
 }
 .recordedBody {
   margin: 0;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 22px;
   color: var(--mz-secondary);
   max-width: 520px;
+  text-wrap: balance;
 }
-.recordedLinks {
-  margin: 8px 0 0;
+.recordedCards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  width: 100%;
+  margin-top: 16px;
+}
+.recordedCard {
+  position: relative;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 4px;
+  min-height: 140px;
+  padding: 20px 48px 20px 20px;
+  border-radius: var(--mz-radius-card);
+  background: var(--mz-surface);
+  border: 1px solid var(--mz-border);
+  text-align: left;
+  text-decoration: none;
+  color: var(--mz-ink);
+  transition: background var(--mz-dur-fast) var(--mz-ease), border-color var(--mz-dur-fast) var(--mz-ease);
 }
-.recordedLink {
-  font-size: 15px;
+.recordedCard:hover {
+  background: var(--mz-hover);
+}
+.recordedCard:focus-visible {
+  outline: 2px solid var(--mz-blue);
+  outline-offset: 2px;
+}
+.recordedTag {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  color: var(--mz-secondary);
+  margin-bottom: 4px;
+}
+.recordedTitle {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+}
+.recordedDesc {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--mz-secondary);
+}
+.recordedArrow {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+  color: var(--mz-secondary);
+  transition: transform var(--mz-dur-fast) var(--mz-ease), color var(--mz-dur-fast) var(--mz-ease);
+}
+.recordedCard:hover .recordedArrow {
   color: var(--mz-blue);
-  min-height: var(--mz-touch);
-  display: inline-flex;
-  align-items: center;
+  transform: translateX(2px);
+}
+@media (min-width: 640px) {
+  .recordedCards {
+    grid-template-columns: 1fr 1fr;
+  }
 }

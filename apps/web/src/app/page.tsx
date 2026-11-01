@@ -94,6 +94,21 @@ export default async function LandingPage({
           ))}
         </div>
 
+        <div className={styles.recorded}>
+          <p className={styles.recordedLabel}>Recorded runs</p>
+          <p className={styles.recordedBody}>
+            Watch a real run with no live model behind it: the same screens, no charges.
+          </p>
+          <p className={styles.recordedLinks}>
+            <Link href="/app/c/recorded?recorded=boren-link" className={styles.recordedLink}>
+              Recorded run: Boren fellowship, link to plan
+            </Link>
+            <Link href="/app/c/recorded?recorded=pasted-fit" className={styles.recordedLink}>
+              Recorded run: pasted text to fit read and draft
+            </Link>
+          </p>
+        </div>
+
         <p className={styles.footer}>
           <Link href="/terms">Terms</Link>
           <Link href="/privacy">Privacy</Link>

@@ -248,3 +248,40 @@
 .point {
   min-width: 0;
 }
+
+/* Recorded runs: a quiet labelled list under the points, tokens only. */
+.recorded {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 48px;
+  text-align: center;
+}
+.recordedLabel {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mz-ink);
+}
+.recordedBody {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--mz-secondary);
+  max-width: 520px;
+}
+.recordedLinks {
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.recordedLink {
+  font-size: 15px;
+  color: var(--mz-blue);
+  min-height: var(--mz-touch);
+  display: inline-flex;
+  align-items: center;
+}

@@ -37,4 +37,13 @@ describe('landing and entry copy (no signup)', () => {
     assert.doesNotMatch(landing, /[Gg]uest/);
     assert.doesNotMatch(landing, /[Aa]nonymous/);
   });
+
+  it('labels two recorded runs that replay without the model', () => {
+    assert.match(landing, /Recorded runs/);
+    assert.match(landing, /recorded=boren-link/);
+    assert.match(landing, /recorded=pasted-fit/);
+    assert.match(landing, /Recorded run: Boren fellowship, link to plan/);
+    assert.match(landing, /Recorded run: pasted text to fit read and draft/);
+    assert.match(landing, /no live model/);
+  });
 });

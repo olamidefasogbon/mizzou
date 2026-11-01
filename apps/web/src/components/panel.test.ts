@@ -9,6 +9,26 @@ import { readFileSync } from 'node:fs';
 
 const src = readFileSync(new URL('./panel.tsx', import.meta.url), 'utf8');
 
+describe('panel reminders contract', () => {
+  it('offers Done and Remove on every reminder row', () => {
+    assert.match(src, /markReminderDone/);
+    assert.match(src, /removeReminder/);
+    assert.match(src, /aria-label={`Mark \${r.title} done`}/);
+    assert.match(src, /aria-label={`Remove \${r.title}`}/);
+  });
+
+  it('shows Clear reminders only when reminders exist', () => {
+    assert.match(src, /visibleReminders.length > 0[\s\S]*?Clear reminders/);
+  });
+
+  it('both undo toasts expire after five seconds and restore on Undo', () => {
+    assert.match(src, /setTimeout\(\(\) => expireUndo\(\), 5000\)/);
+    assert.match(src, /setTimeout\(\(\) => expireRemindersUndo\(\), 5000\)/);
+    assert.match(src, /undoRemoveReminder/);
+    assert.match(src, /undoClearReminders/);
+  });
+});
+
 describe('panel footer contract', () => {
   it('shows Guest with a save-through-Google button for guests', () => {
     assert.match(src, /isGuest/);

@@ -337,8 +337,17 @@ function ChatContent(): React.JSX.Element {
     rolling?: { text: string };
   } | null>(null);
 
-  const [packReady, setPackReady] = useState(false);
   const [pack, setPack] = useState<PackData | null>(null);
+  // The Application Pack exists once requirements, plan, or draft content is
+  // in the thread. The open button lives with that content, never under the
+  // composer, and only renders then.
+  const lastPackIndex = (() => {
+    let last = -1;
+    feed.forEach((entry, i) => {
+      if (entry.kind === 'requirements' || entry.kind === 'plan' || entry.kind === 'draft') last = i;
+    });
+    return last;
+  })();
 
   const patch = useCallback((id: string, update: Partial<FeedItem>): void => {
     setFeed((prev) => prev.map((item) => (item.id === id ? { ...item, ...update } : item)));
@@ -1000,13 +1009,11 @@ function ChatContent(): React.JSX.Element {
                         type="button"
                         onClick={() => {
                           g1YesRef.current = true;
-                          setPackReady(true);
                           void (async () => {
                             const ok = await resumeRef.current({ gate: 'G1', decision: { confirmed: true }, opId: crypto.randomUUID() });
                             patch(item.id, ok ? { decision: 'yes' } : { decision: undefined });
                             if (!ok) {
                               g1YesRef.current = false;
-                              setPackReady(false);
                             }
                           })();
                           setFeed((prev) => {
@@ -1455,6 +1462,13 @@ function ChatContent(): React.JSX.Element {
               </div>
             );
           })}
+          {lastPackIndex >= 0 && (
+            <div key={`pack-open-${lastPackIndex}`} className={`${styles.card} ${styles.gapGroup}`}>
+              <button type="button" onClick={openPack} className={styles.btnSecondary}>
+                {PACK_OPEN_LABEL}
+              </button>
+            </div>
+          )}
           {busy && !feed.some((entry) => entry.kind === 'status' && entry.state === 'active') ? (
             <div className={`${styles.assistantRow} ${styles.gapGroup}`} aria-label="Mizzou is typing">
               <span className={styles.typing}>
@@ -1492,13 +1506,6 @@ function ChatContent(): React.JSX.Element {
             <ArrowUp className={styles.sendIcon} />
           </button>
         </div>
-        {packReady && feed.some((entry) => entry.kind === 'requirements' || entry.kind === 'plan' || entry.kind === 'draft') && (
-          <div className={styles.btnRow}>
-            <button type="button" onClick={openPack} className={styles.btnSecondary}>
-              {PACK_OPEN_LABEL}
-            </button>
-          </div>
-        )}
         {pack && <PackOverlay pack={pack} onClose={() => setPack(null)} />}
         <EvidenceOverlay />
     </div>

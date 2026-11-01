@@ -596,8 +596,10 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       seenReq.add(key);
       elig.push(e);
     }
+    const isoCount = validIsoDeadlines(extraction).length;
     const substantial =
-      docs.length + elig.length >= 1 && (mem.pages.length >= 2 || (docs.length >= 1 && elig.length >= 1));
+      docs.length + elig.length >= 1 &&
+      (mem.pages.length >= 2 || (docs.length >= 1 && elig.length >= 1) || (docs.length >= 1 && isoCount >= 1));
     if (substantial) {
       send({
         t: 'card',

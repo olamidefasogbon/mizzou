@@ -1,4 +1,6 @@
-// Run: node --test src/app/app/c/[chatId]/feed.test.ts (from apps/web).
+// Run: node --test 'src/app/app/c/[[]chatId]/feed.test.ts' (from apps/web).
+// The [[] escape stops node from reading [chatId] as a glob class; without
+// it the file silently matches nothing and zero tests run.
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { isTightGroup, messageBubble, settleActiveStatuses, statusRun, statusRunHead } from './feed.ts';
@@ -46,7 +48,7 @@ describe('live stream bubbles', () => {
     const { readFileSync } = await import('node:fs');
     const { join, dirname } = await import('node:path');
     const { fileURLToPath } = await import('node:url');
-    const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', '..');
+    const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', '..', '..');
     const captured = JSON.parse(readFileSync(join(root, 'packages', 'eval', 'fixtures', 'oist-stream.json'), 'utf8'));
     const idA = captured.items.find((m) => m.type === 'message').id;
     const idB = captured.turn2.find((m) => m.type === 'message').id;

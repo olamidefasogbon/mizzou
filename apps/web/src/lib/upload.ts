@@ -1,7 +1,5 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
-
 // Upload intake helpers (route: api/upload). PNG/JPEG/WebP only, checked by
 // magic bytes — never by extension or client mime. Server-only.
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47];
@@ -40,7 +38,4 @@ export function sniffImageType(bytes: Uint8Array): UploadImageType | null {
   return null;
 }
 
-/** Deterministic upload id from the bytes (evidence source `upload:{id}`). */
-export function uploadIdFromBytes(bytes: Uint8Array): string {
-  return `upl-${createHash('sha256').update(bytes).digest('hex').slice(0, 16)}`;
-}
+export { uploadIdFromBytes } from './upload-id.ts';

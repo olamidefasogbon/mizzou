@@ -17,6 +17,7 @@ import { repo, adaptDb } from '@/lib/repo';
 import { abuseLimitsFromEnv, checkHitRate, checkMessageLength, checkNewRun, clientIp, logCapRefusal, supabaseCounterStore } from '@/lib/caps';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { RequestUsageStore } from '@/lib/usage';
+import { isUploadId } from '@/lib/upload-id';
 
 // Vercel Hobby maximum is 60s (PROMPT.md 9.2 says platform maximum —
 // confirm against the Vercel plan at deploy; raise this when the plan grows).
@@ -33,12 +34,6 @@ export async function POST(req: Request): Promise<Response> {
   let requestedRunId: string | null = null;
   let visionSeeds: VisionSeed[] = [];
   let timezone = 'Africa/Lagos';
-  const HEX = '0123456789abcdef';
-  const isUploadId = (v: unknown): v is string =>
-    typeof v === 'string' &&
-    v.length === 21 &&
-    v.startsWith('upl-') &&
-    v.slice(4).split('').every((c) => HEX.includes(c));
   try {
     const body: unknown = await req.json();
     if (typeof (body as { message?: unknown }).message === 'string') {

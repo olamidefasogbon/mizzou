@@ -7,6 +7,7 @@ import {
   deleteMyDataAction,
   ensureChatAction,
   refreshChatsAction,
+  refreshRemindersAction,
   restoreChatsAction,
   type AppData,
 } from '@/lib/actions';
@@ -29,6 +30,16 @@ interface StoreState {
   undoClearChats: () => Promise<void>;
   expireUndo: () => void;
   undoArmed: boolean;
+  refreshReminders: () => Promise<void>;
+  markReminderDone: (id: string) => Promise<void>;
+  removeReminder: (id: string) => Promise<void>;
+  undoRemoveReminder: () => Promise<void>;
+  clearReminders: () => Promise<void>;
+  undoClearReminders: () => Promise<void>;
+  expireRemindersUndo: () => void;
+  reminderUndo: Reminder | null;
+  clearedReminders: Reminder[] | null;
+  remindersUndoArmed: boolean;
 }
 
 const StoreContext = createContext<StoreState | null>(null);
@@ -107,8 +118,86 @@ export function StoreProvider({ initial, children }: { initial: AppData; childre
     }
   }, []);
 
+  const [reminderUndo, setReminderUndo] = useState<Reminder | null>(null);
+  const [clearedReminders, setClearedReminders] = useState<Reminder[] | null>(null);
+  const [remindersUndoArmed, setRemindersUndoArmed] = useState(false);
+
+  const refreshReminders = useCallback(async () => {
+    setReminders(await refreshRemindersAction());
+  }, []);
+
+  const markReminderDone = useCallback(async (id: string) => {
+    const res = await fetch('/api/reminders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, action: 'done' }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    setReminders((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const removeReminder = useCallback(async (id: string) => {
+    const res = await fetch('/api/reminders', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = (await res.json()) as { removed?: Reminder };
+    setReminders((prev) => prev.filter((r) => r.id !== id));
+    setClearedReminders(null);
+    setReminderUndo(data.removed ?? null);
+    setRemindersUndoArmed(true);
+  }, []);
+
+  const undoRemoveReminder = useCallback(async () => {
+    if (!reminderUndo) return;
+    const row = reminderUndo;
+    await fetch('/api/reminders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ restore: { title: row.title, sub: row.sub, pill: row.pill, dueAt: row.dueAt, kind: row.kind } }),
+    });
+    setReminderUndo(null);
+    setRemindersUndoArmed(false);
+    setReminders(await refreshRemindersAction());
+  }, [reminderUndo]);
+
+  const clearReminders = useCallback(async () => {
+    setClearedReminders(reminders);
+    setReminderUndo(null);
+    const res = await fetch('/api/reminders', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ all: true }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    setReminders([]);
+    setRemindersUndoArmed(true);
+  }, [reminders]);
+
+  const undoClearReminders = useCallback(async () => {
+    if (!clearedReminders) return;
+    for (const row of clearedReminders) {
+      await fetch('/api/reminders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restore: { title: row.title, sub: row.sub, pill: row.pill, dueAt: row.dueAt, kind: row.kind } }),
+      });
+    }
+    setClearedReminders(null);
+    setRemindersUndoArmed(false);
+    setReminders(await refreshRemindersAction());
+  }, [clearedReminders]);
+
+  const expireRemindersUndo = useCallback(() => {
+    setReminderUndo(null);
+    setClearedReminders(null);
+    setRemindersUndoArmed(false);
+  }, []);
+
   return (
-    <StoreContext.Provider value={{ isGuest, name, email, reminders, chats, ensureChat, refreshChats, deleteMyData, clearChats, undoClearChats, expireUndo, undoArmed }}>
+    <StoreContext.Provider value={{ isGuest, name, email, reminders, chats, ensureChat, refreshChats, deleteMyData, clearChats, undoClearChats, expireUndo, undoArmed, refreshReminders, markReminderDone, removeReminder, undoRemoveReminder, clearReminders, undoClearReminders, expireRemindersUndo, reminderUndo, clearedReminders, remindersUndoArmed }}>
       {children}
     </StoreContext.Provider>
   );

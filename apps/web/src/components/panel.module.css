@@ -151,6 +151,38 @@
   box-shadow: var(--mz-shadow);
 }
 
+.sectionActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.reminderOpen {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+}
+.reminderAction {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--mz-secondary);
+  cursor: pointer;
+  border-radius: 8px;
+}
 .reminderRow {
   box-sizing: border-box;
   display: flex;

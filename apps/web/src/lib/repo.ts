@@ -33,6 +33,10 @@ export interface Repo {
     setDone(userId: string, id: string): Promise<void>;
     /** Push one reminder out by N days (default 7). Throws when the id is not yours. */
     snooze(userId: string, id: string, days?: number): Promise<void>;
+    /** Delete one reminder, returning the deleted row for Undo. Throws when the id is not yours. */
+    remove(userId: string, id: string): Promise<Reminder>;
+    /** Update the date line of one open reminder (repeat approvals update). Throws when the id is not yours. */
+    update(userId: string, id: string, patch: { dueAt?: string | null; pill?: string; sub?: string }): Promise<Reminder>;
   };
   chats: {
     list(userId: string): Promise<ChatSummary[]>;
@@ -233,6 +237,23 @@ export function supabaseRepo(db: DbClient): Repo {
         const res = await db.from('reminders').update({ due_at: due, snoozed_until: due }).eq('user_id', userId).eq('id', id).select('id');
         if (res.error || (res.data?.length ?? 0) === 0) throw new Error('Could not snooze the reminder.');
       },
+      remove: async (userId, id) => {
+        const found = await db.from('reminders').select('*').eq('user_id', userId).eq('id', id).limit(1);
+        const row = found.data?.[0];
+        if (found.error || !row) throw new Error('Could not find that reminder.');
+        const gone = await db.from('reminders').delete().eq('user_id', userId).eq('id', id).select('id');
+        if (gone.error || (gone.data?.length ?? 0) === 0) throw new Error('Could not remove that reminder.');
+        return toReminder(row, userId);
+      },
+      update: async (userId, id, patch) => {
+        const changes: Record<string, unknown> = {};
+        if (patch.dueAt !== undefined) changes['due_at'] = patch.dueAt;
+        if (patch.pill !== undefined) changes['pill'] = patch.pill;
+        if (patch.sub !== undefined) changes['status_line'] = patch.sub;
+        const res = await db.from('reminders').update(changes).eq('user_id', userId).eq('id', id).select('*').single();
+        if (!res.data || res.error) throw new Error('Could not update the reminder.');
+        return toReminder(res.data as RunRow, userId);
+      },
       clear: async (userId) => {
         const res = await db.from('reminders').delete().eq('user_id', userId).select('id');
         if (res.error) throw new Error('Could not delete reminders.');
@@ -379,6 +400,24 @@ export function memoryRepo(): Repo {
         const row = reminderRows.get(id);
         if (!row || row.userId !== userId) throw new Error('Could not snooze the reminder.');
         reminderRows.set(id, { ...row, dueAt: new Date(Date.now() + days * 86400000).toISOString() });
+      },
+      remove: async (userId, id) => {
+        const row = reminderRows.get(id);
+        if (!row || row.userId !== userId) throw new Error('Could not find that reminder.');
+        reminderRows.delete(id);
+        return row;
+      },
+      update: async (userId, id, patch) => {
+        const row = reminderRows.get(id);
+        if (!row || row.userId !== userId) throw new Error('Could not update the reminder.');
+        const next: Reminder = {
+          ...row,
+          dueAt: patch.dueAt !== undefined ? patch.dueAt : row.dueAt,
+          pill: patch.pill !== undefined ? patch.pill : row.pill,
+          sub: patch.sub !== undefined ? patch.sub : row.sub,
+        };
+        reminderRows.set(id, next);
+        return next;
       },
       clear: async (userId) => {
         let n = 0;

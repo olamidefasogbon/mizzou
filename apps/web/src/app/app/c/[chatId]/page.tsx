@@ -89,6 +89,7 @@ interface PlanPayload {
   items: string[];
   portalUrl: string | null;
   opensIso: string | null;
+  label: string | null;
 }
 
 interface G2Conflict {
@@ -325,7 +326,7 @@ function ChatContent(): React.JSX.Element {
   const [attach, setAttach] = useState<AttachState>({ status: 'idle' });
   const [vision, setVision] = useState<VisionPayload[] | null>(null);
   const [attaching, setAttaching] = useState(false);
-  const { isGuest, refreshChats } = useStore();
+  const { isGuest, refreshChats, refreshReminders } = useStore();
   const feedRef = useRef<HTMLDivElement>(null);
   // Cards streamed with the run stay hidden until the G1 "Yes" —
   // the deep scan still waits for approval.
@@ -411,7 +412,7 @@ function ChatContent(): React.JSX.Element {
         const res = await fetch('/api/reminders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: plan.title, deadlines: plan.deadlines, items: plan.items, opens: plan.opensIso }),
+          body: JSON.stringify({ title: plan.title, deadlines: plan.deadlines, items: plan.items, opens: plan.opensIso, label: plan.label ?? null }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         patch(itemId, { approved: true });
@@ -557,6 +558,7 @@ function ChatContent(): React.JSX.Element {
         items?: string[];
         portalUrl?: string | null;
         opensIso?: string;
+        label?: string;
         program?: string;
         lines_up?: string[];
         stretch?: string[];
@@ -616,6 +618,7 @@ function ChatContent(): React.JSX.Element {
           items: payload.items as string[],
           portalUrl: typeof payload.portalUrl === 'string' ? payload.portalUrl : null,
           opensIso: typeof payload.opensIso === 'string' ? payload.opensIso : null,
+          label: typeof payload.label === 'string' ? payload.label : null,
         };
         if (g1YesRef.current) {
           const id = `plan-${Date.now()}`;
@@ -736,6 +739,7 @@ function ChatContent(): React.JSX.Element {
       try {
         // Pull the server-generated title (and any list changes) into the panel.
         await refreshChats();
+        await refreshReminders().catch(() => {});
       } catch {
         // The panel keeps its optimistic row; titles refresh on next visit.
       }
@@ -749,7 +753,7 @@ function ChatContent(): React.JSX.Element {
       feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight });
     }
     },
-    [busy, chatId, enterStream, leaveStream, pump, refreshChats],
+    [busy, chatId, enterStream, leaveStream, pump, refreshChats, refreshReminders],
   );
 
   const openPack = useCallback((): void => {
@@ -837,6 +841,7 @@ function ChatContent(): React.JSX.Element {
         });
         try {
           await refreshChats();
+          await refreshReminders().catch(() => {});
         } catch {
           // The panel keeps its optimistic row; titles refresh on next visit.
         }
@@ -844,7 +849,7 @@ function ChatContent(): React.JSX.Element {
         patch(item.id, { talkbackNote: 'Could not update that reminder. Give it a minute and try again.' });
       }
     },
-    [patch, sendText, refreshChats],
+    [patch, sendText, refreshChats, refreshReminders],
   );
 
   const talkbackShown = useRef<string | null>(null);
@@ -863,7 +868,24 @@ function ChatContent(): React.JSX.Element {
         const data = (await res.json()) as {
           due?: Array<{ id: string; title: string; sub: string; pill: string; dueAt: string | null }>;
         };
-        const first = Array.isArray(data.due) ? data.due[0] : undefined;
+        const list = Array.isArray(data.due) ? data.due : [];
+        if (list.length === 0 || cancelled) return;
+        // Scope: a reminder leads only the chat it belongs to. A fresh chat
+        // created from a reminder carries its title in ?q=; a reopened chat
+        // matches its stored history. Never lead a new unrelated chat.
+        const q = initialQ ?? '';
+        let context = q;
+        if (!initialQ) {
+          try {
+            const history = await loadChatHistoryAction(chatId);
+            if (cancelled) return;
+            context += `\n${history.lines.map((l) => l.text).join('\n')}`;
+          } catch {
+            // History unavailable: match on the handoff question alone.
+          }
+        }
+        const lowered = context.toLowerCase();
+        const first = list.find((r) => r.title.length > 0 && lowered.includes(r.title.toLowerCase()));
         if (!first || cancelled) return;
         setFeed((prev) => {
           if (prev.some((entry) => entry.kind === 'talkback')) return prev;

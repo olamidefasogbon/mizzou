@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { Search, Settings, SquarePen, X } from 'lucide-react';
+import { Check, Search, Settings, SquarePen, X } from 'lucide-react';
 import { useStore } from './store-context';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { upgradeToGoogle } from './google-upgrade';
@@ -40,7 +40,7 @@ export function Panel({
   const router = useRouter();
   const pathname = usePathname();
   const activeId = activeChatIdFromPath(pathname);
-  const { isGuest, name, email, reminders, chats, clearChats, undoClearChats, undoArmed, expireUndo } = useStore();
+  const { isGuest, name, email, reminders, chats, clearChats, undoClearChats, undoArmed, expireUndo, markReminderDone, removeReminder, clearReminders, undoRemoveReminder, undoClearReminders, expireRemindersUndo, reminderUndo, clearedReminders, remindersUndoArmed, refreshReminders } = useStore();
   const [upgradeBusy, setUpgradeBusy] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
 
@@ -60,12 +60,14 @@ export function Panel({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reminderUndoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const remindersRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(
     () => () => {
       if (undoTimer.current) clearTimeout(undoTimer.current);
+      if (reminderUndoTimer.current) clearTimeout(reminderUndoTimer.current);
     },
     [],
   );
@@ -118,6 +120,15 @@ export function Panel({
       if (undoTimer.current) clearTimeout(undoTimer.current);
     };
   }, [undoArmed, expireUndo]);
+
+  useEffect(() => {
+    if (!remindersUndoArmed) return;
+    if (reminderUndoTimer.current) clearTimeout(reminderUndoTimer.current);
+    reminderUndoTimer.current = setTimeout(() => expireRemindersUndo(), 5000);
+    return () => {
+      if (reminderUndoTimer.current) clearTimeout(reminderUndoTimer.current);
+    };
+  }, [remindersUndoArmed, expireRemindersUndo]);
 
   const visibleReminders = dedupeReminders(filterPanelReminders(reminders, query));
   const visibleChats = filterPanelChats(chats, query);
@@ -188,22 +199,45 @@ export function Panel({
 
       <div className={styles.sectionRow} ref={remindersRef}>
         <span className={styles.sectionLabel}>Reminders</span>
-        {openReminderCount(visibleReminders) > 0 ? (
-          <span className={styles.countBadge}>{openReminderCount(visibleReminders)}</span>
-        ) : null}
+        <span className={styles.sectionActions}>
+          {openReminderCount(visibleReminders) > 0 ? (
+            <span className={styles.countBadge}>{openReminderCount(visibleReminders)}</span>
+          ) : null}
+          {visibleReminders.length > 0 ? (
+            <button type="button" className={styles.clearAll} onClick={() => void clearReminders().catch(() => void refreshReminders())}>
+              Clear reminders
+            </button>
+          ) : null}
+        </span>
       </div>
 
       {visibleReminders.length > 0 ? (
         <div className={styles.card}>
           {visibleReminders.map((r) => (
-            <button key={r.id} type="button" className={styles.reminderRow} onClick={() => openReminder(r)}>
-              <span className={styles.reminderText}>
-                <span className={styles.reminderTitle}>{r.title}</span>
-                <span className={styles.reminderSub}>{r.sub}</span>
-              </span>
-              <span className={`mz-pill ${styles.reminderPill}`}>{r.pill}</span>
-            </button>
+            <div key={r.id} className={styles.reminderRow}>
+              <button type="button" className={styles.reminderOpen} onClick={() => openReminder(r)} aria-label={`Open a chat about ${r.title}`}>
+                <span className={styles.reminderText}>
+                  <span className={styles.reminderTitle}>{r.title}</span>
+                  <span className={styles.reminderSub}>{r.sub}</span>
+                </span>
+                <span className={`mz-pill ${styles.reminderPill}`}>{r.pill}</span>
+              </button>
+              <button type="button" className={styles.reminderAction} aria-label={`Mark ${r.title} done`} onClick={() => void markReminderDone(r.id).catch(() => void refreshReminders())}>
+                <Check size={16} strokeWidth={2} aria-hidden="true" />
+              </button>
+              <button type="button" className={styles.reminderAction} aria-label={`Remove ${r.title}`} onClick={() => void removeReminder(r.id).catch(() => void refreshReminders())}>
+                <X size={16} strokeWidth={2} aria-hidden="true" />
+              </button>
+            </div>
           ))}
+        </div>
+      ) : null}
+      {remindersUndoArmed ? (
+        <div className={styles.undoToast} role="status">
+          <span>{clearedReminders ? 'Reminders cleared' : `Removed ${reminderUndo?.title ?? 'reminder'}`}</span>
+          <button type="button" className={styles.undoButton} onClick={() => void (clearedReminders ? undoClearReminders() : undoRemoveReminder())}>
+            Undo
+          </button>
         </div>
       ) : null}
 

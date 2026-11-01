@@ -112,6 +112,7 @@ export const CONVERSATION_TOOL_DEFS: ResponsesFunctionTool[] = [
         deadlines: { type: 'array', items: { type: 'string' } },
         items: { type: 'array', items: { type: 'string' } },
         portalUrl: { type: ['string', 'null'] },
+        label: { type: 'string', description: 'Track or program label from the extraction (e.g. Fall 2027), shown in reminder titles.' },
         opens: { type: ['string', 'null'] },
       },
       required: ['title', 'deadlines', 'items'],
@@ -908,6 +909,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         items: Array.isArray(args['items']) ? (args['items'] as unknown[]).filter((d): d is string => typeof d === 'string') : [],
         portalUrl: str(args['portalUrl']),
         opensIso: str(args['opens']),
+        label: str(args['label']),
       };
       send({ t: 'card', id: `conv-${run.id}-t${run.turnCount}-plan`, kind: 'plan', payload });
       return { output: { proposed: true } };

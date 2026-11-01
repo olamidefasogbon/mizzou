@@ -59,6 +59,11 @@ export async function clearChatsAction(): Promise<ChatSummary[]> {
   return (await repo()).chats.clear(userId);
 }
 
+export async function refreshRemindersAction(): Promise<Reminder[]> {
+  const { userId } = await resolveUser();
+  return (await repo()).reminders.list(userId);
+}
+
 export async function restoreChatsAction(snapshot: ChatSummary[]): Promise<void> {
   const { userId } = await resolveUser();
   await (await repo()).chats.restore(userId, snapshot);

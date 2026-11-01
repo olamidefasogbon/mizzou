@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildPlanWrites, eventIdFor, shortDate } from './plan-sync.ts';
+import { buildPlanWrites, eventIdFor, pillFor, shortDate } from './plan-sync.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -52,6 +52,24 @@ describe('buildPlanWrites', () => {
     const b = eventIdFor('MS', '2026-12-01T00:00:00.000Z', 'deadline');
     assert.equal(a, b);
     assert.notEqual(a, eventIdFor('MS', '2026-12-02T00:00:00.000Z', 'deadline'));
+  });
+
+  it('pillFor shows the year off-year and a relative form when near', () => {
+    const now = Date.parse('2026-10-31T12:00:00.000Z');
+    assert.equal(pillFor('2027-04-15T14:59:00.000Z', now), 'Apr 15, 2027');
+    assert.equal(pillFor('2026-11-05T00:00:00.000Z', now), 'in 5 days');
+    assert.equal(pillFor('2026-10-31T23:00:00.000Z', now), 'Today');
+    assert.equal(pillFor('2026-10-15T00:00:00.000Z', now), 'Passed');
+    assert.equal(pillFor('not a date', now), 'Dated');
+    assert.equal(pillFor('2026-12-01T00:00:00.000Z', now), 'Dec 1');
+  });
+
+  it('labels the deadline title with the track and keeps the ledger in step', () => {
+    const out = buildPlanWrites({ title: 'OIST Research Internship', deadlines: ['2027-04-15T14:59:00.000Z'], items: [], label: 'Fall 2027' });
+    assert.ok(!('error' in out));
+    assert.equal(out.reminders[0]?.title, 'OIST Research Internship (Fall 2027)');
+    assert.equal(out.reminders[0]?.sub, 'Application deadline');
+    assert.equal(out.ledger[0]?.eventId, eventIdFor('OIST Research Internship (Fall 2027)', '2027-04-15T14:59:00.000Z', 'deadline'));
   });
 
   it('shortDate pills a month and day', () => {

@@ -275,6 +275,34 @@ describe('supabase repo behind the interface', () => {
     await assert.rejects(repo.reminders.snooze('user-a', 'missing-id'), /Could not snooze/);
   });
 
+  it('removes one reminder and updates its date line on repeat approval', async () => {
+    const { repo } = repoWithSeed();
+    const a = await repo.reminders.create('user-a', { title: 'OIST (Fall 2027)', sub: 'Application deadline', pill: 'in 5 days', dueAt: '2026-11-05T00:00:00.000Z' });
+    const removed = await repo.reminders.remove('user-a', a.id);
+    assert.equal(removed.title, 'OIST (Fall 2027)');
+    assert.deepEqual(await repo.reminders.list('user-a'), []);
+    await assert.rejects(repo.reminders.remove('user-a', a.id), /Could not find/);
+    const b = await repo.reminders.create('user-a', { title: 'OIST (Fall 2027)', sub: 'Application deadline', pill: 'in 5 days', dueAt: '2026-11-05T00:00:00.000Z' });
+    const touched = await repo.reminders.update('user-a', b.id, { dueAt: '2026-11-06T00:00:00.000Z', pill: 'in 6 days' });
+    assert.equal(touched.dueAt, '2026-11-06T00:00:00.000Z');
+    assert.equal(touched.pill, 'in 6 days');
+    assert.equal((await repo.reminders.list('user-a')).length, 1);
+    await assert.rejects(repo.reminders.remove('user-b', b.id), /Could not find/);
+    await assert.rejects(repo.reminders.update('user-a', 'missing-id', { pill: 'x' }), /Could not update/);
+  });
+
+  it('the in-memory repo removes and updates reminders', async () => {
+    const mem = memoryRepo();
+    const a = await mem.reminders.create('user-c', { title: 'T', sub: 'S', pill: 'P' });
+    const removed = await mem.reminders.remove('user-c', a.id);
+    assert.equal(removed.id, a.id);
+    assert.deepEqual(await mem.reminders.list('user-c'), []);
+    const b = await mem.reminders.create('user-c', { title: 'T', sub: 'S', pill: 'P' });
+    const touched = await mem.reminders.update('user-c', b.id, { sub: 'S2' });
+    assert.equal(touched.sub, 'S2');
+    await assert.rejects(mem.reminders.remove('user-c', 'nope'), /Could not find/);
+  });
+
   it('chats support ensure, rename, clear with undo, and isolation', async () => {
     const { repo } = repoWithSeed();
     await repo.chats.ensure('chat-1', 'user-a', 'First chat');

@@ -57,7 +57,7 @@ Tool discipline:
   not answered. Read-only steps run without asking; only gates need the user. If the reply announces a next read-only step, take it in the same turn. Never re-search a confirmed program; never re-ask a confirmed gate.
 - ask_profile_question for exactly one profile question at a time when a
   question blocks fit or drafts; it returns the user's answer next turn.
-- propose_plan when the requirements are confirmed and the user wants
+- propose_plan with the track label when the requirements are confirmed and the user wants
   next steps; draft_document only when the user explicitly asks for a
   draft: the writer drafts it from confirmed profile facts with
   [PLACEHOLDER] for gaps, and every draft ends at G5 for keep.

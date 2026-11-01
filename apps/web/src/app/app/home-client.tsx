@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Composer } from '@/components/chrome';
 import type { AttachState } from '@/components/attach-button';
@@ -38,7 +38,7 @@ const ROTATING_WORDS = [
 
 export default function HomeClient({ dismissedServer }: { dismissedServer: string | null }) {
   const router = useRouter();
-  const { name, reminders } = useStore();
+  const { name, reminders, markReminderDone, removeReminder, reminderUndo, clearedReminders, remindersUndoArmed, undoRemoveReminder, undoClearReminders, expireRemindersUndo, refreshReminders } = useStore();
   const [wordIndex, setWordIndex] = useState(0);
   const [wordVisible, setWordVisible] = useState(true);
   const [input, setInput] = useState('');
@@ -107,6 +107,12 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
   const version = useMemo(() => remindersVersion(reminders), [reminders]);
   const showComingUp = useMemo(() => shouldShowComingUp(reminders, dismissed), [reminders, dismissed]);
 
+  useEffect(() => {
+    if (!remindersUndoArmed) return;
+    const timer = setTimeout(() => expireRemindersUndo(), 5000);
+    return () => clearTimeout(timer);
+  }, [remindersUndoArmed, expireRemindersUndo]);
+
   const dismissComingUp = () => {
     try {
       document.cookie = `${DISMISS_COOKIE}=${encodeURIComponent(version)}; path=/; max-age=31536000; SameSite=Lax`;
@@ -147,11 +153,26 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
                 </button>
               </span>
             </div>
-            {dedupeReminders(reminders).slice(0, 3).map((row) => (
+            {remindersUndoArmed ? (
+            <div className={styles.row} role="status">
+              <span className={styles.rowText}>
+                <span className={styles.rowTitle}>{clearedReminders ? 'Reminders cleared' : `Removed ${reminderUndo?.title ?? 'reminder'}`}</span>
+              </span>
               <button
-                key={row.id}
                 type="button"
-                className={styles.row}
+                className={styles.rowAction}
+                onClick={() => void (clearedReminders ? undoClearReminders() : undoRemoveReminder()).catch(() => void refreshReminders())}
+              >
+                Undo
+              </button>
+            </div>
+          ) : null}
+          {dedupeReminders(reminders).slice(0, 3).map((row) => (
+            <div key={row.id} className={styles.row}>
+              <button
+                type="button"
+                className={styles.rowOpen}
+                aria-label={`Open a chat about ${row.title}`}
                 onClick={() => router.push(newChatHref(reminderQuestion(row), crypto.randomUUID()))}
               >
                 <span className={styles.rowText}>
@@ -160,7 +181,24 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
                 </span>
                 <span className={`mz-pill ${styles.rowPill}`}>{row.pill}</span>
               </button>
-            ))}
+              <button
+                type="button"
+                className={styles.rowAction}
+                aria-label={`Mark ${row.title} done`}
+                onClick={() => void markReminderDone(row.id).catch(() => void refreshReminders())}
+              >
+                <Check size={16} strokeWidth={2} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className={styles.rowAction}
+                aria-label={`Remove ${row.title}`}
+                onClick={() => void removeReminder(row.id).catch(() => void refreshReminders())}
+              >
+                <X size={16} strokeWidth={2} aria-hidden="true" />
+              </button>
+            </div>
+          ))}
           </div>
         ) : null}
       </div>

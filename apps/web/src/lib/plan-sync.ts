@@ -29,6 +29,8 @@ export interface PlanSyncInput {
   deadlines?: unknown;
   items?: unknown;
   opens?: unknown;
+  /** Track or program label from the extraction (e.g. Fall 2027); shown in deadline titles. */
+  label?: unknown;
 }
 
 /** Short pill date for a deadline instant; 'Dated' when unparseable. */
@@ -36,6 +38,28 @@ export function shortDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return 'Dated';
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Reminder pill for a deadline instant: the year when it is not the current
+ * year, a relative form when it is near, 'Today' on the day, 'Passed' once
+ * it is over, and 'Dated' when unparseable. nowMs is injectable for tests.
+ */
+export function pillFor(iso: string, nowMs: number = Date.now()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Dated';
+  const day = (t: number): number => {
+    const x = new Date(t);
+    return Date.UTC(x.getUTCFullYear(), x.getUTCMonth(), x.getUTCDate());
+  };
+  const days = Math.round((day(d.getTime()) - day(nowMs)) / 86400000);
+  if (days < 0) return 'Passed';
+  if (days === 0) return 'Today';
+  if (days <= 30) return `in ${days} day${days === 1 ? '' : 's'}`;
+  if (d.getUTCFullYear() !== new Date(nowMs).getUTCFullYear()) {
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  }
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
 /**
@@ -70,13 +94,15 @@ export function buildPlanWrites(input: PlanSyncInput): PlanSyncResult {
   }
   const reminders: PlanReminderWrite[] = [];
   const ledger: PlanLedgerWrite[] = [];
+  const label = typeof input.label === 'string' && input.label.trim().length > 0 ? input.label.trim().slice(0, 80) : '';
+  const deadlineTitle = label ? `${title} (${label})` : title;
   for (const iso of deadlines.slice(0, MAX_SYNC_DEADLINES)) {
-    reminders.push({ title, sub: 'Application deadline', pill: shortDate(iso), dueAt: iso, kind: 'custom' });
+    reminders.push({ title: deadlineTitle, sub: 'Application deadline', pill: pillFor(iso), dueAt: iso, kind: 'custom' });
     ledger.push({
-      eventId: eventIdFor(title, iso, 'deadline'),
+      eventId: eventIdFor(deadlineTitle, iso, 'deadline'),
       provider: 'google',
       status: 'synced',
-      payload: { title, iso },
+      payload: { title: deadlineTitle, iso },
     });
   }
   for (const task of items.slice(0, MAX_SYNC_ITEMS)) {

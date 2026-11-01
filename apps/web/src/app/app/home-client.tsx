@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Composer } from '@/components/chrome';
@@ -47,6 +47,8 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
   const [attach, setAttach] = useState<AttachState>({ status: 'idle' });
   const [vision, setVision] = useState<VisionPayload | null>(null);
   const [attaching, setAttaching] = useState(false);
+  // Sent while the picture was still being read: ships as soon as it is.
+  const [queued, setQueued] = useState(false);
   const firstName = name?.trim().split(/\s+/)[0] ?? '';
   const typing = input.trim().length > 0;
   // Known before first paint: the server read it from the request cookie.
@@ -93,7 +95,10 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
   };
 
   const send = () => {
-    if (attaching) return;
+    if (attaching) {
+      if (input.trim()) setQueued(true);
+      return;
+    }
     let text = input.trim();
     if (!text && !vision) return;
     if (!text && vision) text = `I attached ${vision.name} — what is it?`;
@@ -103,6 +108,15 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
     if (vision) stashVision(id, [vision]);
     router.push(`/app/c/${id}?q=${encodeURIComponent(text)}`);
   };
+
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    if (!queued || attaching) return;
+    setQueued(false);
+    // A failed read keeps the text in the box and shows the error instead.
+    if (attach.status !== 'error') sendRef.current();
+  }, [queued, attaching, attach.status]);
 
   const version = useMemo(() => remindersVersion(reminders), [reminders]);
   const showComingUp = useMemo(() => shouldShowComingUp(reminders, dismissed), [reminders, dismissed]);
@@ -208,7 +222,7 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
           value={input}
           onChange={setInput}
           onSend={send}
-          attach={{ state: attach, disabled: attaching, onPick: pickImage, onRemove: removeImage }}
+          attach={{ state: attach, disabled: attaching, onPick: pickImage, onRemove: removeImage, queued }}
           voice={{ onTranscript: (t) => setInput((v) => (v ? `${v} ${t}` : t)) }}
         />
       </div>

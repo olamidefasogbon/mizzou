@@ -17,9 +17,12 @@ export function AttachButton({
   disabled,
   onPick,
   onRemove,
+  queued,
 }: {
   state: AttachState;
   disabled?: boolean;
+  /** A message is waiting for the picture to finish reading. */
+  queued?: boolean;
   onPick: (file: File) => void;
   onRemove: () => void;
 }): React.JSX.Element {
@@ -64,7 +67,7 @@ export function AttachButton({
           </button>
         </span>
       ) : null}
-      {state.status === 'uploading' ? <span className="mz-composer-progress">Reading {state.name}</span> : null}
+      {state.status === 'uploading' ? <span className="mz-composer-progress">Reading {state.name}{queued ? ', then sending' : ''}</span> : null}
       {state.status === 'error' ? (
         <span className="mz-composer-progress" role="alert">
           {state.message}

@@ -14,6 +14,7 @@ export type ComposerAttach = {
   disabled?: boolean;
   onPick: (file: File) => void;
   onRemove: () => void;
+  queued?: boolean;
 };
 
 export type ComposerVoice = {
@@ -46,6 +47,7 @@ export function Composer({
             disabled={attach.disabled}
             onPick={attach.onPick}
             onRemove={attach.onRemove}
+            queued={attach.queued}
           />
         ) : null}
         {voice ? <VoiceButton disabled={voice.disabled} onTranscript={voice.onTranscript} /> : null}

@@ -326,6 +326,8 @@ function ChatContent(): React.JSX.Element {
   const [attach, setAttach] = useState<AttachState>({ status: 'idle' });
   const [vision, setVision] = useState<VisionPayload[] | null>(null);
   const [attaching, setAttaching] = useState(false);
+  // Sent while the picture was still being read: ships as soon as it is.
+  const [queued, setQueued] = useState(false);
   const { isGuest, refreshChats, refreshReminders } = useStore();
   const feedRef = useRef<HTMLDivElement>(null);
   // Cards streamed with the run stay hidden until the G1 "Yes" —
@@ -818,8 +820,11 @@ function ChatContent(): React.JSX.Element {
   };
 
   const send = useCallback((): void => {
-    if (attaching) return;
     const text = input.trim();
+    if (attaching) {
+      if (text) setQueued(true);
+      return;
+    }
     const payload = vision;
     if (!text && !payload) return;
     const outgoing = text || `I attached ${payload?.[0]?.name ?? 'an image'} — what is it?`;
@@ -827,6 +832,13 @@ function ChatContent(): React.JSX.Element {
     setAttach({ status: 'idle' });
     void sendText(outgoing, payload ?? undefined);
   }, [input, vision, attaching, sendText]);
+
+  useEffect(() => {
+    if (!queued || attaching) return;
+    setQueued(false);
+    // A failed read keeps the text in the box and shows the error instead.
+    if (attach.status !== 'error') send();
+  }, [queued, attaching, attach.status, send]);
 
   const actTalkback = useCallback(
     async (item: FeedItem, action: 'done' | 'snooze' | 'help'): Promise<void> => {
@@ -1481,7 +1493,7 @@ function ChatContent(): React.JSX.Element {
         </div>
 
         <div className={styles.composer}>
-          <AttachButton state={attach} disabled={busy || attaching} onPick={pickImage} onRemove={removeAttach} />
+          <AttachButton state={attach} disabled={busy || attaching} onPick={pickImage} onRemove={removeAttach} queued={queued} />
           <VoiceButton
             disabled={busy || attaching}
             onTranscript={(t) => setInput((v) => (v ? `${v} ${t}` : t))}
@@ -1499,7 +1511,7 @@ function ChatContent(): React.JSX.Element {
           <button
             type="button"
             onClick={() => void send()}
-            disabled={busy || attaching || (input.trim().length === 0 && !vision)}
+            disabled={busy || queued || (input.trim().length === 0 && !vision)}
             aria-label="Send"
             className={styles.sendBtn}
           >

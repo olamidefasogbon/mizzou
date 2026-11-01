@@ -54,7 +54,7 @@ describe('composer (P2-15)', () => {
   });
 
   it('send button is blue only when there is text (conversation)', () => {
-    assert.match(convoSrc, /disabled=\{busy \|\| attaching \|\| \(input\.trim\(\)\.length === 0 && !vision\)\}/);
+    assert.match(convoSrc, /disabled=\{busy \|\| queued \|\| \(input\.trim\(\)\.length === 0 && !vision\)\}/);
     assert.match(convoCss, /\.sendBtn:disabled\s*\{[^}]*background:\s*var\(--mz-muted\)/);
   });
 });

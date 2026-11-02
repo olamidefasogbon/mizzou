@@ -140,7 +140,8 @@ describe('duplicate-item regression turn', () => {
     expect(flat3).toContain('call_rem');
     // The turn ends on the model-written final reply, not on an error.
     expect(result.gated).toBe(false);
-    expect(result.text).toBe('Checking now.Here is what I found.');
+    // Only the last round is the answer; the earlier narration is activity.
+    expect(result.text).toBe('Here is what I found.');
     expect(events.some((e) => e.t === 'message')).toBe(true);
 
     // Follow-up user message replays the stored exchange through buildInput.

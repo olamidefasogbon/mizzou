@@ -142,12 +142,23 @@ export async function recordVoiceNote(maxSeconds = VOICE_MAX_SECONDS): Promise<V
 
 /** POST one WAV note; resolves the editable transcript. */
 export async function sendVoiceNote(wavBase64: string): Promise<{ transcript: string; seconds: number }> {
-  const res = await fetch('/api/transcribe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ audio: wavBase64 }),
-  });
-  const data = (await res.json()) as { transcript?: unknown; seconds?: unknown; error?: unknown };
+  // Never hang silently: give up after 45 seconds with a plain message.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 45_000);
+  let res: Response;
+  try {
+    res = await fetch('/api/transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audio: wavBase64 }),
+      signal: controller.signal,
+    });
+  } catch {
+    throw new Error('That took too long. Check your connection and try again.');
+  } finally {
+    clearTimeout(timer);
+  }
+  const data = (await res.json().catch(() => ({}))) as { transcript?: unknown; seconds?: unknown; error?: unknown };
   if (!res.ok || typeof data.transcript !== 'string') {
     throw new Error(typeof data.error === 'string' ? data.error : 'I could not transcribe that. Try again in a moment.');
   }

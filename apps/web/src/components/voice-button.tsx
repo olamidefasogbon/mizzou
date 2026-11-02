@@ -24,6 +24,7 @@ export function VoiceButton({
   const [elapsed, setElapsed] = useState(0);
   const recRef = useRef<VoiceRecording | null>(null);
   const timerRef = useRef<unknown>(null);
+  const finishRef = useRef<() => void>(() => {});
 
   const clearTimer = (): void => {
     if (timerRef.current !== null) window.clearInterval(timerRef.current as ReturnType<typeof setInterval>);
@@ -53,7 +54,8 @@ export function VoiceButton({
           const seconds = Math.floor((Date.now() - startedAt) / 1000);
           setElapsed(seconds);
           if (seconds >= VOICE_MAX_SECONDS) {
-            clearTimer();
+            // The cap stops the recorder itself; move on to writing it down.
+            finishRef.current();
           }
         }, 500);
       } catch (err) {
@@ -69,6 +71,9 @@ export function VoiceButton({
     recRef.current = null;
     clearTimer();
     setPhase('working');
+    // End the recorder now. Without this the note only ended at the 60 second
+    // cap, so "Writing down your note" hung for up to a minute.
+    recording.stop();
     void (async () => {
       try {
         const wav = await recording.done;
@@ -81,6 +86,8 @@ export function VoiceButton({
       }
     })();
   };
+
+  finishRef.current = finish;
 
   return (
     <>

@@ -150,6 +150,7 @@ export async function POST(req: Request): Promise<Response> {
             run,
             save: (r) => store.save(r),
             userText: message,
+            polishAnswers: true,
             seedExtractions: visionSeeds,
             timezone,
             userId: run.userId ?? userId,

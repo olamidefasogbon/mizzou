@@ -39,6 +39,7 @@ import {
 } from '../extract/reconcile.js';
 import { buildCoveragePayload } from '../deepscan/coverage.js';
 import { FIT_APPLY_LABEL, FIT_CARD_TITLE, FIT_PARK_LABEL, FIT_QUESTION } from '../voice/index.js';
+import { POLISH_SYSTEM_PROMPT, buildPolishPrompt, chooseAnswer } from './polish.js';
 import {
   ROLLING_NOTICE_TEXT,
   SAY_GOT_IT,
@@ -283,6 +284,8 @@ export interface ConversationTurnDeps {
   /** Writer-role draft create/rewrite. Defaults to a callModel writer call; tests inject a mock (no paid runs). */
   writeDraft?: (input: WriterCreateRequest | WriterEditRequest) => Promise<string>;
   listReminders?: () => Promise<ReminderRow[]>;
+  /** Final-answer voice pass. Defaults to a short orchestrator-model call; tests inject a mock (no paid runs). */
+  polishCall?: (input: { system: string; prompt: string; userId: string; budgetGuard?: BudgetGuard }) => Promise<string>;
   streamCall?: (opts: StreamCallOptions) => Promise<ResponsesCallResult>;
   sleepMs?: (ms: number) => Promise<void>;
 }
@@ -307,6 +310,12 @@ userText: string;
   budgetGuard?: BudgetGuard;
   send: (event: RunEvent) => void;
   maxRounds?: number;
+  /**
+   * Rewrite the closing message of the turn into Mizzou's voice before it is
+   * shown (routes turn this on). Off by default so plain tests stream as-is.
+   * Narration from earlier rounds is shown as written, whole, at round end.
+   */
+  polishAnswers?: boolean;
   /** Observability hook (tests, probes). Routes leave it unset. Timezone defaults to Africa/Lagos; today defaults to server date. */
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
   timezone?: string;
@@ -532,9 +541,54 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   };
   const messageBase = `conv-${run.id}-t${run.turnCount}`;
   let messageId = messageBase;
+  const holdText = opts.polishAnswers === true;
   const emitText = (delta: string): void => {
     roundTexts[roundTexts.length - 1] = (roundTexts[roundTexts.length - 1] ?? '') + delta;
-    send({ t: 'message', id: messageId, text: delta });
+    // When polishing, a round's text is held until we know whether it is
+    // narration (tools follow) or the answer (no tools), so no raw answer
+    // ever flashes on screen before its rewrite.
+    if (!holdText) send({ t: 'message', id: messageId, text: delta });
+  };
+  const polishFinal = async (text: string): Promise<string> => {
+    if (text.length < 40) return chooseAnswer(text, null);
+    const statusId = `conv-${run.id}-t${run.turnCount}-polish`;
+    send({ t: 'status', id: statusId, label: 'Writing it up', state: 'active' });
+    let rewritten: string | null = null;
+    try {
+      const call =
+        opts.polishCall ??
+        (async (input: { system: string; prompt: string; userId: string; budgetGuard?: BudgetGuard }): Promise<string> => {
+          const res = await responsesCall({
+            model: ROLE_MODEL_MAP.orchestrator,
+            effort: 'low',
+            systemPrompt: input.system,
+            input: input.prompt,
+            previousResponseId: null,
+            userId: input.userId,
+            budgetGuard: input.budgetGuard,
+            timeoutMs: 12_000,
+          });
+          logUsage({ kind: 'model', tool: 'polish', role: 'orchestrator', model: res.model, inputTokens: res.inputTokens, outputTokens: res.outputTokens, costUsd: res.costUsd });
+          return messageText(res.items);
+        });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        rewritten = await Promise.race([
+          call({ system: POLISH_SYSTEM_PROMPT, prompt: buildPolishPrompt(opts.userText, text), userId, budgetGuard }),
+          new Promise<null>((resolve) => {
+            timer = setTimeout(() => resolve(null), 12_000);
+          }),
+        ]);
+      } finally {
+        if (timer !== undefined) clearTimeout(timer);
+      }
+    } catch {
+      // The rewrite is a nicety: any failure (including budget) shows the
+      // original answer, never an error.
+      rewritten = null;
+    }
+    send({ t: 'status', id: statusId, label: 'Writing it up', state: 'done' });
+    return chooseAnswer(text, rewritten);
   };
 
   // Stateless transport: previous_response_id is never used, so a missing
@@ -1059,6 +1113,18 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     await persist();
 
     const calls = functionCalls(result.items);
+    if (holdText) {
+      const held = (roundTexts[roundTexts.length - 1] ?? '').trim();
+      if (calls.length > 0) {
+        // Narration: shown whole now, before its tools run, so a card still
+        // lands directly after the line that introduces it.
+        if (held) send({ t: 'message', id: messageId, text: held });
+      } else if (held) {
+        const answer = await polishFinal(held);
+        roundTexts[roundTexts.length - 1] = answer;
+        send({ t: 'message', id: messageId, text: answer });
+      }
+    }
     if (calls.length === 0) break;
     const outputs: unknown[] = [];
     let gateHit: { gate: Gate; what: string; evidence: unknown; options: unknown } | null = null;

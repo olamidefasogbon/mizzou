@@ -116,6 +116,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
                 save: (r) => store.save(r),
                 userText: `The user answered ${String(gate)}: ${JSON.stringify(decision)}`,
                 userId: run.userId ?? userId,
+                polishAnswers: true,
                 budgetGuard,
                 send,
                 listReminders: async () =>

@@ -927,3 +927,55 @@ describe('run state carry-over', () => {
     expect(mem.pages[0].summary).toContain('deadline(s)');
   });
 });
+
+describe('final-answer polish', () => {
+  it('holds narration until tools are about to run, rewrites only the closing message, and never flashes the raw answer', async () => {
+    const h = makeHarness([
+      { ...callResult('list_reminders', {}, 'resp-1'), items: [{ type: 'message', content: [{ type: 'output_text', text: 'Checking your reminders.' }] }, { type: 'function_call', id: 'call_1', call_id: 'call_1', name: 'list_reminders', arguments: '{}' }] },
+      textResult('You have nothing due this week. I have not checked any official page for this.', 'resp-2'),
+    ]);
+    const result = await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'what is due this week?',
+      userId: 'user-1',
+      polishAnswers: true,
+      polishCall: async () => "Nothing is due this week. I haven't checked any official page for this, so that is just your own list.",
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+      listReminders: async () => [],
+    });
+    const messages = h.events.filter((e) => e.t === 'message').map((e) => (e as { text: string }).text);
+    expect(messages).toEqual(['Checking your reminders.', "Nothing is due this week. I haven't checked any official page for this, so that is just your own list."]);
+    expect(result.text).toBe(messages[1]);
+    expect(h.run.messages[h.run.messages.length - 1]).toEqual({ role: 'assistant', text: messages[1] });
+    expect(h.events.some((e) => e.t === 'status' && e.label === 'Writing it up' && e.state === 'done')).toBe(true);
+  });
+
+  it('shows the original answer when the rewrite fails or loses a number', async () => {
+    const h = makeHarness([textResult('The deadline is 20 November 2026 and the page was not verified.', 'resp-1')]);
+    const result = await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'when is it?',
+      userId: 'user-1',
+      polishAnswers: true,
+      polishCall: async () => 'The deadline is in November.',
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+    });
+    expect(result.text).toBe('The deadline is 20 November 2026 and the page was not verified.');
+    const failing = makeHarness([textResult('Here is what I found about the program.', 'resp-1')]);
+    const r2 = await runConversationTurn({
+      run: failing.run,
+      save: async () => {},
+      userText: 'hi there',
+      userId: 'user-1',
+      polishAnswers: true,
+      polishCall: async () => { throw new Error('model down'); },
+      send: (e) => failing.events.push(e),
+      streamCall: failing.streamCall,
+    });
+    expect(r2.text).toBe('Here is what I found about the program.');
+  });
+});

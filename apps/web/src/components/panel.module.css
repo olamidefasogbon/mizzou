@@ -430,3 +430,11 @@
   opacity: 0.6;
   cursor: default;
 }
+
+/* Touch screens: row actions reach 44px. */
+@media (pointer: coarse) {
+  .reminderAction {
+    width: 44px;
+    min-height: 44px;
+  }
+}

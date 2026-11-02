@@ -7,7 +7,7 @@
   z-index: 1;
   box-sizing: border-box;
   min-width: 0;
-  padding: 116px 16px 120px;
+  padding: 116px 16px 184px;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -242,5 +242,13 @@
 
   .rotatingWord {
     transition: none;
+  }
+}
+
+/* Touch screens: row actions reach 44px. */
+@media (pointer: coarse) {
+  .rowAction {
+    min-width: 44px;
+    min-height: 44px;
   }
 }

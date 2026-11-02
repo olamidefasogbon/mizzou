@@ -378,11 +378,6 @@
   margin-top: 8px;
 }
 
-.sendIcon {
-  width: 16px;
-  height: 16px;
-}
-
 .errorCard {
   border-radius: var(--mz-radius-bubble);
   background: var(--mz-surface);
@@ -401,60 +396,6 @@
 /* Composer: large rounded pill with a round blue send button. The pill takes
    a 1px Meta Blue border on focus-within; the input itself never draws an
    inner ring (P2-15). */
-.composer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: var(--mz-radius-composer);
-  border: 1px solid var(--mz-border);
-  background: var(--mz-surface);
-  padding: 8px 8px 8px 20px;
-  box-shadow: var(--mz-shadow);
-}
-
-.composer:focus-within {
-  border-color: var(--mz-blue);
-}
-
-.composerInput {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  background: transparent;
-  outline: none;
-  font-family: inherit;
-  font-size: 16px;
-  color: var(--mz-ink);
-}
-
-.composerInput:focus-visible {
-  box-shadow: none;
-}
-
-.composerInput::placeholder {
-  color: var(--mz-secondary);
-}
-
-.sendBtn {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border: 0;
-  border-radius: 20px;
-  background: var(--mz-blue);
-  color: var(--mz-on-blue);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-}
-
-.sendBtn:disabled {
-  background: var(--mz-muted);
-  color: var(--mz-secondary);
-  cursor: default;
-}
-
 .loadingFallback {
   display: flex;
   min-height: 100dvh;
@@ -625,4 +566,21 @@
   font-family: inherit;
   font-size: 15px;
   color: var(--mz-ink);
+}
+
+/* Long unbroken text (links, ids, pasted blobs) wraps inside cards instead of
+   pushing the page sideways on phones. */
+.card,
+.cardTitle,
+.cardSub,
+.cardPrompt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Touch screens: the step summary toggle reaches 44px. */
+@media (pointer: coarse) {
+  .progressHead {
+    min-height: 44px;
+  }
 }

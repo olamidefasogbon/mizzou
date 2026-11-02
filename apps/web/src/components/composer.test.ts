@@ -12,12 +12,11 @@ const chromeSrc = readFileSync(new URL('./chrome.tsx', import.meta.url), 'utf8')
 const convoSrc = readFileSync(new URL('../app/app/c/[chatId]/page.tsx', import.meta.url), 'utf8');
 
 describe('composer (P2-15)', () => {
-  it('conversation pill takes a 1px Meta Blue border on focus-within', () => {
-    assert.match(convoCss, /\.composer:focus-within\s*\{\s*border-color:\s*var\(--mz-blue\);\s*\}/);
-  });
-
-  it('conversation input never draws an inner ring', () => {
-    assert.match(convoCss, /\.composerInput:focus-visible\s*\{\s*box-shadow:\s*none;\s*\}/);
+  it('the chat uses the shared composer, tools below the text, with the credit line', () => {
+    assert.match(convoSrc, /<Composer\s+flush/);
+    assert.match(chromeSrc, /className="mz-composer-tools"/);
+    assert.match(chromeSrc, /Powered by Muse Spark/);
+    assert.match(chromeSrc, /<textarea/);
   });
 
   it('shared composer pill takes a 1px Meta Blue border on focus-within', () => {
@@ -40,7 +39,7 @@ describe('composer (P2-15)', () => {
     assert.match(voiceSrc, /aria-label="Record a voice note"/);
     assert.match(voiceSrc, /onTranscript\(out\.transcript\)/);
     assert.doesNotMatch(voiceSrc, /#[0-9a-fA-F]{3,6}/);
-    assert.match(chromeSrc, /<VoiceButton disabled=\{voice\.disabled\} onTranscript=\{voice\.onTranscript\} \/>/);
+    assert.match(chromeSrc, /<VoiceButton disabled=\{voice\.disabled \|\| busy === true\} onTranscript=\{voice\.onTranscript\} \/>/);
   });
 
   it('attach control is quiet: tokens only, lucide icon at 1.75 stroke', () => {
@@ -54,7 +53,6 @@ describe('composer (P2-15)', () => {
   });
 
   it('send button is blue only when there is text (conversation)', () => {
-    assert.match(convoSrc, /disabled=\{busy \|\| queued \|\| \(input\.trim\(\)\.length === 0 && !vision\)\}/);
-    assert.match(convoCss, /\.sendBtn:disabled\s*\{[^}]*background:\s*var\(--mz-muted\)/);
+    assert.match(chromeSrc, /canSend = busy !== true && attach\?\.queued !== true && \(hasText \|\| hasReady === true\)/);
   });
 });

@@ -2,14 +2,14 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { ArrowUp, Check, ChevronDown, CircleAlert, Download, Loader2, Quote, X } from 'lucide-react';
+import { Check, ChevronDown, CircleAlert, Download, Loader2, Quote, X } from 'lucide-react';
 import { DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, FIT_APPLY_LABEL, FIT_PARK_LABEL, PACK_OPEN_LABEL, TALKBACK_DONE_LABEL, TALKBACK_HELP_LABEL, TALKBACK_SNOOZE_LABEL, formatDueMessage, formatG1Prompt } from '@mizzou/core/voice';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { PackOverlay, type PackData, type PackDraft } from '@/components/pack-overlay';
-import { AttachButton, type AttachState } from '@/components/attach-button';
+import type { AttachState } from '@/components/attach-button';
+import { Composer } from '@/components/chrome';
 import { upcomingDeadlines } from '@/lib/plan-dates';
-import { VoiceButton } from '@/components/voice-button';
 import { downscaleImage, takeStashedVision, uploadImage, type VisionPayload } from '@/components/attach-image';
 import { ensureChatAction, loadChatHistoryAction } from '@/lib/actions';
 import { supabaseBrowser } from '@/lib/supabase/client';
@@ -1519,32 +1519,15 @@ function ChatContent(): React.JSX.Element {
           ) : null}
         </div>
 
-        <div className={styles.composer}>
-          <AttachButton state={attach} disabled={busy || attaching} onPick={pickImage} onRemove={removeAttach} queued={queued} />
-          <VoiceButton
-            disabled={busy || attaching}
-            onTranscript={(t) => setInput((v) => (v ? `${v} ${t}` : t))}
-          />
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void send();
-            }}
-            placeholder="Message Mizzou"
-            aria-label="Message Mizzou"
-            className={styles.composerInput}
-          />
-          <button
-            type="button"
-            onClick={() => void send()}
-            disabled={busy || queued || (input.trim().length === 0 && !vision)}
-            aria-label="Send"
-            className={styles.sendBtn}
-          >
-            <ArrowUp className={styles.sendIcon} />
-          </button>
-        </div>
+        <Composer
+          flush
+          value={input}
+          onChange={setInput}
+          onSend={() => void send()}
+          busy={busy}
+          attach={{ state: attach, disabled: attaching, onPick: pickImage, onRemove: removeAttach, queued }}
+          voice={{ disabled: attaching, onTranscript: (t) => setInput((v) => (v ? `${v} ${t}` : t)) }}
+        />
         {pack && <PackOverlay pack={pack} onClose={() => setPack(null)} />}
         <EvidenceOverlay />
     </div>

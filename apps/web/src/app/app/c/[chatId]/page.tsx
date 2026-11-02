@@ -1,9 +1,9 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Check, ChevronDown, CircleAlert, Download, Loader2, Quote, X } from 'lucide-react';
-import { DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, FIT_APPLY_LABEL, FIT_PARK_LABEL, PACK_OPEN_LABEL, TALKBACK_DONE_LABEL, TALKBACK_HELP_LABEL, TALKBACK_SNOOZE_LABEL, formatDueMessage, formatG1Prompt } from '@mizzou/core/voice';
+import { Check, ChevronDown, CircleAlert, Download, Loader2, Quote } from 'lucide-react';
+import { DRAFT_EDIT_PLACEHOLDER, DRAFT_KEEP_LABEL, FIT_APPLY_LABEL, FIT_PARK_LABEL, PACK_OPEN_LABEL, TALKBACK_DONE_LABEL, TALKBACK_HELP_LABEL, TALKBACK_SNOOZE_LABEL, formatDueMessage, formatG1Prompt, plainDashes } from '@mizzou/core/voice';
 import { useEvidence } from '@/components/evidence';
 import { EvidenceOverlay } from '@/components/evidence-overlay';
 import { PackOverlay, type PackData, type PackDraft } from '@/components/pack-overlay';
@@ -16,7 +16,7 @@ import { supabaseBrowser } from '@/lib/supabase/client';
 import { upgradeToGoogle } from '@/components/google-upgrade';
 import { GOOGLE_CALENDAR_SCOPE } from '@/lib/google-scopes';
 import { useStore } from '@/components/store-context';
-import { isTightGroup, messageBubble, settleActiveStatuses, statusRun, statusRunHead } from './feed';
+import { buildDisplay, isTightGroup, messageBubble, settleActiveStatuses, type WorkEntry } from './feed';
 import styles from './conversation.module.css';
 
 // Subtitle parts worth showing: not blank, not a repeat of the title, not a
@@ -177,39 +177,52 @@ function needsLook(confidence: string, needsHuman: boolean): boolean {
   return needsHuman || confidence === 'low';
 }
 
-// Progress line for a run of consecutive tool-status events. No box: one
-// quiet row with a spinner while a step is active, a check when done, and
-// the latest step label. Tap it to see every step. Each status id renders
-// once, never repeated.
-function ToolSteps({ items, grouped }: { items: Array<{ id: string; label?: string; state?: StatusState }>; grouped: boolean }): React.JSX.Element {
+// The Working row. While Mizzou iterates, its steps and the short lines it
+// says between steps live here instead of as chat bubbles: an animated mark,
+// the latest line, and a tap to see everything it did. When the turn ends the
+// mark settles and the row stays as a quiet "what I did" record.
+function Working({ entry, grouped }: { entry: WorkEntry; grouped: boolean }): React.JSX.Element | null {
   const [open, setOpen] = useState(false);
-  const activeItem = items.find((entry) => entry.state === 'active');
-  const failedItem = items.find((entry) => entry.state === 'failed');
-  const shown = activeItem ?? failedItem ?? items[items.length - 1];
-  const summary = shown?.label ?? 'Working';
+  const lines = entry.lines;
+  if (!entry.active && lines.length === 0) return null;
+  const latest = lines[lines.length - 1];
+  const label = entry.active
+    ? plainDashes(latest?.text ?? '') || 'Working on it'
+    : `Worked through ${lines.length} ${lines.length === 1 ? 'step' : 'steps'}`;
+  const expandable = lines.length > 1;
   return (
     <div className={grouped ? `${styles.progress} ${styles.gapGroup}` : styles.progress}>
-      <button type="button" className={styles.progressHead} onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        {activeItem ? (
-          <Loader2 className={styles.spin} aria-label="working" />
-        ) : failedItem ? (
-          <CircleAlert className={styles.warnIcon} aria-label="needs attention" />
-        ) : (
-          <Check className={styles.checkIcon} aria-label="done" />
-        )}
-        <span className={styles.progressLabel}>{summary}</span>
-        {items.length > 1 ? (
+      <button
+        type="button"
+        className={styles.progressHead}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={expandable ? open : undefined}
+        disabled={!expandable}
+      >
+        <span className={entry.active ? `${styles.workMark} ${styles.workMarkLive}` : styles.workMark} aria-hidden="true">
+          M
+        </span>
+        <span className={styles.progressLabel} role={entry.active ? 'status' : undefined}>
+          {label}
+        </span>
+        {expandable ? (
           <ChevronDown className={open ? `${styles.toolChevron} ${styles.toolChevronOpen}` : styles.toolChevron} aria-hidden="true" />
         ) : null}
       </button>
-      {open && items.length > 1 ? (
+      {open && expandable ? (
         <ul className={styles.progressList}>
-          {items.map((entry) => (
-            <li key={entry.id} className={styles.progressStep}>
-              {entry.state === 'active' && <Loader2 className={styles.spin} aria-label="working" />}
-              {entry.state === 'done' && <Check className={styles.checkIcon} aria-label="done" />}
-              {entry.state === 'failed' && <X className={styles.failIcon} aria-label="failed" />}
-              <span>{entry.label}</span>
+          {lines.map((line) => (
+            <li key={line.id} className={styles.progressStep}>
+              {line.state === 'active' ? (
+                <Loader2 className={styles.spin} aria-label="working" />
+              ) : line.state === 'failed' ? (
+                <CircleAlert className={styles.warnIcon} aria-label="needs attention" />
+              ) : line.state === 'done' ? (
+                <Check className={styles.checkIcon} aria-label="done" />
+              ) : (
+                <span className={styles.stepDot} aria-hidden="true" />
+              )}
+              <span className={styles.progressStepText}>{plainDashes(line.text)}</span>
             </li>
           ))}
         </ul>
@@ -854,7 +867,7 @@ function ChatContent(): React.JSX.Element {
     }
     const payload = vision;
     if (!text && !payload) return;
-    const outgoing = text || `I attached ${payload?.[0]?.name ?? 'an image'} — what is it?`;
+    const outgoing = text || `I attached ${payload?.[0]?.name ?? 'an image'}. What is it?`;
     setVision(null);
     setAttach({ status: 'idle' });
     void sendText(outgoing, payload ?? undefined);
@@ -873,7 +886,7 @@ function ChatContent(): React.JSX.Element {
       if (!talk) return;
       if (action === 'help') {
         patch(item.id, { talkbackState: 'done', talkbackNote: `Helping with ${talk.title} below.` });
-        void sendText(`Help me with ${talk.title} — ${talk.sub}`);
+        void sendText(`Help me with ${talk.title}, ${talk.sub}`);
         return;
       }
       try {
@@ -885,7 +898,7 @@ function ChatContent(): React.JSX.Element {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         patch(item.id, {
           talkbackState: action === 'done' ? 'done' : 'snoozed',
-          talkbackNote: action === 'done' ? 'Done — nice.' : 'Snoozed for a week.',
+          talkbackNote: action === 'done' ? 'Done, nice.' : 'Snoozed for a week.',
         });
         try {
           await refreshChats();
@@ -1007,12 +1020,16 @@ function ChatContent(): React.JSX.Element {
 
   // Same-sender bubbles sit 4px apart (the feed gap); a new group gets
   // 12px (see feed.ts isTightGroup).
-  const tight = (index: number): boolean => isTightGroup(feed, index);
+  const display = useMemo(() => buildDisplay(feed, busy), [feed, busy]);
+  const tight = (index: number): boolean => isTightGroup(display, index);
 
   return (
     <div className={styles.screen}>
         <div ref={feedRef} className={styles.feed}>
-          {feed.map((item, i) => {
+          {display.map((item, i) => {
+            if (item.kind === 'work') {
+              return <Working key={item.id} entry={item} grouped={i > 0} />;
+            }
             if (item.kind === 'user') {
               return (
                 <div key={item.id} className={tight(i) ? styles.userRow : `${styles.userRow} ${styles.gapGroup}`}>
@@ -1023,15 +1040,9 @@ function ChatContent(): React.JSX.Element {
             if (item.kind === 'message') {
               return (
                 <div key={item.id} className={tight(i) ? styles.assistantRow : `${styles.assistantRow} ${styles.gapGroup}`}>
-                  <p className={styles.assistantText}>{item.text}</p>
+                  <p className={styles.assistantText}>{plainDashes(item.text ?? '')}</p>
                 </div>
               );
-            }
-            if (item.kind === 'status') {
-              // Only the head of a consecutive run renders; the run
-              // collapses into one compact row (see feed.ts).
-              if (!statusRunHead(feed, i)) return null;
-              return <ToolSteps key={`tools-${item.id}`} items={statusRun(feed, i)} grouped={i > 0} />;
             }
             if (item.kind === 'g1' && item.program) {
               const heading = g1Title(item.program, item.opportunity_type);
@@ -1104,7 +1115,7 @@ function ChatContent(): React.JSX.Element {
                     </p>
                   )}
                   {item.decision === 'no' && (
-                    <p className={styles.g1No}>No problem — paste a different link and I&apos;ll check that one.</p>
+                    <p className={styles.g1No}>No problem. Paste a different link and I&apos;ll check that one.</p>
                   )}
                 </div>
               );
@@ -1219,7 +1230,7 @@ function ChatContent(): React.JSX.Element {
                       </button>
                     </div>
                   )}
-                  {item.decided === 'apply' && <p className={styles.g1DoneText}>You&apos;re going for it. Good — let&apos;s get you ready.</p>}
+                  {item.decided === 'apply' && <p className={styles.g1DoneText}>You&apos;re going for it. Good, let&apos;s get you ready.</p>}
                   {item.decided === 'not_now' && <p className={styles.g1DoneText}>Parked. Your reminders stay where they are.</p>}
                 </div>
               );
@@ -1326,7 +1337,7 @@ function ChatContent(): React.JSX.Element {
                   )}
                   {flagged > 0 && (
                     <p className={styles.flagNote}>
-                      {flagged} {flagged === 1 ? 'item needs' : 'items need'} a look — the page wasn&apos;t clear there.
+                      {flagged} {flagged === 1 ? 'item needs' : 'items need'} a look. The page wasn&apos;t clear there.
                     </p>
                   )}
                 </div>
@@ -1473,7 +1484,7 @@ function ChatContent(): React.JSX.Element {
                       </button>
                     </div>
                   ) : (
-                    <p className={styles.g1DoneText}>{item.talkbackNote ?? (talkState === 'snoozed' ? 'Snoozed for a week.' : 'Done — nice.')}</p>
+                    <p className={styles.g1DoneText}>{item.talkbackNote ?? (talkState === 'snoozed' ? 'Snoozed for a week.' : 'Done, nice.')}</p>
                   )}
                 </div>
               );
@@ -1508,15 +1519,6 @@ function ChatContent(): React.JSX.Element {
               </button>
             </div>
           )}
-          {busy && !feed.some((entry) => entry.kind === 'status' && entry.state === 'active') ? (
-            <div className={`${styles.assistantRow} ${styles.gapGroup}`} aria-label="Mizzou is typing">
-              <span className={styles.typing}>
-                <span className={styles.typingDot} />
-                <span className={styles.typingDot} />
-                <span className={styles.typingDot} />
-              </span>
-            </div>
-          ) : null}
         </div>
 
         <Composer

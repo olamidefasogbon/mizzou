@@ -8,6 +8,17 @@ export function formatCoverageRead(titles: string[]): string {
   return `I read ${titles.length} pages: ${titles.join('; ')}.`;
 }
 
+/**
+ * Mizzou writes with commas and full stops, never long dashes. Em dashes
+ * become a comma, spaced en dashes too; a dash between two numbers stays a
+ * plain hyphen ("5-8").
+ */
+export function plainDashes(text: string): string {
+  return text
+    .replace(/(\d)\s*[\u2013\u2014]\s*(\d)/g, '$1-$2')
+    .replace(/\s*[\u2013\u2014]\s*/g, ', ');
+}
+
 /** Short step labels for the progress line (nouns, not sentences). */
 export const STATUS_START = 'Finding the right page';
 export const STATUS_DONE = 'Finished reading';
@@ -86,13 +97,13 @@ export const PACK_TITLE = 'Application Pack';
 export const PACK_OPEN_LABEL = 'View Application Pack';
 export const CHECK_AGAINST_PORTAL = 'check against the portal';
 /** Check-again reminder for an unpublished opening date (PROMPT.md 6.5). */
-export const OPENING_CHECK_AGAIN = "Opening date isn't posted yet — I'll check again.";
+export const OPENING_CHECK_AGAIN = "Opening date isn't posted yet. I'll check again.";
 /** Talk-back chips (PROMPT.md 7.4): the chat opens with a due reminder plus these three. */
 export const TALKBACK_DONE_LABEL = 'Done';
 export const TALKBACK_SNOOZE_LABEL = 'Snooze';
 export const TALKBACK_HELP_LABEL = 'Help me';
 export function formatDueMessage(title: string, sub: string, pill: string): string {
-  return `${title} — ${sub} ${pill}.`;
+  return `${title}, ${sub} ${pill}.`;
 }
 
 export function formatG1Prompt(opportunityType: string): string {

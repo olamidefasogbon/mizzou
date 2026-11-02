@@ -19,4 +19,16 @@ describe('visibleLines', () => {
       { role: 'assistant', text: 'Found it.' },
     ]);
   });
+
+  it('hides the gate answers stored as user lines', () => {
+    const out = visibleLines([
+      { role: 'user', text: 'is this real?' },
+      { role: 'user', text: 'The user answered G1: {"confirmed":true}' },
+      { role: 'assistant', text: 'Yes.' },
+    ]);
+    assert.deepEqual(out, [
+      { role: 'user', text: 'is this real?' },
+      { role: 'assistant', text: 'Yes.' },
+    ]);
+  });
 });

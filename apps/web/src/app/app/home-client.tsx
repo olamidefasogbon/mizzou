@@ -101,7 +101,7 @@ export default function HomeClient({ dismissedServer }: { dismissedServer: strin
     }
     let text = input.trim();
     if (!text && !vision) return;
-    if (!text && vision) text = `I attached ${vision.name} — what is it?`;
+    if (!text && vision) text = `I attached ${vision.name}. What is it?`;
     // Hand the message to a fresh chat; the conversation screen posts it.
     // A vision seed travels in session storage, consumed once on arrival.
     const id = crypto.randomUUID();

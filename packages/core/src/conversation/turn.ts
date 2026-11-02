@@ -47,6 +47,7 @@ import {
   formatG1Prompt,
   formatG2Conflict,
   formatReadingStatus,
+  plainDashes,
 } from '../voice/index.js';
 import type { RunEvent } from '../schemas/events.js';
 import type { Gate, RunRecord } from '../agent/types.js';
@@ -517,11 +518,22 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     mem.pendingProfileQuestion = null;
   }
 
-  let fullText = '';
+  // Text arrives round by round (a round is one model call, usually followed
+  // by tool calls). Earlier rounds are narration of work in progress; only the
+  // last round with text is the answer that is stored and returned. Joining
+  // them all glued sentences together ("...identify it.That name...").
+  const roundTexts: string[] = [];
+  const answerText = (): string => {
+    for (let i = roundTexts.length - 1; i >= 0; i -= 1) {
+      const t = (roundTexts[i] ?? '').trim();
+      if (t.length > 0) return plainDashes(t);
+    }
+    return '';
+  };
   const messageBase = `conv-${run.id}-t${run.turnCount}`;
   let messageId = messageBase;
   const emitText = (delta: string): void => {
-    fullText += delta;
+    roundTexts[roundTexts.length - 1] = (roundTexts[roundTexts.length - 1] ?? '') + delta;
     send({ t: 'message', id: messageId, text: delta });
   };
 
@@ -1029,6 +1041,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   ]);
   for (let round = 0; round < maxRounds; round += 1) {
     messageId = round === 0 ? messageBase : `${messageBase}-r${round}`;
+    roundTexts.push('');
     const result = await callWithRetry(
       {
         model: ROLE_MODEL_MAP.orchestrator,
@@ -1081,26 +1094,27 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
           if (hint) mem.programHint = hint.slice(0, 120);
         }
       }
-      mem.lastReply = fullText || null;
+      mem.lastReply = answerText() || null;
       mem.gateContext = { gate: gateHit.gate, what: gateHit.what };
       run.pendingGate = { gate: gateHit.gate, what: gateHit.what, evidence: gateHit.evidence, options: gateHit.options };
       run.status = 'needs_approval';
       await persist();
-      return { gated: true, gate: gateHit.gate, text: fullText, usageUsd: run.usageUsd };
+      return { gated: true, gate: gateHit.gate, text: answerText(), usageUsd: run.usageUsd };
     }
         // META_API_NOTES section 9: the API accepts function_call pairs without their reasoning item, so it is never replayed.
     const replayable = result.items.filter((item) => item.type !== 'reasoning');
     thread = buildInput(thread, [...replayable, ...outputs]);
   }
-  mem.lastReply = fullText || mem.lastReply;
+  let finalText = answerText();
+  mem.lastReply = finalText || mem.lastReply;
 
-  if (fullText.trim().length === 0) {
-    fullText = SAY_GOT_IT;
-    send({ t: 'message', id: messageId, text: fullText });
+  if (finalText.length === 0) {
+    finalText = SAY_GOT_IT;
+    send({ t: 'message', id: messageId, text: finalText });
   }
-  run.messages.push({ role: 'assistant', text: fullText });
+  run.messages.push({ role: 'assistant', text: finalText });
   await persist();
-  return { gated: false, text: fullText, usageUsd: run.usageUsd };
+  return { gated: false, text: finalText, usageUsd: run.usageUsd };
 }
 
 async function defaultJudge({ conflicts, userId }: { conflicts: Conflict[]; userId?: string }, budgetGuard?: BudgetGuard): Promise<JudgeCall> {

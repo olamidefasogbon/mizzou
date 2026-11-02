@@ -22,6 +22,7 @@ import {
   SAY_PAGE_WOULD_NOT_OPEN,
   formatG1Prompt,
   hasBannedTerm,
+  plainDashes,
 } from './index.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -103,7 +104,15 @@ describe('talk-back and check-again voice (PROMPT.md 6.5, 7.4)', () => {
     expect(TALKBACK_DONE_LABEL).toBe('Done');
     expect(TALKBACK_SNOOZE_LABEL).toBe('Snooze');
     expect(TALKBACK_HELP_LABEL).toBe('Help me');
-    expect(formatDueMessage('Statement of purpose', 'due', 'in 6 days')).toBe('Statement of purpose — due in 6 days.');
+    expect(formatDueMessage('Statement of purpose', 'due', 'in 6 days')).toBe('Statement of purpose, due in 6 days.');
     expect(OPENING_CHECK_AGAIN).toContain('check again');
+  });
+});
+
+describe('plainDashes', () => {
+  it('turns long dashes into commas and keeps number ranges as hyphens', () => {
+    expect(plainDashes('Found it — Northeastern.')).toBe('Found it, Northeastern.');
+    expect(plainDashes('Opens April 5–8, 2027')).toBe('Opens April 5-8, 2027');
+    expect(plainDashes('No dashes here.')).toBe('No dashes here.');
   });
 });

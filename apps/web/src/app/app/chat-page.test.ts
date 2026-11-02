@@ -85,7 +85,7 @@ describe('vision seed contract', () => {
   });
 
   it('renders the attach control and ships the seed with the message', () => {
-    assert.match(src, /<AttachButton state=\{attach\}/);
+    assert.match(src, /attach=\{\{ state: attach,/);
     assert.match(src, /downscaleImage\(file\)/);
     assert.match(src, /void sendText\(outgoing, payload \?\? undefined\)/);
   });
@@ -93,8 +93,8 @@ describe('vision seed contract', () => {
 
 describe('voice note contract', () => {
   it('renders the record button and appends the transcript editable', () => {
-    assert.match(src, /<VoiceButton/);
-    assert.match(src, /onTranscript=\{\(t\) => setInput\(\(v\) => \(v \? `\$\{v\} \$\{t\}` : t\)\)\}/);
+    assert.match(src, /voice=\{\{ disabled: attaching,/);
+    assert.match(src, /onTranscript: \(t\) => setInput\(\(v\) => \(v \? `\$\{v\} \$\{t\}` : t\)\)/);
   });
 });
 

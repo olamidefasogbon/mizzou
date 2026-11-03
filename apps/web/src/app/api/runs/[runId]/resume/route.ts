@@ -2,6 +2,7 @@ import {
   BudgetExceededError,
   BudgetGuard,
   DEFAULT_MAX_TURNS,
+  CONTINUE_TEXT,
   SAY_STUCK,
   budgetFriendlyMessage,
   continueRun,
@@ -20,6 +21,7 @@ import { adaptDb, repo } from '@/lib/repo';
 import { abuseLimitsFromEnv, checkHitRate, clientIp, logCapRefusal, supabaseCounterStore } from '@/lib/caps';
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { RequestUsageStore } from '@/lib/usage';
+import { turnBudgetMs } from '@/lib/turn-budget';
 
 // Vercel Hobby maximum is 60s (PROMPT.md 9.2 says platform maximum —
 // confirm against the Vercel plan at deploy; raise this when the plan grows).
@@ -103,17 +105,41 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
             existing && existing.pendingGate && typeof existing.pendingGate.evidence === 'object' && existing.pendingGate.evidence !== null
               ? (existing.pendingGate.evidence as { origin?: unknown }).origin
               : undefined;
+          const convMem = existing ? ((existing.state as Record<string, unknown>)['conversation'] as { pendingContinue?: unknown } | undefined) : undefined;
+          // A conversation turn that ran out of time asked the client to carry on.
+          const convContinue = !answering && existing !== null && convMem?.pendingContinue === true;
+          let timedOut = false;
           let run;
-          if (answering && origin === 'chat') {
+          if (convContinue && existing) {
+            run = existing;
+            const turn = await runConversationTurn({
+              run,
+              save: (r) => store.save(r),
+              deadlineAtMs: Date.now() + turnBudgetMs(),
+              userText: CONTINUE_TEXT,
+              polishAnswers: true,
+              userId: run.userId ?? userId,
+              budgetGuard,
+              send,
+              listReminders: async () =>
+                (await db.reminders.list(userId)).map((r) => ({
+                  id: r.id,
+                  text: r.sub ? `${r.title}, ${r.sub}` : r.title,
+                  dueAt: r.dueAt,
+                })),
+            });
+            timedOut = turn.timedOut === true;
+          } else if (answering && origin === 'chat') {
             // Conversation-run gate (AGENT_BRAIN.md): record the decision,
             // then continue with a model turn — the pendingGate (if any) is
             // set by the orchestrator, not by the deep-scan loop.
             const recorded = await recordDecision(runId, store, { gate: gate as Gate, decision, opId });
             run = recorded.run;
             if (!recorded.duplicate) {
-              await runConversationTurn({
+              const turn = await runConversationTurn({
                 run,
                 save: (r) => store.save(r),
+                deadlineAtMs: Date.now() + turnBudgetMs(),
                 userText: `The user answered ${String(gate)}: ${JSON.stringify(decision)}`,
                 userId: run.userId ?? userId,
                 polishAnswers: true,
@@ -122,10 +148,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
                 listReminders: async () =>
                   (await db.reminders.list(userId)).map((r) => ({
                     id: r.id,
-                    text: r.sub ? `${r.title} — ${r.sub}` : r.title,
+                    text: r.sub ? `${r.title}, ${r.sub}` : r.title,
                     dueAt: r.dueAt,
                   })),
               });
+              timedOut = turn.timedOut === true;
             }
           } else {
             const outcome = answering
@@ -159,6 +186,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
               card: { ...base, what: run.pendingGate.what },
             });
           }
+          if (timedOut) send({ t: 'continue', runId });
           send({ t: 'done', runId });
           controller.close();
         } finally {

@@ -19,6 +19,12 @@ export function plainDashes(text: string): string {
     .replace(/\s*[\u2013\u2014]\s*/g, ', ');
 }
 
+/**
+ * The line sent when a turn ran out of time and carries on in a fresh
+ * request. Plumbing for the model: never shown to the person.
+ */
+export const CONTINUE_TEXT = 'Carry on with the work you were doing. Take the next step now.';
+
 /** Short step labels for the progress line (nouns, not sentences). */
 export const STATUS_START = 'Finding the right page';
 export const STATUS_DONE = 'Finished reading';

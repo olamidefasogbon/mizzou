@@ -39,9 +39,11 @@ const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render
 export function Turnstile({
   onToken,
   onError,
+  visible = false,
 }: {
   onToken: (token: string | null) => void;
   onError?: () => void;
+  visible?: boolean;
 }): React.JSX.Element | null {
   const siteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
   const ref = useRef<HTMLDivElement | null>(null);
@@ -63,7 +65,7 @@ export function Turnstile({
         sitekey: siteKey,
         theme: 'light',
         size: 'flexible',
-        appearance: 'interaction-only',
+        appearance: visible ? 'always' : 'interaction-only',
         retry: 'auto',
         'refresh-expired': 'auto',
         callback: (token: string) => onTokenRef.current(token),
@@ -97,7 +99,7 @@ export function Turnstile({
       cancelled = true;
       if (widgetId !== undefined) window.turnstile?.remove(widgetId);
     };
-  }, [siteKey]);
+  }, [siteKey, visible]);
 
   if (!siteKey) return null;
   return <div ref={ref} className={styles.captcha} />;

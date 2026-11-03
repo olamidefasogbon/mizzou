@@ -489,7 +489,11 @@ function ChatContent(): React.JSX.Element {
   );
 
   const runIdRef = useRef<string | null>(null);
-  const g1YesRef = useRef(false);
+  // True while a program card waits for an answer. Cards that come back
+  // meanwhile are held behind it; with no such card (a pasted link needs no
+  // question) everything shows as it arrives.
+  const g1OpenRef = useRef(false);
+  const continuesRef = useRef(0);
   const streamsRef = useRef(0);
   const enterStream = useCallback((): void => {
     streamsRef.current += 1;
@@ -560,6 +564,7 @@ function ChatContent(): React.JSX.Element {
         opensIso?: string | null;
       };
       if (event.gate === 'G1' && card.kind === 'program') {
+        g1OpenRef.current = true;
         setFeed((prev) => [
           ...prev,
           {
@@ -650,7 +655,7 @@ function ChatContent(): React.JSX.Element {
           documents: (payload.documents ?? []).map(toDoc),
           eligibility: (payload.eligibility ?? []).map(toRule),
         };
-        if (g1YesRef.current) {
+        if (!g1OpenRef.current) {
           const id = `req-${Date.now()}`;
           setFeed((prev) => [...prev, { id, kind: 'requirements', requirements: built }]);
         } else {
@@ -671,7 +676,7 @@ function ChatContent(): React.JSX.Element {
           opensIso: typeof payload.opensIso === 'string' ? payload.opensIso : null,
           label: typeof payload.label === 'string' ? payload.label : null,
         };
-        if (g1YesRef.current) {
+        if (!g1OpenRef.current) {
           const id = `plan-${Date.now()}`;
           setFeed((prev) => [...prev, { id, kind: 'plan', plan: built }]);
         } else {
@@ -700,14 +705,14 @@ function ChatContent(): React.JSX.Element {
           question: payload.question as string,
           options: strings(payload.options),
         };
-        if (g1YesRef.current) {
+        if (!g1OpenRef.current) {
           const id = `fit-${Date.now()}`;
           setFeed((prev) => [...prev, { id, kind: 'fit', fit: built }]);
         } else {
           setPendingCards((prev) => ({ ...(prev ?? {}), fit: built }));
         }
       } else if (event.kind === 'rolling_notice' && typeof payload.text === 'string') {
-        if (g1YesRef.current) {
+        if (!g1OpenRef.current) {
           const id = `rolling-${Date.now()}`;
           setFeed((prev) => [...prev, { id, kind: 'rolling', text: payload.text as string }]);
         } else {
@@ -731,7 +736,18 @@ function ChatContent(): React.JSX.Element {
       setFeed((prev) => settleActiveStatuses(prev, 'done'));
     } else if (event.t === 'continue') {
       runIdRef.current = event.runId;
-      void resumeRef.current({ opId: crypto.randomUUID() });
+      // The agent ran out of time for this request and saved its place.
+      // Carry on in a fresh one, up to six times, so a stuck run still ends.
+      continuesRef.current += 1;
+      if (continuesRef.current > 6) {
+        continuesRef.current = 0;
+        setFeed((prev) => [
+          ...settleActiveStatuses(prev, 'failed'),
+          { id: `err-${Date.now()}`, kind: 'error', text: 'This one is taking longer than it should. Send me a message and I will pick it up from where I got to.' },
+        ]);
+      } else {
+        void resumeRef.current({ opId: crypto.randomUUID() });
+      }
     } else if (event.t === 'error') {
       setFeed((prev) => [...prev, { id: `err-${Date.now()}`, kind: 'error', text: event.friendly, link: event.link }]);
       setFeed((prev) => settleActiveStatuses(prev, 'failed'));
@@ -768,6 +784,7 @@ function ChatContent(): React.JSX.Element {
       const text = raw.trim();
       if (!text || busy) return;
       setInput('');
+    continuesRef.current = 0;
     enterStream();
     const userId = `user-${Date.now()}`;
     setFeed((prev) => [...prev, { id: userId, kind: 'user', text }]);
@@ -1058,12 +1075,12 @@ function ChatContent(): React.JSX.Element {
                       <button
                         type="button"
                         onClick={() => {
-                          g1YesRef.current = true;
+                          g1OpenRef.current = false;
                           void (async () => {
                             const ok = await resumeRef.current({ gate: 'G1', decision: { confirmed: true }, opId: crypto.randomUUID() });
                             patch(item.id, ok ? { decision: 'yes' } : { decision: undefined });
                             if (!ok) {
-                              g1YesRef.current = false;
+                              g1OpenRef.current = true;
                             }
                           })();
                           setFeed((prev) => {
@@ -1099,6 +1116,7 @@ function ChatContent(): React.JSX.Element {
                       <button
                         type="button"
                         onClick={() => {
+                          g1OpenRef.current = false;
                           patch(item.id, { decision: 'no' });
                           setPendingCards(null);
                           void resumeRef.current({ gate: 'G1', decision: { confirmed: false }, opId: crypto.randomUUID() });

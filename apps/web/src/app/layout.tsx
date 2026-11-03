@@ -15,7 +15,7 @@ const kaushan = Kaushan_Script({
 });
 
 export const metadata: Metadata = {
-  title: "Mizzou — from link to executed application",
+  title: "Mizzou: from link to executed application",
   description: "Mizzou reads the official page, extracts dates and requirements with evidence, and builds your application plan. You approve every step.",
 };
 

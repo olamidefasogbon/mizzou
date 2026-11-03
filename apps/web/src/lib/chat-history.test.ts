@@ -31,4 +31,13 @@ describe('visibleLines', () => {
       { role: 'assistant', text: 'Yes.' },
     ]);
   });
+
+  it('hides the line that carries on after a time-out', () => {
+    const out = visibleLines([
+      { role: 'user', text: 'hey, apply for https://x.edu' },
+      { role: 'user', text: 'Carry on with the work you were doing. Take the next step now.' },
+      { role: 'assistant', text: 'Here is what I found.' },
+    ]);
+    assert.deepEqual(out.map((l) => l.role), ['user', 'assistant']);
+  });
 });

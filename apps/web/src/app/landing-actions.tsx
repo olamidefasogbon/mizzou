@@ -30,6 +30,7 @@ export function TryButton({ className }: { className: string }) {
   // do not already have a session (the proxy usually mints one first).
   const [needsCheck, setNeedsCheck] = useState<boolean | null>(null);
   const [attempt, setAttempt] = useState(0);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
     if (!siteKey) return;
@@ -72,6 +73,34 @@ export function TryButton({ className }: { className: string }) {
     }
   }, [waiting, token, start]);
 
+  // A hidden check can stall. After a few seconds try without a token (works
+  // when captcha is not enforced), then show the check so the visitor can
+  // finish it, and after a longer wait say what to do.
+  useEffect(() => {
+    if (!waiting) return;
+    const t1 = setTimeout(() => {
+      void (async () => {
+        try {
+          await ensureAnonymousSession(supabaseBrowser().auth, undefined);
+          router.push('/app');
+          setWaiting(false);
+        } catch {
+          setVisible(true);
+          setAttempt((a) => a + 1);
+          setError('One more step: finish the check below and I will take you in');
+        }
+      })();
+    }, 8000);
+    const t2 = setTimeout(() => {
+      setWaiting(false);
+      setError('The check is not finishing. Refresh the page or try another browser, then tap Try it for free again');
+    }, 35000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [waiting, router]);
+
   async function onClick(): Promise<void> {
     if (busy || waiting) return;
     setError(null);
@@ -97,7 +126,7 @@ export function TryButton({ className }: { className: string }) {
       <button type="button" className={className} onClick={() => void onClick()} disabled={busy || waiting}>
         {busy ? 'Starting…' : waiting ? 'Checking…' : 'Try it for free'}
       </button>
-      {siteKey && needsCheck ? <Turnstile key={attempt} onToken={setToken} onError={onCheckFailed} /> : null}
+      {siteKey && needsCheck ? <Turnstile key={attempt} visible={visible} onToken={setToken} onError={onCheckFailed} /> : null}
       {error ? <Notice onDismiss={() => setError(null)}>{error}</Notice> : null}
     </div>
   );

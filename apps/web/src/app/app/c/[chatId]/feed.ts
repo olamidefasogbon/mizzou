@@ -90,7 +90,7 @@ export function friendlyStatusLabel(label: string, state: string | undefined): s
 
 /** Gate answers sent to the model as user lines are plumbing, never shown. */
 export function isInternalUserLine(text: string | undefined): boolean {
-  return typeof text === 'string' && /^The user answered /.test(text);
+  return typeof text === 'string' && (/^The user answered /.test(text) || text.startsWith('Carry on with the work you were doing.'));
 }
 
 /**

@@ -49,12 +49,31 @@ import {
   formatG2Conflict,
   formatReadingStatus,
   plainDashes,
+  CONTINUE_TEXT,
 } from '../voice/index.js';
 import type { RunEvent } from '../schemas/events.js';
 import type { Gate, RunRecord } from '../agent/types.js';
 import type { UsageEntry } from '../deepscan/orchestrator.js';
 
 export const CONVERSATION_MAX_ROUNDS = 10;
+
+export { CONTINUE_TEXT };
+const isContinueText = (text: string): boolean => text === CONTINUE_TEXT;
+
+// A closing message that only announces the next step ("Reading the apply
+// page now", "Just say the word") or asks permission for a read-only step.
+// The workflow says do the step; this catches the turns where it did not.
+const ANNOUNCES_NEXT_STEP =
+  /\b(i['\u2019]?ll|i will|let me|i['\u2019]?m going to|going to|next,? i)\b|\b(reading|pulling|checking|looking|opening|grabbing|fetching|digging)\b[^.?!]{0,80}\b(now|next)\b|\bsay the word\b|\bjust say\b|\bwant me to\b|\bshall i\b|\bshould i\b|\blet me know if\b/i;
+
+export function announcesNextStep(text: string): boolean {
+  const t = text.trim();
+  if (t.length === 0) return false;
+  return ANNOUNCES_NEXT_STEP.test(t);
+}
+
+export const NUDGE_TEXT =
+  'You described a next step instead of taking it. Do it now with a tool call. Reading, searching and planning never need permission. Do not describe it again and do not ask whether to go ahead. If you truly cannot continue without something from the person, ask for exactly that in one short question.';
 const RETRY_BACKOFF_MS = [500, 1000];
 
 let cachedPrompt: string | null = null;
@@ -203,6 +222,8 @@ export interface ConversationMemory {
   /** Question asked by ask_profile_question, awaiting the user's answer. */
   pendingProfileQuestion: string | null;
   g1Confirmed: boolean;
+  /** The last turn ran out of time mid-work; the next request carries on. */
+  pendingContinue: boolean;
   /** Fit read asked at most once per run; the answer is recorded once in decisions. */
   fitAsked: boolean;
   fitDecision: 'apply' | 'not_now' | null;
@@ -211,7 +232,7 @@ export interface ConversationMemory {
 }
 
 function blankMemory(): ConversationMemory {
-  return { programUrl: null, programHint: null, pages: [], unreadable: [], languages: [], extractions: [], usage: [], lastReply: null, gateContext: null, profile: [], pendingProfileQuestion: null, fitAsked: false, fitDecision: null, g1Confirmed: false, drafts: [] };
+  return { programUrl: null, programHint: null, pages: [], unreadable: [], languages: [], extractions: [], usage: [], lastReply: null, gateContext: null, profile: [], pendingProfileQuestion: null, fitAsked: false, fitDecision: null, g1Confirmed: false, pendingContinue: false, drafts: [] };
 }
 
 function readMemory(run: RunRecord): ConversationMemory {
@@ -237,6 +258,7 @@ function readMemory(run: RunRecord): ConversationMemory {
     fitAsked: m.fitAsked === true,
     fitDecision: m.fitDecision === 'apply' || m.fitDecision === 'not_now' ? m.fitDecision : null,
     g1Confirmed: m.g1Confirmed === true,
+    pendingContinue: m.pendingContinue === true,
     drafts: Array.isArray(m.drafts)
       ? (m.drafts as unknown[])
           .filter((d): d is { kind: string; title: string; body: string; version: number; kept: boolean } => !!d && typeof d === 'object' && typeof (d as { body?: unknown }).body === 'string')
@@ -311,6 +333,13 @@ userText: string;
   send: (event: RunEvent) => void;
   maxRounds?: number;
   /**
+   * Wall-clock moment (ms since epoch) after which no new model round or tool
+   * call starts. The turn saves its place and reports `timedOut`; the route
+   * asks the client to continue in a fresh request. Without this a long read
+   * is killed by the platform mid-step and the screen is left spinning.
+   */
+  deadlineAtMs?: number;
+  /**
    * Rewrite the closing message of the turn into Mizzou's voice before it is
    * shown (routes turn this on). Off by default so plain tests stream as-is.
    * Narration from earlier rounds is shown as written, whole, at round end.
@@ -323,6 +352,8 @@ userText: string;
 }
 
 export interface ConversationTurnResult {
+  /** Ran out of time before finishing; the caller sends a continue. */
+  timedOut?: boolean;
   gated: boolean;
   gate?: Gate;
   text: string;
@@ -445,6 +476,17 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       if (mem.gateContext?.gate === 'G1') mem.gateContext = null;
     }
   }
+  // A pasted link already says which opportunity this is: no "is this the
+  // one?" question. The person only approves what is sensitive.
+  {
+    const pasted = /https?:\/\/[^\s)>\]"']+/i.exec(opts.userText)?.[0]?.replace(/[.,;:!?]+$/, '') ?? null;
+    if (pasted && pasted !== mem.programUrl) {
+      mem.programUrl = pasted;
+      mem.programHint = null;
+      mem.g1Confirmed = true;
+    }
+  }
+  mem.pendingContinue = false;
   const pageCache = new Map<string, FetchPageResult>();
   // Judge-role fit read (PROMPT.md 7.2). A throwing judge returns null so
   // the turn skips the fit card; like any tool failure it never ends the run.
@@ -872,7 +914,22 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
 
   type ExecOutcome = { output: unknown; gate?: { gate: Gate; what: string; evidence: unknown; options: unknown } };
 
+  const searchCache = new Map<string, unknown>();
   const executeTool = async (name: string, args: Record<string, unknown>): Promise<ExecOutcome> => {
+    // Never do the same work twice. A page already read this run is not read
+    // again (its facts are in the run state); a repeated search returns the
+    // first answer.
+    if (name === 'read_page' || name === 'read_pdf') {
+      const again = str(args['url'])?.trim();
+      const done = again ? mem.pages.find((p) => p.url === again) : undefined;
+      if (done) {
+        return { output: { alreadyRead: true, summary: done.summary, note: 'You already read this page. Its facts are in the run state. Use them and move to the next page or the next step. Do not read it again.' } };
+      }
+    }
+    if (name === 'web_search') {
+      const q = str(args['query'])?.trim().toLowerCase();
+      if (q && searchCache.has(q)) return { output: searchCache.get(q) };
+    }
     if (name === 'find_links') {
       const pageUrl = str(args['page_url'])?.trim() || null;
       if (!pageUrl) return { output: { error: 'page_url is required' } };
@@ -961,7 +1018,9 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         budgetGuard,
       });
       logUsage({ kind: 'model', tool: 'web_search', role: 'orchestrator', model: res.model, inputTokens: res.inputTokens, outputTokens: res.outputTokens, costUsd: res.costUsd });
-      return { output: { answer: messageText(res.items), model: res.model } };
+      const searchOut = { answer: messageText(res.items), model: res.model };
+      searchCache.set(query.trim().toLowerCase(), searchOut);
+      return { output: searchOut };
     }
     if (name === 'list_reminders') {
       if (!listReminders) return { output: { error: 'reminders are unavailable' } };
@@ -1093,7 +1152,14 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   let thread: unknown[] = buildInput(run.messages.map(historyItem), [
     { type: 'message', role: 'user', content: [{ type: 'input_text', text: firstInput }] },
   ]);
+  let timedOut = false;
+  let nudges = 0;
+  const outOfTime = (): boolean => opts.deadlineAtMs !== undefined && Date.now() > opts.deadlineAtMs;
   for (let round = 0; round < maxRounds; round += 1) {
+    if (round > 0 && outOfTime()) {
+      timedOut = true;
+      break;
+    }
     messageId = round === 0 ? messageBase : `${messageBase}-r${round}`;
     roundTexts.push('');
     const result = await callWithRetry(
@@ -1113,6 +1179,18 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     await persist();
 
     const calls = functionCalls(result.items);
+    // The turn is about to end on "I'll read that now" or "just say the word".
+    // Make it do the step instead of waiting for the person to prod it.
+    const heldNow = (roundTexts[roundTexts.length - 1] ?? '').trim();
+    if (calls.length === 0 && nudges < 1 && round < maxRounds - 1 && heldNow.length > 0 && announcesNextStep(heldNow) && !outOfTime()) {
+      nudges += 1;
+      if (holdText) send({ t: 'message', id: messageId, text: heldNow });
+      thread = buildInput(thread, [
+        { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: heldNow }] },
+        { type: 'message', role: 'user', content: [{ type: 'input_text', text: NUDGE_TEXT }] },
+      ]);
+      continue;
+    }
     if (holdText) {
       const held = (roundTexts[roundTexts.length - 1] ?? '').trim();
       if (calls.length > 0) {
@@ -1129,6 +1207,10 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     const outputs: unknown[] = [];
     let gateHit: { gate: Gate; what: string; evidence: unknown; options: unknown } | null = null;
     for (const call of calls) {
+      if (outOfTime()) {
+        outputs.push({ type: 'function_call_output', call_id: call.callId, output: JSON.stringify({ skipped: true, note: 'Out of time in this request. This step carries on next.' }) });
+        continue;
+      }
       const args = parseArgs(call.argsText);
       opts.onToolCall?.(call.name, args);
       // A failing tool returns a structured result to the model; it never ends the run.
@@ -1170,6 +1252,16 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         // META_API_NOTES section 9: the API accepts function_call pairs without their reasoning item, so it is never replayed.
     const replayable = result.items.filter((item) => item.type !== 'reasoning');
     thread = buildInput(thread, [...replayable, ...outputs]);
+  }
+  if (timedOut) {
+    // Save our place. The route tells the client to continue in a fresh
+    // request, which picks up from the run state (pages read, decisions).
+    mem.pendingContinue = true;
+    const narration = answerText();
+    mem.lastReply = narration || mem.lastReply;
+    if (narration) run.messages.push({ role: 'assistant', text: narration });
+    await persist();
+    return { gated: false, timedOut: true, text: narration, usageUsd: run.usageUsd };
   }
   let finalText = answerText();
   mem.lastReply = finalText || mem.lastReply;

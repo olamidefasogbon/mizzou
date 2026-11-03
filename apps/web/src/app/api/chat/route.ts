@@ -18,6 +18,7 @@ import { abuseLimitsFromEnv, checkHitRate, checkMessageLength, checkNewRun, clie
 import { supabaseAdmin } from '@/lib/supabase/admin';
 import { RequestUsageStore } from '@/lib/usage';
 import { isUploadId } from '@/lib/upload-id';
+import { turnBudgetMs } from '@/lib/turn-budget';
 
 // Vercel Hobby maximum is 60s (PROMPT.md 9.2 says platform maximum —
 // confirm against the Vercel plan at deploy; raise this when the plan grows).
@@ -145,10 +146,12 @@ export async function POST(req: Request): Promise<Response> {
         const snapshot = await db.usage.snapshot(userId);
         const usageStore = new RequestUsageStore(snapshot.userSpend, snapshot.globalSpend);
         const budgetGuard = new BudgetGuard(usageStore, limitsFromEnv());
+        let timedOut = false;
         try {
-          await runConversationTurn({
+          const turn = await runConversationTurn({
             run,
             save: (r) => store.save(r),
+            deadlineAtMs: Date.now() + turnBudgetMs(),
             userText: message,
             polishAnswers: true,
             seedExtractions: visionSeeds,
@@ -159,10 +162,11 @@ export async function POST(req: Request): Promise<Response> {
             listReminders: async () =>
               (await db.reminders.list(userId)).map((r) => ({
                 id: r.id,
-                text: r.sub ? `${r.title} — ${r.sub}` : r.title,
+                text: r.sub ? `${r.title}, ${r.sub}` : r.title,
                 dueAt: r.dueAt,
               })),
           });
+          timedOut = turn.timedOut === true;
         } catch (err) {
           if (err instanceof BudgetExceededError) {
             console.warn(`[mizzou:budget] refusal scope=${err.scope} amount=${err.amount} limit=${err.limit}`);
@@ -202,6 +206,7 @@ export async function POST(req: Request): Promise<Response> {
             card: { ...base, what: run.pendingGate.what },
           });
         }
+        if (timedOut) send({ t: 'continue', runId });
         send({ t: 'done', runId });
         controller.close();
       } catch (err) {

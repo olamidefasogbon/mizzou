@@ -92,7 +92,7 @@ export async function POST(req: Request): Promise<Response> {
     return badRequest('title is required.');
   }
   if (!Array.isArray(input.deadlines) || input.deadlines.length === 0) {
-    return badRequest('At least one dated deadline is required — nothing to put on the calendar yet.');
+    return badRequest('At least one dated deadline is required. Nothing to put on the calendar yet.');
   }
   if (input.deadlines.length > MAX_DEADLINES) {
     return badRequest(`At most ${MAX_DEADLINES} deadlines per file.`);
@@ -118,7 +118,7 @@ export async function POST(req: Request): Promise<Response> {
     events.push({
       start: toArray(prep),
       duration: { hours: 1 },
-      title: `Get documents ready — ${title}`,
+      title: `Get documents ready: ${title}`,
       description,
       uid: uidFor(title, iso, 'prep'),
       status: 'CONFIRMED',
@@ -126,7 +126,7 @@ export async function POST(req: Request): Promise<Response> {
     events.push({
       start: toArray(push),
       duration: { hours: 1 },
-      title: `Final push — ${title}`,
+      title: `Final push: ${title}`,
       description,
       uid: uidFor(title, iso, 'push'),
       status: 'CONFIRMED',
@@ -134,7 +134,7 @@ export async function POST(req: Request): Promise<Response> {
     events.push({
       start: toArray(day),
       duration: { hours: 1 },
-      title: `${title} — deadline`,
+      title: `${title} deadline`,
       description,
       uid: uidFor(title, iso, 'deadline'),
       status: 'CONFIRMED',

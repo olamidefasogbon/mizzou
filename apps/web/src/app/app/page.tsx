@@ -8,7 +8,7 @@ import { readDismissed } from './coming-up';
 // first paint, so server HTML and the first client render always agree.
 
 export const metadata = {
-  title: 'Mizzou — home',
+  title: 'Mizzou, home',
 };
 
 export default async function HomePage() {

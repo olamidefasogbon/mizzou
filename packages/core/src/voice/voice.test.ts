@@ -23,6 +23,7 @@ import {
   formatG1Prompt,
   hasBannedTerm,
   plainDashes,
+  CONTINUE_TEXT,
 } from './index.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -114,5 +115,11 @@ describe('plainDashes', () => {
     expect(plainDashes('Found it — Northeastern.')).toBe('Found it, Northeastern.');
     expect(plainDashes('Opens April 5–8, 2027')).toBe('Opens April 5-8, 2027');
     expect(plainDashes('No dashes here.')).toBe('No dashes here.');
+  });
+});
+
+describe('continue line', () => {
+  it('starts with the prefix the web app hides', () => {
+    expect(CONTINUE_TEXT.startsWith('Carry on with the work you were doing.')).toBe(true);
   });
 });

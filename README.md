@@ -58,6 +58,121 @@ flowchart TB
 - **Resumable.** Runs are stored. A long task carries on across requests, and an approval can stay open for days without losing work.
 - **Never repeats itself.** Pages already read and searches already made are not repeated in a run. An announced next step that is not taken gets a single nudge to do it.
 
+## Full system architecture
+
+One picture of the whole workflow, from the browser to the models and back.
+
+```mermaid
+flowchart TB
+  subgraph Client ["Browser (Next.js, Vercel)"]
+    UI["Chat, Working row, cards,<br/>Application Pack, reminders"]
+    IN["Inputs: text, link, pasted posting,<br/>flyer image, voice note"]
+    TS["Cloudflare Turnstile<br/>(new visitors only)"]
+  end
+
+  subgraph API ["API routes (server only)"]
+    CH["/api/chat<br/>stream + time budget"]
+    RS["/api/runs/:id/resume<br/>approvals + continue"]
+    UP["/api/upload<br/>sniff + downscale check"]
+    TR["/api/transcribe<br/>WAV check, 60s cap"]
+    CAL["/api/calendar<br/>.ics + Google sync"]
+    REM["/api/reminders<br/>due, done, snooze"]
+    CAP["Abuse caps and budget guard<br/>per IP, per user, global"]
+  end
+
+  subgraph Agent ["Agent (packages/core)"]
+    ORCH["Orchestrator loop<br/>chooses tools each round"]
+    CASE["Case file<br/>known vs missing"]
+    TOOLS["Tools: find_links, fetch_page,<br/>read_page, read_pdf, web_search,<br/>propose_plan, ask_profile_question,<br/>draft_document, edit_draft,<br/>request_approval, resolve_gate,<br/>yield_to_user"]
+    READ["Page reader<br/>schema-bound extraction"]
+    EVID["Evidence check (code)<br/>quote must support value"]
+    REC["Reconcile conflicts,<br/>dates vs today, timezones"]
+    FIT["Fit judge<br/>plain words"]
+    WRITE["Draft writer"]
+    POL["Final-answer polish<br/>with link and number guard"]
+  end
+
+  subgraph Muse ["Meta Model API"]
+    SPARK["muse-spark<br/>Responses API, tool calling"]
+    SEARCH["web_search tool"]
+    VOICE["muse-voice-transcribe"]
+  end
+
+  subgraph Data ["Supabase"]
+    SESS["Anonymous sessions + optional Google"]
+    RUNS[("Runs, decisions,<br/>messages, usage")]
+    PLANS[("Plans, reminders,<br/>drafts")]
+  end
+
+  WEB["Official sites, FAQs, PDFs<br/>(robots.txt respected)"]
+  GCAL["Google Calendar"]
+
+  TS --> SESS
+  IN --> UI
+  UI --> CH
+  UI --> RS
+  UI --> UP
+  UI --> TR
+  CH --> CAP --> ORCH
+  RS --> CAP
+  RS --> ORCH
+  UP --> READ
+  TR --> VOICE
+  ORCH <--> CASE
+  ORCH --> TOOLS
+  TOOLS --> WEB
+  TOOLS --> SEARCH
+  TOOLS --> READ
+  READ --> EVID --> REC --> ORCH
+  ORCH --> FIT
+  ORCH --> WRITE
+  ORCH --> POL
+  ORCH <--> SPARK
+  READ <--> SPARK
+  FIT <--> SPARK
+  WRITE <--> SPARK
+  POL <--> SPARK
+  ORCH <--> RUNS
+  TOOLS --> PLANS
+  UI --> CAL --> GCAL
+  UI --> REM --> PLANS
+  ORCH -- "SSE: message, status, card,<br/>needs_approval, continue, done" --> UI
+```
+
+### One request, step by step
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor You
+  participant Web as Web app
+  participant Agent as Orchestrator (muse-spark)
+  participant Site as Official site
+  participant Check as Evidence check
+  participant DB as Supabase
+
+  You->>Web: Paste a link, "I want to apply"
+  Web->>Agent: Message (anonymous session, caps checked)
+  Agent->>DB: Record program (no card, the link is the choice)
+  loop Until nothing essential is missing
+    Agent->>Site: Read main, apply, dates, FAQ, PDFs
+    Site-->>Agent: Page text
+    Agent->>Check: Extracted fields with quotes
+    Check-->>Agent: Verified or flagged
+  end
+  alt Dates found
+    Agent-->>Web: Requirements card, upcoming vs passed
+  else No dates posted
+    Agent-->>Web: Says so, asks: apply, interested, or have dates?
+    You->>Web: "I have them from an email"
+  end
+  Agent-->>Web: Fit read in plain words
+  You->>Web: "Yes, let's apply"
+  Agent->>DB: Plan and reminders
+  Web-->>You: .ics, optional Google Calendar after approval
+  Note over Agent,Web: Out of time on this request?<br/>It saves its place and continues on its own.
+```
+
 ## Autonomous, with approvals only where it counts
 
 ```mermaid
@@ -86,6 +201,59 @@ Mizzou never sends email, never submits an application and never logs in as you.
 | **Voice and vision** | Record a note (it lands in the composer for you to edit, never auto-sent) or attach a flyer image. |
 | **Cost guarded** | Per-user and global daily budgets, per-IP rate and upload caps, a page budget per run, and an optional Cloudflare check. |
 | **Friendly voice** | Working steps fold into one animated row. The closing answer is rewritten in a warm voice and a code guard rejects any rewrite that loses a link or a number. |
+
+## Why Mizzou would fail without the Muse models
+
+Mizzou is not a chatbot with a nice skin. Its workflow needs four things in one stack, and the Meta Model API supplies all four behind a single key and a single cost ledger. Take any one away and a core promise breaks.
+
+```mermaid
+flowchart LR
+  subgraph Needs ["What the workflow needs"]
+    N1["Decide the next step itself,<br/>over many rounds"]
+    N2["Read messy pages and PDFs<br/>into a strict schema"]
+    N3["Look things up on the web<br/>when no link is given"]
+    N4["Understand flyers<br/>and spoken notes"]
+    N5["Sound like a friendly<br/>assistant, safely"]
+  end
+  subgraph Muse ["Meta Model API"]
+    M1["muse-spark, Responses API<br/>tool calling"]
+    M2["muse-spark, structured output"]
+    M3["Built-in web_search"]
+    M4["muse-spark vision +<br/>muse-voice-transcribe"]
+    M5["muse-spark, low-effort<br/>rewrite call"]
+  end
+  N1 --> M1
+  N2 --> M2
+  N3 --> M3
+  N4 --> M4
+  N5 --> M5
+```
+
+| Without this | What breaks in Mizzou |
+|---|---|
+| **Tool-calling orchestration** (`muse-spark` on the Responses API) | There is no agent. The "paste a link and watch it finish" flow is a loop where the model picks `find_links`, `read_page`, `read_pdf`, `web_search` and the approval tools round after round. Without reliable tool calls it collapses into a fixed script that cannot adapt to a site laid out differently. |
+| **Schema-bound reading** | Evidence is the product. Every date needs a source and an exact quote that code can re-check. A model that drifts from the schema or paraphrases its quotes produces dates nobody can trust, and the verification step rejects them. |
+| **Built-in `web_search`** | "Cambridge Mastercard Foundation scholarship" with no link needs a search that returns sources the agent then reads. Without it the agent cannot find the official source on its own and every user would have to bring a link. |
+| **Vision on the same model** | A flyer or screenshot is read into the same extraction schema as a web page, so it flows through the same checks. A separate OCR plus a second model would split the evidence trail. |
+| **`muse-voice-transcribe`** | Voice notes become editable text in the composer. Many applicants are on phones, where speaking is faster than typing. |
+| **One vendor, one key, one ledger** | Mizzou runs on a hard budget (a provider limit, a project cap, a per-user daily cap). Every call is priced and logged in one place, so the budget guard can stop a run before it overspends. Mixing providers would make that guard guesswork. |
+| **Low-effort rewrite call** | The warm, trusted voice comes from a short second call that rewrites the closing answer. A code guard throws the rewrite away if it loses a link or a number. This only pays off when the call is fast and cheap. |
+
+Put plainly: the product promise is "it reads the real source, proves it, and acts", and that promise is built out of these capabilities. This is how Mizzou is designed, not a claim that nothing else could ever be made to work.
+
+## Who it is for, and why this is an Indie project
+
+**The applicant.** Mizzou is built for the student or early-career applicant with no advisor: someone applying across time zones for fellowships, scholarships, graduate programs and internships, often from a phone, often on a tight data budget, with deadlines that differ by track and are sometimes simply not published. The defaults reflect that. The assistant works in the user's own time zone (Africa/Lagos by default), opens with no signup, accepts a voice note or a photographed flyer, and is honest when a page posts no dates instead of guessing.
+
+**The builder.** Mizzou is a solo build for the Indie track, made by a student who lives this problem: scattered requirements, unclear deadlines, one essay per application. That shows in the choices:
+
+| Choice | Why it fits one builder and one real user |
+|---|---|
+| One focused problem, finished end to end | Link to plan to calendar to draft, instead of a wide demo that stops halfway |
+| No signup, optional Google | The first run takes seconds, so the idea can be judged on the work |
+| Hard cost caps and a budget guard | A solo project must never run away with money |
+| Honesty over polish | Unverified is labeled as unverified, and the agent says what it could not find |
+| Advice only | The applicant keeps every decision, and nothing is sent or submitted for them |
 
 ## Meta models used
 

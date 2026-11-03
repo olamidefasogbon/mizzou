@@ -153,7 +153,7 @@ export interface FetchedBytes {
 
 export const FETCH_TTL_MS = 24 * 3600 * 1000;
 const DEFAULT_TIMEOUT_MS = 10_000;
-const DEFAULT_MIN_INTERVAL_MS = 1000;
+const DEFAULT_MIN_INTERVAL_MS = 250;
 const DEFAULT_UA = 'Mozilla/5.0 Mizzou-deep-scan';
 
 function originOf(url: string): string {

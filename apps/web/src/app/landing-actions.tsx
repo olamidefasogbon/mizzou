@@ -16,8 +16,7 @@ import styles from './landing.module.css';
 // lives in Settings.
 
 function failure(friendly: string, detail: string): string {
-  // TEMPORARY: show the provider message in production too until sign-in is confirmed working.
-  return `${friendly} (${detail.slice(0, 140)})`;
+  return process.env.NODE_ENV === 'production' ? friendly : `${friendly} (${detail})`;
 }
 
 export function TryButton({ className }: { className: string }) {

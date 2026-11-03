@@ -953,7 +953,33 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     const start = raw.indexOf('{');
     const end = raw.lastIndexOf('}');
     if (start < 0 || end <= start) throw new Error('The page reader returned no JSON.');
-    const extraction = ExtractionSchema.parse(JSON.parse(raw.slice(start, end + 1))) as Extraction;
+    // A low-effort reply can get one list item wrong. Drop only the broken
+    // items (never a whole page) and keep everything that parsed.
+    const obj = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>;
+    const listKeys = new Set(['deadlines', 'documents', 'eligibility', 'people', 'tests', 'money', 'unusual_rules']);
+    let extraction: Extraction | null = null;
+    for (let attempt = 0; attempt < 6 && extraction === null; attempt += 1) {
+      const parsed = ExtractionSchema.safeParse(obj);
+      if (parsed.success) {
+        extraction = parsed.data as Extraction;
+        break;
+      }
+      const drops = new Map<string, Set<number>>();
+      for (const issue of parsed.error.issues) {
+        const [key, idx] = issue.path;
+        if (typeof key === 'string' && listKeys.has(key) && typeof idx === 'number') {
+          const set = drops.get(key) ?? new Set<number>();
+          set.add(idx);
+          drops.set(key, set);
+        }
+      }
+      if (drops.size === 0) throw new Error('The page reader reply did not match the format.');
+      for (const [key, set] of drops) {
+        const list = obj[key];
+        if (Array.isArray(list)) obj[key] = list.filter((_, i) => !set.has(i));
+      }
+    }
+    if (extraction === null) throw new Error('The page reader reply did not match the format.');
     return {
       extraction: verifyExtractionEvidence(sliced, extraction),
       costUsd: res.costUsd,
@@ -978,8 +1004,8 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     console.error(`[mizzou:tool] ${tool} ${stage} failed for ${url}: ${raw.slice(0, 300)}`);
     const timedOut = err instanceof ToolTimeoutError || err instanceof ModelTimeoutError;
     const friendly = timedOut ? 'took too long' : stage === 'read' ? 'could not be read' : 'did not open';
-    // TEMPORARY: always show the raw reason on screen until the reader failure is found. Set MIZZOU_DEBUG=0 to hide it.
-    return process.env['MIZZOU_DEBUG'] === '0' ? friendly : `${friendly} (${raw.slice(0, 120)})`;
+    // Set MIZZOU_DEBUG=1 to show the raw reason in the step label while testing.
+    return process.env['MIZZOU_DEBUG'] === '1' ? `${friendly} (${raw.slice(0, 120)})` : friendly;
   };
   const FAILED_NOTE = 'That page would not open or read after two tries. Do not try it or its variants again. Use web_search for the dates and requirements, and if that finds nothing, ask the person in one message to paste the text of the page or give you the dates.';
   /** Tools that never halt the turn: safe to run side by side in one block. Status and card ids carry the slot so parallel rows never share an id. */
@@ -1287,7 +1313,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     try {
       result = await callWithRetry({
         model: ROLE_MODEL_MAP.orchestrator,
-        effort: 'medium',
+        effort: 'low',
         systemPrompt: `${loadConversationPrompt()}\n\n${buildDateContext(opts.timezone, opts.todayIso)}`,
         input: thread,
         tools,

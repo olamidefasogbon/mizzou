@@ -979,3 +979,26 @@ describe('final-answer polish', () => {
     expect(r2.text).toBe('Here is what I found about the program.');
   });
 });
+
+describe('workflow: yield and resolve_gate', () => {
+  it('records G1 without a card when the user pasted the exact URL', async () => {
+    const h = makeHarness([
+      callResult('resolve_gate', { gate: 'G1', confirmed: true, source: 'user_supplied_url', url: 'https://example.edu/a' }, 'resp-1'),
+      textResult('Reading it now.', 'resp-2'),
+    ]);
+    const result = await runConversationTurn({ run: h.run, save: async () => {}, userText: 'apply here https://example.edu/a', userId: 'user-1', send: (e) => h.events.push(e), streamCall: h.streamCall });
+    expect(result.gated).toBe(false);
+    expect(h.events.some((e) => e.t === 'needs_approval')).toBe(false);
+  });
+
+  it('does not nudge a closing message that yields', async () => {
+    const h = makeHarness([
+      { ...textResult('I will check again when the page changes.', 'resp-1'), items: [
+        { type: 'message', content: [{ type: 'output_text', text: 'I will check again when the page changes.' }] },
+        { type: 'function_call', id: 'call_y', call_id: 'call_y', name: 'yield_to_user', arguments: '{"reason":"answered"}' },
+      ] },
+    ]);
+    await runConversationTurn({ run: h.run, save: async () => {}, userText: 'ok', userId: 'user-1', send: (e) => h.events.push(e), streamCall: h.streamCall });
+    expect(h.seen.length).toBe(1);
+  });
+});

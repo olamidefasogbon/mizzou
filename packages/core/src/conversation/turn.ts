@@ -7,6 +7,7 @@
 // turns; usage is logged per model call so no turn ever costs $0 silently.
 
 import { readFileSync } from 'node:fs';
+import { buildCaseFile } from './casefile.js';
 import { callModel } from '../meta/callModel.js';
 import {
   isRetryableTransportError,
@@ -202,6 +203,28 @@ export const CONVERSATION_TOOL_DEFS: ResponsesFunctionTool[] = [
     name: 'finish',
     description: 'End the turn with a one-sentence summary of what was found.',
     parameters: { type: 'object', properties: { summary: { type: 'string' } }, required: ['summary'] },
+  },
+  {
+    type: 'function',
+    name: 'yield_to_user',
+    description: 'Hand the conversation back to the user. Call it in the same round as your final message, once nothing is left to read or do on your own. Never yield while a read-only step you mentioned is still undone.',
+    parameters: { type: 'object', properties: { reason: { type: 'string', enum: ['answered', 'need_answer', 'blocked'] } }, required: ['reason'] },
+  },
+  {
+    type: 'function',
+    name: 'resolve_gate',
+    description: 'Record the program check (G1) without a card. Use confirmed=true with source user_supplied_url when the user pasted the exact page URL, or source typed when they agreed in their own words to an open question. Use confirmed=false when they say it is the wrong page.',
+    parameters: {
+      type: 'object',
+      properties: {
+        gate: { type: 'string', enum: ['G1'] },
+        confirmed: { type: 'boolean' },
+        source: { type: 'string', enum: ['typed', 'user_supplied_url'] },
+        url: { type: 'string' },
+        program: { type: 'string' },
+      },
+      required: ['gate', 'confirmed', 'source'],
+    },
   },
 ];
 
@@ -446,6 +469,12 @@ function fitChoiceFromText(text: string): 'apply' | 'not_now' | null {
   if (norm === FIT_APPLY_LABEL.toLowerCase()) return 'apply';
   if (norm === FIT_PARK_LABEL.toLowerCase()) return 'not_now';
   return null;
+}
+
+function pageStamp(url: string): string {
+  let h = 0;
+  for (let i = 0; i < url.length; i += 1) h = (h * 31 + url.charCodeAt(i)) >>> 0;
+  return h.toString(36);
 }
 
 export function buildDateContext(timezone?: string | null, todayIso?: string | null): string {
@@ -915,6 +944,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   type ExecOutcome = { output: unknown; gate?: { gate: Gate; what: string; evidence: unknown; options: unknown } };
 
   const searchCache = new Map<string, unknown>();
+  const seenCalls = new Set<string>();
   const executeTool = async (name: string, args: Record<string, unknown>): Promise<ExecOutcome> => {
     // Never do the same work twice. A page already read this run is not read
     // again (its facts are in the run state); a repeated search returns the
@@ -925,6 +955,11 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       if (done) {
         return { output: { alreadyRead: true, summary: done.summary, note: 'You already read this page. Its facts are in the run state. Use them and move to the next page or the next step. Do not read it again.' } };
       }
+    }
+    if (name === 'fetch_page' || name === 'find_links') {
+      const key = `${name}:${(str(args['url']) ?? str(args['page_url']) ?? '').trim().replace(/#.*$/, '').replace(/\/$/, '')}`;
+      if (seenCalls.has(key)) return { output: { duplicate: true, note: 'You already did this exact step in this turn. Use what you have and move to the next missing item in the case file.' } };
+      seenCalls.add(key);
     }
     if (name === 'web_search') {
       const q = str(args['query'])?.trim().toLowerCase();
@@ -944,7 +979,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     if (name === 'fetch_page') {
       const url = str(args['url'])?.trim() || null;
       if (!url) return { output: { error: 'url is required' } };
-      const statusId = `conv-${run.id}-t${run.turnCount}-fetch`;
+      const statusId = `conv-${run.id}-t${run.turnCount}-fetch-${pageStamp(url)}`;
       send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'active' });
       let settled = false;
       try {
@@ -981,7 +1016,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     if (name === 'read_page') {
       const url = str(args['url'])?.trim() || null;
       if (!url) return { output: { error: 'url is required' } };
-      const statusId = `conv-${run.id}-t${run.turnCount}-read`;
+      const statusId = `conv-${run.id}-t${run.turnCount}-read-${pageStamp(url)}`;
       let statusLabel = formatFindingStatus(url);
       send({ t: 'status', id: statusId, label: statusLabel, state: 'active' });
       let settled = false;
@@ -1081,6 +1116,29 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       const options = Array.isArray(args['options']) ? args['options'] : null;
       return { output: { gated: true }, gate: { gate, what, evidence: { origin: 'chat', card }, options } };
     }
+    if (name === 'yield_to_user') {
+      return { output: { yielded: true } };
+    }
+    if (name === 'resolve_gate') {
+      if (str(args['gate']) !== 'G1') return { output: { error: 'only G1 can be resolved in words' } };
+      const confirmed = args['confirmed'] === true;
+      const source = str(args['source']) === 'user_supplied_url' ? 'user_supplied_url' : 'typed';
+      const url = str(args['url'])?.trim() || null;
+      const program = str(args['program'])?.trim() || null;
+      if (confirmed) {
+        mem.g1Confirmed = true;
+        if (url) mem.programUrl = url;
+        if (program) mem.programHint = program.slice(0, 120);
+        if (!run.decisions.some((d) => d.gate === 'G1')) {
+          run.decisions.push({ gate: 'G1', decision: { confirmed: true, source }, opId: `g1-${run.id}` });
+        }
+      } else {
+        mem.g1Confirmed = false;
+      }
+      mem.gateContext = null;
+      if (run.pendingGate?.gate === 'G1') run.pendingGate = null;
+      return { output: { recorded: true, confirmed } };
+    }
     if (name === 'finish') {
       return { output: { finished: true, summary: str(args['summary']) ?? '' } };
     }
@@ -1122,7 +1180,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   if (mem.gateContext) {
     const parts: string[] = [];
     if (mem.lastReply) parts.push(`Earlier in this conversation you said: "${mem.lastReply.slice(0, 500)}"`);
-    parts.push(`Open question (${mem.gateContext.gate}, answered through the approval UI, not here): ${mem.gateContext.what.slice(0, 300)}`);
+    parts.push(`Open question (${mem.gateContext.gate}): ${mem.gateContext.what.slice(0, 300)}. If their new message answers it in their own words, call resolve_gate with source typed and carry on without asking again. If it does not, answer what they said and keep the question open.`);
     if (mem.programUrl) parts.push(`Working program page: ${mem.programUrl}${mem.programHint ? ` (${mem.programHint})` : ''}`);
     const known = mem.pages.map((p) => p.url).filter((u) => u !== mem.programUrl).slice(0, 5);
     if (known.length > 0) parts.push(`Other pages already read this run: ${known.join(', ')}`);
@@ -1138,7 +1196,16 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     if (mem.unreadable.length > 0) lines.push(`Unreadable: ${mem.unreadable.map((u) => u.url).join(', ')}`);
     if (mem.profile.length > 0) lines.push(`Profile: ${mem.profile.map((f) => `${f.question} => ${f.answer}`.slice(0, 160)).join(' | ')}`);
     if (run.decisions.length > 0) lines.push(`Decisions: ${run.decisions.map((d) => `${d.gate}=${JSON.stringify(d.decision).slice(0, 80)}`).join('; ')}`);
-    if (lines.length > 0) firstInput = `Run state (persisted; never re-search a confirmed program or re-ask a confirmed gate):\n${lines.join('\n')}\n${firstInput}`;
+    lines.push(...buildCaseFile({
+      g1Confirmed: mem.g1Confirmed,
+      programUrl: mem.programUrl,
+      pagesRead: mem.pages.length,
+      unreadable: mem.unreadable.length,
+      extractions: mem.extractions,
+      profileFacts: mem.profile.length,
+      now: opts.todayIso ? new Date(opts.todayIso) : new Date(),
+    }));
+    firstInput = `Run state (persisted; never re-search a confirmed program or re-ask a confirmed gate):\n${lines.join('\n')}\n${firstInput}`;
   }
   if (fitDecidedThisTurn === 'apply') {
     firstInput = `The user answered "Want to go for it anyway?" with "Yes, let's apply" (recorded — never ask again). Carry on with the plan and drafts.\n${firstInput}`;
@@ -1179,10 +1246,13 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     await persist();
 
     const calls = functionCalls(result.items);
+    const isYield = (n: string): boolean => n === 'yield_to_user';
+    const yieldedNow = calls.some((c) => isYield(c.name));
+    const workCalls = calls.filter((c) => !isYield(c.name));
     // The turn is about to end on "I'll read that now" or "just say the word".
     // Make it do the step instead of waiting for the person to prod it.
     const heldNow = (roundTexts[roundTexts.length - 1] ?? '').trim();
-    if (calls.length === 0 && nudges < 1 && round < maxRounds - 1 && heldNow.length > 0 && announcesNextStep(heldNow) && !outOfTime()) {
+    if (workCalls.length === 0 && !yieldedNow && nudges < 1 && round < maxRounds - 1 && heldNow.length > 0 && announcesNextStep(heldNow) && !outOfTime()) {
       nudges += 1;
       if (holdText) send({ t: 'message', id: messageId, text: heldNow });
       thread = buildInput(thread, [
@@ -1193,7 +1263,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     }
     if (holdText) {
       const held = (roundTexts[roundTexts.length - 1] ?? '').trim();
-      if (calls.length > 0) {
+      if (workCalls.length > 0) {
         // Narration: shown whole now, before its tools run, so a card still
         // lands directly after the line that introduces it.
         if (held) send({ t: 'message', id: messageId, text: held });
@@ -1203,7 +1273,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         send({ t: 'message', id: messageId, text: answer });
       }
     }
-    if (calls.length === 0) break;
+    if (workCalls.length === 0) break;
     const outputs: unknown[] = [];
     let gateHit: { gate: Gate; what: string; evidence: unknown; options: unknown } | null = null;
     for (const call of calls) {

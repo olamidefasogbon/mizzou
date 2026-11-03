@@ -936,22 +936,30 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     text: string,
   ): Promise<{ extraction: Extraction; costUsd: number; model: string; inputTokens: number; outputTokens: number }> => {
     const sliced = text.slice(0, READER_MAX_CHARS);
-    const result = await callModel({
-      role: 'reader',
-      systemPrompt: READER_SYSTEM_PROMPT,
-      prompt: buildReaderPrompt(sliced, url, mem.programHint),
-      schema: ExtractionSchema,
-      temperature: 0,
+    // The reader runs on the Responses API at low reasoning effort. At the
+    // default effort a full page took about 44 seconds, which blew the time
+    // limit on every site. Low effort keeps the same schema and checks.
+    const res = await responsesCall({
+      model: ROLE_MODEL_MAP.reader,
+      effort: 'low',
+      systemPrompt: `${READER_SYSTEM_PROMPT}\nReply with exactly one JSON object and nothing else. No code fences.`,
+      input: buildReaderPrompt(sliced, url, mem.programHint),
       userId,
       budgetGuard,
       timeoutMs: readerTimeoutMs,
     });
+    logUsage({ kind: 'model', tool: 'read_page', role: 'reader', model: res.model, inputTokens: res.inputTokens, outputTokens: res.outputTokens, costUsd: res.costUsd });
+    const raw = messageText(res.items);
+    const start = raw.indexOf('{');
+    const end = raw.lastIndexOf('}');
+    if (start < 0 || end <= start) throw new Error('The page reader returned no JSON.');
+    const extraction = ExtractionSchema.parse(JSON.parse(raw.slice(start, end + 1))) as Extraction;
     return {
-      extraction: verifyExtractionEvidence(sliced, result.data as Extraction),
-      costUsd: result.costUsd,
-      model: result.model,
-      inputTokens: result.usage?.prompt_tokens ?? 0,
-      outputTokens: result.usage?.completion_tokens ?? 0,
+      extraction: verifyExtractionEvidence(sliced, extraction),
+      costUsd: res.costUsd,
+      model: res.model,
+      inputTokens: res.inputTokens,
+      outputTokens: res.outputTokens,
     };
   };
 

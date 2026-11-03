@@ -147,7 +147,10 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
       }
     } catch (err: unknown) {
       if (err instanceof BudgetExceededError) throw err;
-      if ((err as { name?: string })?.name === 'AbortError') throw new ModelTimeoutError(role, timeoutMs);
+      {
+        const e = err as { name?: string; message?: string };
+        if (e?.name === 'AbortError' || e?.name === 'APIUserAbortError' || e?.message === 'Request was aborted.') throw new ModelTimeoutError(role, timeoutMs);
+      }
       const status = (err as { status?: number })?.status;
       if (status === 429 && attempt < MAX_ATTEMPTS) {
         await sleep(delay);

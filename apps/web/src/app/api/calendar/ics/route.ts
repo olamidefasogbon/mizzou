@@ -110,36 +110,33 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const description = checklist(items, portalUrl);
-  const events: EventAttributes[] = [];
+  // At most three reminders per opportunity, and only ones still ahead: the
+  // deadline itself first, then the final push, then the document prep. More
+  // than that is a nuisance, not help.
+  const now = Date.now();
+  const candidates: Array<{ at: Date; rank: number; kind: 'deadline' | 'push' | 'prep'; iso: string }> = [];
   for (const day of parsed) {
     const iso = day.toISOString();
-    const prep = new Date(day.getTime() - 14 * DAY_MS);
-    const push = new Date(day.getTime() - 3 * DAY_MS);
-    events.push({
-      start: toArray(prep),
-      duration: { hours: 1 },
-      title: `Get documents ready: ${title}`,
-      description,
-      uid: uidFor(title, iso, 'prep'),
-      status: 'CONFIRMED',
-    });
-    events.push({
-      start: toArray(push),
-      duration: { hours: 1 },
-      title: `Final push: ${title}`,
-      description,
-      uid: uidFor(title, iso, 'push'),
-      status: 'CONFIRMED',
-    });
-    events.push({
-      start: toArray(day),
-      duration: { hours: 1 },
-      title: `${title} deadline`,
-      description,
-      uid: uidFor(title, iso, 'deadline'),
-      status: 'CONFIRMED',
-    });
+    candidates.push({ at: day, rank: 1, kind: 'deadline', iso });
+    candidates.push({ at: new Date(day.getTime() - 3 * DAY_MS), rank: 2, kind: 'push', iso });
+    candidates.push({ at: new Date(day.getTime() - 14 * DAY_MS), rank: 3, kind: 'prep', iso });
   }
+  const chosen = candidates
+    .filter((c) => c.at.getTime() > now)
+    .sort((x, y) => x.rank - y.rank || x.at.getTime() - y.at.getTime())
+    .slice(0, 3)
+    .sort((x, y) => x.at.getTime() - y.at.getTime());
+  if (chosen.length === 0) {
+    return badRequest('Every date is already in the past. Nothing to put on the calendar.');
+  }
+  const events: EventAttributes[] = chosen.map((c) => ({
+    start: toArray(c.at),
+    duration: { hours: 1 },
+    title: c.kind === 'deadline' ? `${title} deadline` : c.kind === 'push' ? `Final push: ${title}` : `Get documents ready: ${title}`,
+    description,
+    uid: uidFor(title, c.iso, c.kind),
+    status: 'CONFIRMED' as const,
+  }));
 
   const { error, value } = createEvents(events);
   if (error || !value) {

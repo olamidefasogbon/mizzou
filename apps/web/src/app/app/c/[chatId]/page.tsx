@@ -231,13 +231,6 @@ function Working({ entry, grouped }: { entry: WorkEntry; grouped: boolean }): Re
         </ul>
       ) : null}
     </div>
-    {entry.active ? (
-      <div className={styles.typing} role="status" aria-label="Mizzou is typing">
-        <span />
-        <span />
-        <span />
-      </div>
-    ) : null}
     </>
   );
 }
@@ -1355,6 +1348,13 @@ function ChatContent(): React.JSX.Element {
                             </li>
                           );
                         })}
+          {busy && display[display.length - 1]?.kind !== 'message' ? (
+            <div className={styles.typing} role="status" aria-label="Mizzou is typing">
+              <span />
+              <span />
+              <span />
+            </div>
+          ) : null}
                       </ul>
                     </div>
                   )}

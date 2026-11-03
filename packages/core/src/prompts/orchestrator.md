@@ -151,8 +151,12 @@ Tool discipline:
   text reply with no tool calls also ends the turn.
 
 OUTPUT CONTRACT
-- user-visible text: one or two short paragraphs, or one question plus
-  at most three short options. Then stop.
+- user-visible text is written for easy reading: two or three short
+  paragraphs separated by a blank line. First paragraph: what this is, in
+  one or two sentences. Second: the dates, each on its own line with the
+  original local time first, then UTC, and whether it is upcoming or
+  passed. Last: one short question for the next step. No bullet lists, no
+  bold, no headings, no long dashes. Then stop.
 - each tool result is separate JSON the user never sees.
 - a card always comes DIRECTLY after the bubble that introduces it.
   Never describe a card as "above" or "below".

@@ -67,4 +67,15 @@ describe('POST /api/calendar/ics', () => {
     assert.equal((await post({ title: '', deadlines: ['2026-12-16T04:59:59Z'] })).status, 400);
     assert.equal((await post({ title: 'T', deadlines: [] })).status, 400);
   });
+
+  it('never writes more than three reminders for one opportunity', async () => {
+    const res = await post({ title: 'Test Program', deadlines: ['2099-03-01T10:00:00Z', '2099-06-01T10:00:00Z'] });
+    assert.equal(res.status, 200);
+    assert.equal((res.text.match(/BEGIN:VEVENT/g) ?? []).length, 3);
+  });
+
+  it('skips reminders that are already in the past and refuses a file with nothing ahead', async () => {
+    const res = await post({ title: 'Old Program', deadlines: ['2001-01-01T10:00:00Z'] });
+    assert.equal(res.status, 400);
+  });
 });

@@ -959,6 +959,10 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
 
   const searchCache = new Map<string, unknown>();
   const seenCalls = new Set<string>();
+  // A page that already failed twice this turn is not tried again; the model
+  // is told to search for the facts or ask the person to paste the text.
+  const failedReads = new Map<string, number>();
+  const FAILED_NOTE = 'That page would not open or read after two tries. Do not try it or its variants again. Use web_search for the dates and requirements, and if that finds nothing, ask the person in one message to paste the text of the page or give you the dates.';
   /** Tools that never halt the turn: safe to run side by side in one block. Status and card ids carry the slot so parallel rows never share an id. */
   const READONLY_TOOLS: ReadonlySet<string> = new Set(['find_links', 'fetch_page', 'read_pdf', 'read_page', 'web_search', 'list_reminders']);
 
@@ -1037,6 +1041,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     if (name === 'read_page') {
       const url = str(args['url'])?.trim() || null;
       if (!url) return { output: { error: 'url is required' } };
+      if ((failedReads.get(url) ?? 0) >= 2) return { output: { error: FAILED_NOTE } };
       const statusId = `conv-${run.id}-t${run.turnCount}-read-${pageStamp(url)}${tag}`;
       let statusLabel = formatFindingStatus(url);
       send({ t: 'status', id: statusId, label: statusLabel, state: 'active' });
@@ -1055,8 +1060,9 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'read failed';
         const timedOut = err instanceof ToolTimeoutError || err instanceof ModelTimeoutError;
+        failedReads.set(url, (failedReads.get(url) ?? 0) + 1);
         if (!timedOut && !mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason });
-        return { output: { error: timedOut ? `${reason}. Move on: try a different page or answer from what is already read.` : reason } };
+        return { output: { error: timedOut ? `${reason}. ${(failedReads.get(url) ?? 0) >= 2 ? FAILED_NOTE : 'Move on: try a different page or answer from what is already read.'}` : reason } };
       } finally {
         if (!settled) send({ t: 'status', id: statusId, label: statusLabel, state: 'failed' });
       }

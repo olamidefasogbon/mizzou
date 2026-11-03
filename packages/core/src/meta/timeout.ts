@@ -17,7 +17,15 @@ export class ToolTimeoutError extends Error {
 /** One page fetch that drags past this hands a structured timeout to the model instead of eating the turn. */
 export const FETCH_TOOL_TIMEOUT_MS = 15_000;
 /** One reader call that drags past this hands a structured timeout to the model so the turn can move on. */
-export const READER_TOOL_TIMEOUT_MS = 20_000;
+export const READER_TOOL_TIMEOUT_MS = readerTimeoutFromEnv();
+
+// A full-page extraction measured about 44 seconds on the first eval, so a
+// 20 second ceiling failed every read. 40 seconds still fits inside the 60
+// second function limit when a read starts a fresh request.
+function readerTimeoutFromEnv(): number {
+  const raw = Number(process.env['MIZZOU_READER_TIMEOUT_MS']);
+  return Number.isFinite(raw) && raw >= 10_000 && raw <= 52_000 ? raw : 40_000;
+}
 /** Reader input cap: very large pages slow the reader and add nothing past this. */
 export const READER_MAX_CHARS = 15_000;
 

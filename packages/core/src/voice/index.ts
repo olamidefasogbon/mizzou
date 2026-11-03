@@ -86,6 +86,22 @@ export function formatReadingStatus(opportunityType: string, institutionName?: s
   }
 }
 
+/**
+ * Plain host and path label for an in-flight read. While the page is still
+ * unread its opportunity type is unknown, so this never guesses one.
+ * Capped so the progress row stays one line.
+ */
+export function formatReadingPage(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.replace(/^www\./, '');
+    const path = parsed.pathname === '/' ? '' : parsed.pathname.replace(/\/+$/, '');
+    return `Reading ${host}${path}`.slice(0, 80);
+  } catch {
+    return 'Reading that page';
+  }
+}
+
 export function formatG2Conflict(fields: string[]): string {
   if (fields.length === 1) return `Two official pages disagree on "${fields[0]}". Which one looks right to you?`;
   return `Two official pages disagree on ${fields.length} items (${fields.slice(0, 3).join('; ')}). Which ones look right to you?`;

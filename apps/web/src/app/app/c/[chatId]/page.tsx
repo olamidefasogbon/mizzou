@@ -155,6 +155,7 @@ type ClientEvent =
   | { t: 'continue'; runId: string }
   | { t: 'error'; friendly: string; link?: string };
 
+
 /**
  * User-local date first, original zone muted. Stored deadlines are UTC
  * instants, so the muted zone reads UTC; date-only values show the date
@@ -495,6 +496,10 @@ function ChatContent(): React.JSX.Element {
   // question) everything shows as it arrives.
   const g1OpenRef = useRef(false);
   const continuesRef = useRef(0);
+  // True once the open stream delivered a terminal frame (done, continue
+  // or error). A stream that ends without one was cut off: settle any
+  // active step and show a retry instead of spinning forever.
+  const streamTerminalRef = useRef(false);
   const streamsRef = useRef(0);
   const enterStream = useCallback((): void => {
     streamsRef.current += 1;
@@ -733,9 +738,11 @@ function ChatContent(): React.JSX.Element {
         ]);
       }
     } else if (event.t === 'done') {
+      streamTerminalRef.current = true;
       if (typeof event.runId === 'string') runIdRef.current = event.runId;
       setFeed((prev) => settleActiveStatuses(prev, 'done'));
     } else if (event.t === 'continue') {
+      streamTerminalRef.current = true;
       runIdRef.current = event.runId;
       // The agent ran out of time for this request and saved its place.
       // Carry on in a fresh one, up to six times, so a stuck run still ends.
@@ -745,11 +752,13 @@ function ChatContent(): React.JSX.Element {
         setFeed((prev) => [
           ...settleActiveStatuses(prev, 'failed'),
           { id: `err-${Date.now()}`, kind: 'error', text: 'This one is taking longer than it should. Send me a message and I will pick it up from where I got to.' },
+
         ]);
       } else {
         void resumeRef.current({ opId: crypto.randomUUID() });
       }
     } else if (event.t === 'error') {
+      streamTerminalRef.current = true;
       setFeed((prev) => [...prev, { id: `err-${Date.now()}`, kind: 'error', text: event.friendly, link: event.link }]);
       setFeed((prev) => settleActiveStatuses(prev, 'failed'));
     }
@@ -766,7 +775,17 @@ function ChatContent(): React.JSX.Element {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      streamTerminalRef.current = false;
       await pump(res);
+      if (!streamTerminalRef.current) {
+        // The stream ended with no done, continue or error frame. Settle
+        // any active step so no spinner survives, then show a retry.
+        setFeed((prev) => settleActiveStatuses(prev, 'failed'));
+        setFeed((prev) => [
+          ...prev,
+          { id: `err-${Date.now()}`, kind: 'error', text: 'I could not continue that step. Try again in a moment.' },
+        ]);
+      }
       return true;
     } catch {
       setFeed((prev) => [
@@ -790,6 +809,7 @@ function ChatContent(): React.JSX.Element {
     const userId = `user-${Date.now()}`;
     setFeed((prev) => [...prev, { id: userId, kind: 'user', text }]);
     setPendingCards(null);
+    continuesRef.current = 0;
 
     try {
       const res = await fetch('/api/chat', {
@@ -804,7 +824,17 @@ function ChatContent(): React.JSX.Element {
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      streamTerminalRef.current = false;
       await pump(res);
+      if (!streamTerminalRef.current) {
+        // The stream ended with no done, continue or error frame. Settle
+        // any active step so no spinner survives, then show a retry.
+        setFeed((prev) => settleActiveStatuses(prev, 'failed'));
+        setFeed((prev) => [
+          ...prev,
+          { id: `err-${Date.now()}`, kind: 'error', text: 'I could not send that. Try again in a moment.' },
+        ]);
+      }
       try {
         // Pull the server-generated title (and any list changes) into the panel.
         await refreshChats();

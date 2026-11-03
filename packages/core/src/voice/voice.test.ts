@@ -21,6 +21,7 @@ import {
   SAY_ON_IT,
   SAY_PAGE_WOULD_NOT_OPEN,
   formatG1Prompt,
+  formatReadingPage,
   hasBannedTerm,
   plainDashes,
   CONTINUE_TEXT,
@@ -63,8 +64,9 @@ describe('voice banned terms', () => {
   });
 
   it('writes the voice as texting-a-friend with examples, not a jargon list', () => {
-    expect(prompt).toMatch(/sharp friend texting/i);
-    expect(prompt).toMatch(/Three examples/);
+    expect(prompt).toMatch(/admissions counselor/i);
+    expect(prompt).toMatch(/texting someone you want to help/i);
+    expect(prompt).toMatch(/Tone examples/);
     expect(prompt).not.toContain('never "AI"');
   });
 });
@@ -121,5 +123,14 @@ describe('plainDashes', () => {
 describe('continue line', () => {
   it('starts with the prefix the web app hides', () => {
     expect(CONTINUE_TEXT.startsWith('Carry on with the work you were doing.')).toBe(true);
+  });
+});
+
+
+describe('reading status labels', () => {
+  it('labels an in-flight read with the plain host and path', () => {
+    expect(formatReadingPage('https://example.edu/admissions/apply')).toBe('Reading example.edu/admissions/apply');
+    expect(formatReadingPage('https://www.example.edu/')).toBe('Reading example.edu');
+    expect(formatReadingPage('not a url')).toBe('Reading that page');
   });
 });

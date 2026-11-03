@@ -7,6 +7,21 @@ import { BudgetExceededError, BudgetGuard, defaultBudgetGuard } from './budget.j
 
 export { BudgetExceededError };
 
+/** A model call that outran its per-call budget. Callers turn this into a structured tool error, never a retry storm. */
+export class ModelTimeoutError extends Error {
+  readonly role: ModelRole;
+  readonly timeoutMs: number;
+  constructor(role: ModelRole, timeoutMs: number) {
+    super(`${role} model call timed out after ${timeoutMs}ms`);
+    this.name = 'ModelTimeoutError';
+    this.role = role;
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+/** Default ceiling for one model call. The reader passes a shorter one. */
+export const DEFAULT_MODEL_TIMEOUT_MS = 30_000;
+
 interface CallModelOptions<T extends z.ZodTypeAny> {
   role: ModelRole;
   prompt: string;
@@ -19,6 +34,8 @@ interface CallModelOptions<T extends z.ZodTypeAny> {
   userId?: string;
   /** Inject a guard in tests; defaults to the shared process guard. */
   budgetGuard?: BudgetGuard;
+  /** Per-call ceiling in ms. Defaults to DEFAULT_MODEL_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
 
 export interface CallModelResult<T> {
@@ -47,6 +64,7 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
   temperature = 0.2,
   userId = 'dev',
   budgetGuard = defaultBudgetGuard,
+  timeoutMs = DEFAULT_MODEL_TIMEOUT_MS,
 }: CallModelOptions<T>): Promise<CallModelResult<z.infer<T>>> {
   const model = ROLE_MODEL_MAP[role];
 
@@ -82,13 +100,15 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
 
   while (attempt < MAX_ATTEMPTS) {
     attempt += 1;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await getMetaClient().chat.completions.create({
         model,
         messages,
         temperature,
         ...(schema ? { response_format: { type: 'json_object' } } : {}),
-      });
+      }, { signal: controller.signal });
 
       const content = response.choices[0]?.message?.content || '';
 
@@ -117,7 +137,7 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
           ],
           temperature: 0.0,
           response_format: { type: 'json_object' },
-        });
+        }, { signal: controller.signal });
 
         const repairContent = repairResponse.choices[0]?.message?.content || '';
         const repairJson = JSON.parse(repairContent);
@@ -127,6 +147,7 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
       }
     } catch (err: unknown) {
       if (err instanceof BudgetExceededError) throw err;
+      if ((err as { name?: string })?.name === 'AbortError') throw new ModelTimeoutError(role, timeoutMs);
       const status = (err as { status?: number })?.status;
       if (status === 429 && attempt < MAX_ATTEMPTS) {
         await sleep(delay);
@@ -134,6 +155,8 @@ export async function callModel<T extends z.ZodTypeAny = z.ZodString>({
         continue;
       }
       throw err;
+    } finally {
+      clearTimeout(timer);
     }
   }
 

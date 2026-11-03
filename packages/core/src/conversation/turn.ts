@@ -19,6 +19,8 @@ import {
   type StreamCallOptions,
 } from '../meta/responses.js';
 import { BudgetExceededError, type BudgetGuard } from '../meta/budget.js';
+import { ModelTimeoutError } from '../meta/callModel.js';
+import { FETCH_TOOL_TIMEOUT_MS, READER_MAX_CHARS, READER_TOOL_TIMEOUT_MS, ToolTimeoutError, withTimeout } from '../meta/timeout.js';
 import { ROLE_MODEL_MAP } from '../meta/registry.js';
 import { fetchBytes, fetchPageText, type FetchPageResult } from '../deepscan/fetch.js';
 import { rankLinks } from '../deepscan/rank.js';
@@ -48,6 +50,7 @@ import {
   formatFindingStatus,
   formatG1Prompt,
   formatG2Conflict,
+  formatReadingPage,
   formatReadingStatus,
   plainDashes,
   CONTINUE_TEXT,
@@ -70,7 +73,7 @@ const ANNOUNCES_NEXT_STEP =
 export function announcesNextStep(text: string): boolean {
   const t = text.trim();
   if (t.length === 0) return false;
-  return ANNOUNCES_NEXT_STEP.test(t);
+  return ANNOUNCES_NEXT_STEP.exec(t) !== null;
 }
 
 export const NUDGE_TEXT =
@@ -372,6 +375,8 @@ userText: string;
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
   timezone?: string;
   todayIso?: string;
+  /** Per-tool ceilings for tests. Defaults to FETCH_TOOL_TIMEOUT_MS and READER_TOOL_TIMEOUT_MS. */
+  toolTimeouts?: { fetchMs?: number; readerMs?: number };
 }
 
 export interface ConversationTurnResult {
@@ -497,6 +502,8 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   const tools = listReminders ? CONVERSATION_TOOL_DEFS : CONVERSATION_TOOL_DEFS.filter((t) => t.name !== 'list_reminders');
 
   const { run, save, send } = opts;
+  const fetchTimeoutMs = opts.toolTimeouts?.fetchMs ?? FETCH_TOOL_TIMEOUT_MS;
+  const readerTimeoutMs = opts.toolTimeouts?.readerMs ?? READER_TOOL_TIMEOUT_MS;
   const mem = readMemory(run);
   {
     const g1 = run.decisions.find((d) => d.gate === 'G1' && typeof d.decision === 'object' && d.decision !== null && (d.decision as { confirmed?: unknown }).confirmed === true);
@@ -664,6 +671,8 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
 
   // Stateless transport: previous_response_id is never used, so a missing
   // or expired response id can never fail a turn. Plain retries only.
+  /** A stream that timed out past the wall clock must save and continue, not retry into the ceiling. */
+  const isStreamTimeout = (err: unknown): boolean => err instanceof Error && err.message.includes('timed out');
   async function callWithRetry(callOpts: StreamCallOptions): Promise<ResponsesCallResult> {
     for (let attempt = 0; ; attempt += 1) {
       try {
@@ -676,6 +685,9 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
           const last = err instanceof Error ? err.message : 'transport error';
           throw new Error(`orchestrator transport failed after 3 attempts (last: ${last})`);
         }
+        // Past the wall clock, a retry only overruns the platform slice:
+        // surface the timeout so the turn can save and continue instead.
+        if (isStreamTimeout(err) && outOfTime()) throw err;
         await sleepMs(RETRY_BACKOFF_MS[attempt] ?? 1000);
       }
     }
@@ -689,9 +701,9 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     return page;
   };
 
-  const pushCoverageCard = (): void => {
+  const pushCoverageCard = (tag = ''): void => {
     const payload = buildCoveragePayload({ pagesRead: mem.pages, unreadable: mem.unreadable, languages: mem.languages });
-    send({ t: 'card', id: `${run.id}-t${run.turnCount}-coverage`, kind: 'coverage', payload });
+    send({ t: 'card', id: `${run.id}-t${run.turnCount}-coverage${tag}`, kind: 'coverage', payload });
   };
 
   /** Deadlines that passed the evidence post-check and carry a usable ISO instant. */
@@ -715,8 +727,8 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
    * card goes out only when valid ISO deadlines exist; otherwise the UI
    * gets a rolling notice only when the page explicitly says rolling. Requirements cards need evidenced items from real reading, never one trivial sentence.
    */
-  const emitExtractionCards = (extraction: Extraction): boolean => {
-    const cardId = `conv-${run.id}-t${run.turnCount}`;
+  const emitExtractionCards = (extraction: Extraction, tag = ''): boolean => {
+    const cardId = `conv-${run.id}-t${run.turnCount}${tag}`;
     const seenReq = new Set<string>();
     const docs = [];
     for (const d of extraction.documents) {
@@ -864,6 +876,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     title: string,
     extraction: Extraction,
     readerCost: { costUsd: number; model: string | null; inputTokens: number | null; outputTokens: number | null },
+    tag = '',
   ): Promise<{ gate: { gate: Gate; what: string; evidence: unknown; options: unknown } | null; summary: string }> => {
     mem.extractions.push({ url, title, extraction });
     if (!mem.pages.some((p) => p.url === url)) mem.pages.push({ url, title, summary: '' });
@@ -873,7 +886,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       if (hint) mem.programHint = hint.slice(0, 120);
     }
     logUsage({ kind: 'tool', tool: 'read_page', role: 'reader', model: readerCost.model, inputTokens: readerCost.inputTokens, outputTokens: readerCost.outputTokens, costUsd: readerCost.costUsd });
-    pushCoverageCard();
+    pushCoverageCard(tag);
     const pageEntry = mem.pages.find((p) => p.url === url);
     if (pageEntry) pageEntry.summary = `${title || url}: ${extraction.deadlines.length} deadline(s), ${extraction.documents.length} document(s), ${extraction.eligibility.length} eligibility rule(s)`.slice(0, 200);
     const rec = reconcileExtractions(mem.extractions, mem.programUrl);
@@ -882,7 +895,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       const noDateNote = deadlines === 0 ? '. With no date on this page, read the apply and dates pages next; never show a rolling card for a page that never says rolling' : '';
       let reqNote = '';
       if (rec.merged) {
-        const shown = emitExtractionCards(rec.merged);
+        const shown = emitExtractionCards(rec.merged, tag);
         if (!shown) reqNote = '. Requirements card held back: read the Apply and eligibility pages before showing it';
       }
       if (rec.merged) await emitFitCard(rec.merged);
@@ -899,7 +912,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       // Judge unreachable: fall through with code-detected conflicts.
     }
     if (remaining.length === 0) {
-      if (settled && !emitExtractionCards(settled)) {
+      if (settled && !emitExtractionCards(settled, tag)) {
         return { gate: null, summary: `read ${title || url}; conflicts resolved by judge. Requirements card held back: read the Apply and eligibility pages before showing it` };
       }
       if (settled) await emitFitCard(settled);
@@ -922,7 +935,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     title: string,
     text: string,
   ): Promise<{ extraction: Extraction; costUsd: number; model: string; inputTokens: number; outputTokens: number }> => {
-    const sliced = text.slice(0, 60_000);
+    const sliced = text.slice(0, READER_MAX_CHARS);
     const result = await callModel({
       role: 'reader',
       systemPrompt: READER_SYSTEM_PROMPT,
@@ -931,6 +944,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       temperature: 0,
       userId,
       budgetGuard,
+      timeoutMs: readerTimeoutMs,
     });
     return {
       extraction: verifyExtractionEvidence(sliced, result.data as Extraction),
@@ -945,7 +959,12 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
 
   const searchCache = new Map<string, unknown>();
   const seenCalls = new Set<string>();
-  const executeTool = async (name: string, args: Record<string, unknown>): Promise<ExecOutcome> => {
+  /** Tools that never halt the turn: safe to run side by side in one block. Status and card ids carry the slot so parallel rows never share an id. */
+  const READONLY_TOOLS: ReadonlySet<string> = new Set(['find_links', 'fetch_page', 'read_pdf', 'read_page', 'web_search', 'list_reminders']);
+
+  const executeTool = async (name: string, args: Record<string, unknown>, slot = 0): Promise<ExecOutcome> => {
+    // Parallel blocks share the turn: slot keeps each call's status and card ids unique.
+    const tag = slot > 0 ? `-p${slot}` : '';
     // Never do the same work twice. A page already read this run is not read
     // again (its facts are in the run state); a repeated search returns the
     // first answer.
@@ -969,7 +988,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       const pageUrl = str(args['page_url'])?.trim() || null;
       if (!pageUrl) return { output: { error: 'page_url is required' } };
       try {
-        const page = await getPage(pageUrl);
+        const page = await withTimeout(getPage(pageUrl), fetchTimeoutMs, 'fetch_page');
         const ranked = rankLinks(pageUrl, page.links.map((l) => ({ href: l.href, text: l.text })), { programHint: mem.programHint });
         return { output: { page_url: pageUrl, title: page.title, links: ranked.slice(0, 8) } };
       } catch (err) {
@@ -979,18 +998,19 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     if (name === 'fetch_page') {
       const url = str(args['url'])?.trim() || null;
       if (!url) return { output: { error: 'url is required' } };
-      const statusId = `conv-${run.id}-t${run.turnCount}-fetch-${pageStamp(url)}`;
+      const statusId = `conv-${run.id}-t${run.turnCount}-fetch-${pageStamp(url)}${tag}`;
       send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'active' });
       let settled = false;
       try {
-        const page = await getPage(url);
+        const page = await withTimeout(getPage(url), fetchTimeoutMs, 'fetch_page');
         send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'done' });
         settled = true;
         return { output: { url, title: page.title, size: page.text.length, snippet: page.text.slice(0, 2000) } };
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'fetch failed';
-        if (!mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason });
-        return { output: { error: reason } };
+        const timedOut = err instanceof ToolTimeoutError;
+        if (!timedOut && !mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason });
+        return { output: { error: timedOut ? `${reason}. Move on: try a different page or answer from what is already read.` : reason } };
       } finally {
         if (!settled) send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'failed' });
       }
@@ -999,42 +1019,44 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       const url = str(args['url'])?.trim() || null;
       if (!url) return { output: { error: 'url is required' } };
       try {
-        const { bytes } = await fetchBytes(url);
+        const { bytes } = await withTimeout(fetchBytes(url), fetchTimeoutMs, 'fetch_page');
         const pdf = await readPdfText(bytes);
         if (!pdf.readable) {
           if (!mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason: pdf.reason });
           return { output: { error: pdf.reason } };
         }
-        const read = await readPageText({ url, title: url, text: pdf.text }, { programHint: mem.programHint, userId });
-        return { output: (await mergeAndReconcile(url, url, read.extraction, { costUsd: read.costUsd, model: read.model, inputTokens: read.inputTokens, outputTokens: read.outputTokens })).summary };
+        const read = await withTimeout(readPageText({ url, title: url, text: pdf.text }, { programHint: mem.programHint, userId }), readerTimeoutMs, 'read_page');
+        return { output: (await mergeAndReconcile(url, url, read.extraction, { costUsd: read.costUsd, model: read.model, inputTokens: read.inputTokens, outputTokens: read.outputTokens }, tag)).summary };
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'pdf read failed';
-        if (!mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason });
-        return { output: { error: reason } };
+        const timedOut = err instanceof ToolTimeoutError || err instanceof ModelTimeoutError;
+        if (!timedOut && !mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason });
+        return { output: { error: timedOut ? `${reason}. Move on: try a different page or answer from what is already read.` : reason } };
       }
     }
     if (name === 'read_page') {
       const url = str(args['url'])?.trim() || null;
       if (!url) return { output: { error: 'url is required' } };
-      const statusId = `conv-${run.id}-t${run.turnCount}-read-${pageStamp(url)}`;
+      const statusId = `conv-${run.id}-t${run.turnCount}-read-${pageStamp(url)}${tag}`;
       let statusLabel = formatFindingStatus(url);
       send({ t: 'status', id: statusId, label: statusLabel, state: 'active' });
       let settled = false;
       try {
-        const page = await getPage(url);
-        statusLabel = formatReadingStatus('generic_opportunity');
+        const page = await withTimeout(getPage(url), fetchTimeoutMs, 'fetch_page');
+        statusLabel = formatReadingPage(url);
         send({ t: 'status', id: statusId, label: statusLabel, state: 'active' });
-        const read = await readPageText({ url, title: page.title, text: page.text }, { programHint: mem.programHint, userId });
+        const read = await withTimeout(readPageText({ url, title: page.title, text: page.text }, { programHint: mem.programHint, userId }), readerTimeoutMs, 'read_page');
         statusLabel = formatReadingStatus(read.extraction.opportunity_type, read.extraction.program.institution.value || undefined);
         send({ t: 'status', id: statusId, label: statusLabel, state: 'done' });
         settled = true;
-        const merged = await mergeAndReconcile(url, page.title, read.extraction, { costUsd: read.costUsd, model: read.model, inputTokens: read.inputTokens, outputTokens: read.outputTokens });
+        const merged = await mergeAndReconcile(url, page.title, read.extraction, { costUsd: read.costUsd, model: read.model, inputTokens: read.inputTokens, outputTokens: read.outputTokens }, tag);
         if (merged.gate) return { output: { gated: true, summary: merged.summary }, gate: merged.gate };
         return { output: { summary: merged.summary } };
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'read failed';
-        if (!mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason });
-        return { output: { error: reason } };
+        const timedOut = err instanceof ToolTimeoutError || err instanceof ModelTimeoutError;
+        if (!timedOut && !mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason });
+        return { output: { error: timedOut ? `${reason}. Move on: try a different page or answer from what is already read.` : reason } };
       } finally {
         if (!settled) send({ t: 'status', id: statusId, label: statusLabel, state: 'failed' });
       }
@@ -1051,6 +1073,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         previousResponseId: null,
         userId,
         budgetGuard,
+        timeoutMs: 20_000,
       });
       logUsage({ kind: 'model', tool: 'web_search', role: 'orchestrator', model: res.model, inputTokens: res.inputTokens, outputTokens: res.outputTokens, costUsd: res.costUsd });
       const searchOut = { answer: messageText(res.items), model: res.model };
@@ -1229,8 +1252,12 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     }
     messageId = round === 0 ? messageBase : `${messageBase}-r${round}`;
     roundTexts.push('');
-    const result = await callWithRetry(
-      {
+    // Bound one round to the remaining slice: a slow stream cannot push
+    // the turn past the platform ceiling with no done or continue.
+    const roundTimeoutMs = opts.deadlineAtMs === undefined ? undefined : Math.max(10_000, Math.min(45_000, opts.deadlineAtMs - Date.now()));
+    let result: ResponsesCallResult;
+    try {
+      result = await callWithRetry({
         model: ROLE_MODEL_MAP.orchestrator,
         effort: 'medium',
         systemPrompt: `${loadConversationPrompt()}\n\n${buildDateContext(opts.timezone, opts.todayIso)}`,
@@ -1240,8 +1267,13 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         userId,
         budgetGuard,
         onText: emitText,
-      },
-    );
+        ...(roundTimeoutMs === undefined ? {} : { timeoutMs: roundTimeoutMs }),
+      });
+    } catch (err) {
+      // A timeout past the wall clock saves and continues instead of retrying into the ceiling.
+      if (isStreamTimeout(err) && outOfTime()) { timedOut = true; break; }
+      throw err;
+    }
     logUsage({ kind: 'model', tool: null, role: 'orchestrator', model: result.model, inputTokens: result.inputTokens, outputTokens: result.outputTokens, costUsd: result.costUsd });
     await persist();
 
@@ -1274,12 +1306,14 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       }
     }
     if (workCalls.length === 0) break;
-    const outputs: unknown[] = [];
-    let gateHit: { gate: Gate; what: string; evidence: unknown; options: unknown } | null = null;
-    for (const call of calls) {
+    // Independent reads run side by side: the model emits them in one
+    // block precisely because none waits on another. Gate and card tools
+    // stay sequential so approvals and cards keep their order.
+    const runOne = async (call: { name: string; callId: string; argsText: string }, slot: number): Promise<{ output: unknown; gate: ExecOutcome['gate'] }> => {
+      // No new work past the wall clock: the skipped step carries on in the
+      // next request, where the run state (pages, decisions) is reloaded.
       if (outOfTime()) {
-        outputs.push({ type: 'function_call_output', call_id: call.callId, output: JSON.stringify({ skipped: true, note: 'Out of time in this request. This step carries on next.' }) });
-        continue;
+        return { output: { skipped: true, note: 'Out of time in this request. This step carries on next.' }, gate: undefined };
       }
       const args = parseArgs(call.argsText);
       opts.onToolCall?.(call.name, args);
@@ -1287,13 +1321,28 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       // Only the budget guard propagates (it is a gate, not a tool failure).
       let outcome: ExecOutcome;
       try {
-        outcome = await executeTool(call.name, args);
+        outcome = await executeTool(call.name, args, slot);
       } catch (err) {
         if (err instanceof BudgetExceededError) throw err;
         outcome = { output: { error: err instanceof Error ? err.message : String(err) } };
       }
-      if (outcome.gate) gateHit = outcome.gate;
-      outputs.push({ type: 'function_call_output', call_id: call.callId, output: JSON.stringify(outcome.output) });
+      return { output: outcome.output, gate: outcome.gate };
+    };
+    const allReadonly = calls.length > 1 && calls.every((call) => READONLY_TOOLS.has(call.name));
+    const settled = allReadonly
+      ? await Promise.all(calls.map((call, slot) => runOne(call, slot)))
+      : await (async () => {
+          const out: Array<{ output: unknown; gate: ExecOutcome['gate'] }> = [];
+          for (let slot = 0; slot < calls.length; slot += 1) out.push(await runOne(calls[slot] as { name: string; callId: string; argsText: string }, slot));
+          return out;
+        })();
+    const outputs: unknown[] = [];
+    let gateHit: { gate: Gate; what: string; evidence: unknown; options: unknown } | null = null;
+    for (let i = 0; i < calls.length; i += 1) {
+      const call = calls[i] as { name: string; callId: string; argsText: string };
+      const one = settled[i] as { output: unknown; gate: ExecOutcome['gate'] };
+      if (one.gate) gateHit = one.gate;
+      outputs.push({ type: 'function_call_output', call_id: call.callId, output: JSON.stringify(one.output) });
     }
     await persist();
     if (gateHit) {

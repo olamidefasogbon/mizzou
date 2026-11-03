@@ -38,11 +38,12 @@ import {
   formatFindingStatus,
   formatG1Prompt,
   formatG2Conflict,
-  formatReadingStatus,
+  formatReadingPage,
 } from '../voice/index.js';
 import { PdfContentError, fetchBytes, fetchPageText, type OutboundLink } from './fetch.js';
 import { rankLinks, sameSite } from './rank.js';
 import { readPdfText } from './pdf.js';
+import { FETCH_TOOL_TIMEOUT_MS, READER_MAX_CHARS, READER_TOOL_TIMEOUT_MS, withTimeout } from '../meta/timeout.js';
 
 /** Section 5.1 caps. */
 export const MAX_SCAN_PAGES = 25;
@@ -252,7 +253,7 @@ async function defaultReadPage(
   ctx: { programHint: string | null; opportunityType?: string; userId?: string },
   budgetGuard?: BudgetGuard,
 ): Promise<ReadPageResult> {
-  const text = page.text.slice(0, 60_000);
+  const text = page.text.slice(0, READER_MAX_CHARS);
   const result = await callModel({
     role: 'reader',
     systemPrompt: READER_SYSTEM_PROMPT,
@@ -261,6 +262,7 @@ async function defaultReadPage(
     temperature: 0,
     userId: ctx.userId ?? 'dev',
     budgetGuard,
+    timeoutMs: READER_TOOL_TIMEOUT_MS,
   });
   return {
     extraction: verifyExtractionEvidence(text, result.data as Extraction),
@@ -446,7 +448,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
       let title = mem.programUrl;
       let text = '';
       try {
-        const page = await fetchPage(mem.programUrl);
+        const page = await withTimeout(fetchPage(mem.programUrl), FETCH_TOOL_TIMEOUT_MS, 'fetch_page');
         title = page.title || mem.programUrl;
         text = page.text;
       } catch (err) {
@@ -463,10 +465,10 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
         return { events, finished: { ...buildFinish(mem), error: 'page has no readable text' } };
       }
       try {
-        const result = await readPage(
+        const result = await withTimeout(readPage(
           { url: mem.programUrl, title, text },
           { programHint: mem.programHint, opportunityType: mem.opportunityType, userId },
-        );
+        ), READER_TOOL_TIMEOUT_MS, 'read_page');
         mem.usageUsd += result.costUsd;
         run.usageUsd = (typeof run.usageUsd === 'number' ? run.usageUsd : 0) + result.costUsd;
         mem.calls.push({
@@ -681,6 +683,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
     }
 
     let sawReading = false;
+    let sawReadingUrl: string | null = null;
     let sawFinding: string | null = null;
     let sawUnreadable = false;
 
@@ -722,7 +725,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
           continue;
         }
         try {
-          const page = await fetchPage(pageUrl);
+          const page = await withTimeout(fetchPage(pageUrl), FETCH_TOOL_TIMEOUT_MS, 'fetch_page');
           const parentDepth = mem.depths[pageUrl] ?? 0;
           const ranked = rankLinks(pageUrl, page.links.map((l) => ({ href: l.href, text: l.text })), {
             programHint: mem.programHint,
@@ -757,7 +760,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
 
         if (call.name === 'fetch_page') {
           try {
-            const page = await fetchPage(url);
+            const page = await withTimeout(fetchPage(url), FETCH_TOOL_TIMEOUT_MS, 'fetch_page');
             logTool({ kind: 'tool', tool: 'fetch_page', role: null, model: null, inputTokens: null, outputTokens: null, costUsd: 0 });
             sawFinding = sawFinding ?? url;
             out({ title: page.title, chars: page.text.length, snippet: page.text.slice(0, 800), linksFound: page.links.length });
@@ -782,7 +785,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
 
         // read_page
         try {
-          const page = await fetchPage(url);
+          const page = await withTimeout(fetchPage(url), FETCH_TOOL_TIMEOUT_MS, 'fetch_page');
           let text = page.text;
           if (text.length === 0) {
             const pdf = await readPdf(url);
@@ -794,7 +797,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
             }
             text = pdf.text;
           }
-          const result = await readPage({ url, title: page.title || url, text }, { programHint: mem.programHint, opportunityType: mem.opportunityType, userId });
+          const result = await withTimeout(readPage({ url, title: page.title || url, text }, { programHint: mem.programHint, opportunityType: mem.opportunityType, userId }), READER_TOOL_TIMEOUT_MS, 'read_page');
           mem.usageUsd += result.costUsd;
           run.usageUsd = (typeof run.usageUsd === 'number' ? run.usageUsd : 0) + result.costUsd;
           mem.calls.push({
@@ -810,6 +813,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
           mem.extractions.push(result.extraction);
           mem.pages.push({ url, title: page.title || url });
           sawReading = true;
+          sawReadingUrl = url;
           out({ deadlines: result.extraction.deadlines.length, title: page.title || url });
         } catch (err) {
           if (err instanceof BudgetExceededError) {
@@ -828,7 +832,7 @@ export function createDeepScanStep(tools: DeepScanTools = {}): import('../agent/
       out({ error: `unknown tool: ${call.name}` });
     }
 
-    if (sawReading) say(formatReadingStatus(mem.opportunityType ?? 'generic_opportunity', mem.institution));
+    if (sawReading && sawReadingUrl) say(formatReadingPage(sawReadingUrl));
     else if (sawFinding) say(formatFindingStatus(sawFinding));
     if (sawUnreadable) say(SAY_PAGE_WOULD_NOT_OPEN, 'failed');
     writeMemory(run, mem);

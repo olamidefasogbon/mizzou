@@ -18,13 +18,13 @@ describe('turnstile contract', () => {
   });
 
   it('landing gates Try on the token only when a key is set, then passes it through', () => {
-    assert.match(landing, /<Turnstile key=\{attempt\} onToken=\{setToken\} onError=\{onCheckFailed\} \/>/);
+    assert.match(landing, /<Turnstile key=\{attempt\} visible=\{visible\} onToken=\{setToken\} onError=\{onCheckFailed\} \/>/);
     assert.match(landing, /if \(siteKey && !token\)/);
     assert.match(landing, /ensureAnonymousSession\(supabaseBrowser\(\)\.auth, captcha \?\? undefined\)/);
   });
 
   it('runs quietly: interaction-only, handled errors, no check for visitors who already have a session', () => {
-    assert.match(widget, /appearance: 'interaction-only'/);
+    assert.match(widget, /appearance: visible \? 'always' : 'interaction-only'/);
     assert.match(widget, /'error-callback'/);
     assert.match(landing, /needsCheck/);
   });

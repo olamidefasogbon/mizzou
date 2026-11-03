@@ -7,7 +7,7 @@ import type { RunEvent } from '../schemas/events.js';
 import type { Extraction } from '../schemas/extraction.js';
 import type { ResponsesCallResult, StreamCallOptions } from '../meta/responses.js';
 import type { FitAssessment, FitAssessmentInput } from '../prompts/fit.js';
-import { runConversationTurn } from './turn.js';
+import { CONTINUE_TEXT, runConversationTurn } from './turn.js';
 
 // AGENT_BRAIN.md section 2: the chat route and the conversation turn must
 // contain no regex or URL branching on the user message. The model decides
@@ -1000,5 +1000,141 @@ describe('workflow: yield and resolve_gate', () => {
     ]);
     await runConversationTurn({ run: h.run, save: async () => {}, userText: 'ok', userId: 'user-1', send: (e) => h.events.push(e), streamCall: h.streamCall });
     expect(h.seen.length).toBe(1);
+  });
+});
+
+describe('turn time budget and tool timeouts', () => {
+  function extractionFor(url: string): Extraction {
+    return { ...stubExtraction(), program: { ...stubExtraction().program, portal_url: url } };
+  }
+
+  it('labels an in-flight read with the plain host and path', async () => {
+    const h = makeHarness([
+      callResult('read_page', { url: 'https://example.edu/admissions/apply' }, 'resp-1'),
+      textResult('Checked the page.', 'resp-2'),
+    ]);
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'https://example.edu/admissions/apply',
+      userId: 'user-1',
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+      fetchPage: async (url) => ({ ...stubPage, url }),
+      readPageText: async () => ({ extraction: stubExtraction(), costUsd: 0.002, model: 'muse-spark-1.3', inputTokens: 80, outputTokens: 40 }),
+    });
+    const labels = h.events.filter((e) => e.t === 'status').map((e) => (e as { label: string }).label);
+    expect(labels).toContain('Reading example.edu/admissions/apply');
+    expect(labels).not.toContain('Reading opportunity admissions details');
+  });
+
+  it('hands a slow read to the model as a structured error and keeps the page out of unreadable', async () => {
+    const h = makeHarness([
+      callResult('read_page', { url: 'https://example.edu/slow' }, 'resp-1'),
+      textResult('Moving on.', 'resp-2'),
+    ]);
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'https://example.edu/slow',
+      userId: 'user-1',
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+      fetchPage: async () => stubPage,
+      readPageText: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        return { extraction: stubExtraction(), costUsd: 0.002, model: 'muse-spark-1.3', inputTokens: 80, outputTokens: 40 };
+      },
+      toolTimeouts: { readerMs: 50 },
+    });
+    const secondInput = JSON.stringify(h.seen[1]?.input);
+    expect(secondInput).toContain('timed out');
+    expect(secondInput).toContain('Move on');
+    const mem = (h.run.state as Record<string, unknown>)['conversation'] as { unreadable: unknown[] };
+    expect(mem.unreadable).toEqual([]);
+  });
+
+  it('runs independent reads side by side with ordered outputs and unique status rows', async () => {
+    const bothCalls: ResponsesCallResult = {
+      ...callResult('read_page', { url: 'https://example.edu/a' }, 'resp-1'),
+      items: [
+        { type: 'function_call', id: 'call_1', call_id: 'call_1', name: 'read_page', arguments: JSON.stringify({ url: 'https://example.edu/a' }) },
+        { type: 'function_call', id: 'call_2', call_id: 'call_2', name: 'read_page', arguments: JSON.stringify({ url: 'https://example.edu/b' }) },
+      ],
+    };
+    const h = makeHarness([bothCalls, textResult('Read both.', 'resp-2')]);
+    let active = 0;
+    let maxActive = 0;
+    await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'read both pages',
+      userId: 'user-1',
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+      fetchPage: async (url) => ({ ...stubPage, url, title: `Title ${url}` }),
+      readPageText: async ({ url }) => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        active -= 1;
+        return { extraction: extractionFor(url), costUsd: 0.002, model: 'muse-spark-1.3', inputTokens: 80, outputTokens: 40 };
+      },
+    });
+    expect(maxActive).toBe(2);
+    const secondInput = JSON.stringify(h.seen[1]?.input);
+    expect(secondInput).toContain('example.edu/a');
+    expect(secondInput).toContain('example.edu/b');
+    const ids = h.events.filter((e) => e.t === 'status').map((e) => (e as { id: string }).id);
+    expect(ids).toHaveLength(6);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids.some((id) => id.endsWith('-p1'))).toBe(true);
+  });
+
+  it('saves its place and reports timedOut when the slice runs out', async () => {
+    const h = makeHarness([
+      callResult('read_page', { url: 'https://example.edu/a' }, 'resp-1'),
+      textResult('never used', 'resp-2'),
+    ]);
+    const result = await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: 'https://example.edu/a',
+      userId: 'user-1',
+      send: (e) => h.events.push(e),
+      streamCall: h.streamCall,
+      fetchPage: async () => stubPage,
+      readPageText: async () => ({ extraction: stubExtraction(), costUsd: 0.002, model: 'muse-spark-1.3', inputTokens: 80, outputTokens: 40 }),
+      deadlineAtMs: Date.now() - 1,
+    });
+    expect(result.timedOut).toBe(true);
+    expect(result.gated).toBe(false);
+    const mem = (h.run.state as Record<string, unknown>)['conversation'] as { pendingContinue: boolean };
+    expect(mem.pendingContinue).toBe(true);
+    // The turn reports; the route sends the continue frame.
+    expect(h.events.some((e) => e.t === 'continue')).toBe(false);
+  });
+
+  it('continues a timed-out turn from the saved run state', async () => {
+    const h = makeHarness([textResult('Picking up.', 'resp-2')]);
+    h.run.messages.push({ role: 'user', text: 'first question' }, { role: 'assistant', text: 'First answer.' });
+    const before = h.run.messages.length;
+    const result = await runConversationTurn({
+      run: h.run,
+      save: async () => {},
+      userText: CONTINUE_TEXT,
+      userId: 'user-1',
+      send: () => {},
+      streamCall: h.streamCall,
+    });
+    expect(result.gated).toBe(false);
+    expect(result.timedOut).toBeFalsy();
+    // The control line travels as the user message; the UI hides it through
+    // the chat-history literal match, never as a turn special case.
+    expect(h.run.messages.length).toBe(before + 2);
+    expect(h.run.messages[before]).toEqual({ role: 'user', text: CONTINUE_TEXT });
+    const input = JSON.stringify(h.seen[0]?.input);
+    expect(input).toContain('First answer.');
+    expect(input).toContain(CONTINUE_TEXT);
   });
 });

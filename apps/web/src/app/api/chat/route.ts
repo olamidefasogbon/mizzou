@@ -33,7 +33,7 @@ export async function POST(req: Request): Promise<Response> {
   let message = '';
   let chatId: string | null = null;
   let requestedRunId: string | null = null;
-  let visionSeeds: VisionSeed[] = [];
+  const visionSeeds: VisionSeed[] = [];
   let timezone = 'Africa/Lagos';
   try {
     const body: unknown = await req.json();
@@ -165,6 +165,7 @@ export async function POST(req: Request): Promise<Response> {
         let timedOut = false;
         try {
           const turn = await runConversationTurn({
+
             run,
             save: (r) => store.save(r),
             deadlineAtMs: Date.now() + turnBudgetMs(),

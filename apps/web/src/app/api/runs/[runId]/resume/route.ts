@@ -1,8 +1,8 @@
 import {
   BudgetExceededError,
   BudgetGuard,
-  DEFAULT_MAX_TURNS,
   CONTINUE_TEXT,
+  DEFAULT_MAX_TURNS,
   SAY_STUCK,
   budgetFriendlyMessage,
   continueRun,
@@ -112,23 +112,33 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
           let run;
           if (convContinue && existing) {
             run = existing;
-            const turn = await runConversationTurn({
-              run,
-              save: (r) => store.save(r),
-              deadlineAtMs: Date.now() + turnBudgetMs(),
-              userText: CONTINUE_TEXT,
-              polishAnswers: true,
-              userId: run.userId ?? userId,
-              budgetGuard,
-              send,
-              listReminders: async () =>
-                (await db.reminders.list(userId)).map((r) => ({
-                  id: r.id,
-                  text: r.sub ? `${r.title}, ${r.sub}` : r.title,
-                  dueAt: r.dueAt,
-                })),
-            });
-            timedOut = turn.timedOut === true;
+            // A retried continue frame replays instead of re-running the turn.
+            const state = existing.state as Record<string, unknown>;
+            const seen = Array.isArray(state['continueOpIds'])
+              ? (state['continueOpIds'] as unknown[]).filter((s): s is string => typeof s === 'string')
+              : [];
+            if (!seen.includes(opId)) {
+              seen.push(opId);
+              state['continueOpIds'] = seen;
+              await store.save(existing);
+              const turn = await runConversationTurn({
+                run,
+                save: (r) => store.save(r),
+                deadlineAtMs: Date.now() + turnBudgetMs(),
+                userText: CONTINUE_TEXT,
+                polishAnswers: true,
+                userId: run.userId ?? userId,
+                budgetGuard,
+                send,
+                listReminders: async () =>
+                  (await db.reminders.list(userId)).map((r) => ({
+                    id: r.id,
+                    text: r.sub ? `${r.title}, ${r.sub}` : r.title,
+                    dueAt: r.dueAt,
+                  })),
+              });
+              timedOut = turn.timedOut === true;
+            }
           } else if (answering && origin === 'chat') {
             // Conversation-run gate (AGENT_BRAIN.md): record the decision,
             // then continue with a model turn — the pendingGate (if any) is
@@ -137,6 +147,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
             run = recorded.run;
             if (!recorded.duplicate) {
               const turn = await runConversationTurn({
+
                 run,
                 save: (r) => store.save(r),
                 deadlineAtMs: Date.now() + turnBudgetMs(),
@@ -174,20 +185,20 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
               }
             }
           }
-          if (run.pendingGate) {
-            const evidence = run.pendingGate.evidence as { card?: unknown } | Record<string, unknown> | null | undefined;
-            const base =
-              evidence && typeof evidence === 'object' && 'card' in evidence && evidence.card !== null && typeof evidence.card === 'object'
-                ? (evidence.card as Record<string, unknown>)
-                : ((evidence as Record<string, unknown> | null | undefined) ?? {});
-            send({
-              t: 'needs_approval',
-              gate: run.pendingGate.gate,
-              card: { ...base, what: run.pendingGate.what },
-            });
-          }
-          if (timedOut) send({ t: 'continue', runId });
-          send({ t: 'done', runId });
+            if (run.pendingGate) {
+              const evidence = run.pendingGate.evidence as { card?: unknown } | Record<string, unknown> | null | undefined;
+              const base =
+                evidence && typeof evidence === 'object' && 'card' in evidence && evidence.card !== null && typeof evidence.card === 'object'
+                  ? (evidence.card as Record<string, unknown>)
+                  : ((evidence as Record<string, unknown> | null | undefined) ?? {});
+              send({
+                t: 'needs_approval',
+                gate: run.pendingGate.gate,
+                card: { ...base, what: run.pendingGate.what },
+              });
+            }
+            if (timedOut) send({ t: 'continue', runId });
+            send({ t: 'done', runId });
           controller.close();
         } finally {
           try {

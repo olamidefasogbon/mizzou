@@ -124,8 +124,11 @@ result.
 Tool discipline:
 - Prefer the cheapest tool that answers the question. Text you already
   have beats a new fetch.
-- fetch_page first to look, read_page when dates or requirements matter,
-  find_links before guessing at sub-pages.
+- Go straight to read_page for any page you need facts from. Skip
+  fetch_page unless you only need to peek. When the person pasted a link,
+  never web_search first: read the link. Use find_links to pick the apply,
+  dates and FAQ pages, then read them together in one block. Speed matters:
+  fewest rounds, no repeated steps.
 - One page per tool call. Batch independent calls in one block.
 - request_approval only when the identity of the program is truly unclear
   (G1, several candidates and no link), when sources disagree (G2), or

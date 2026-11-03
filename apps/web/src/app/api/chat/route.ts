@@ -171,6 +171,7 @@ export async function POST(req: Request): Promise<Response> {
             deadlineAtMs: Date.now() + turnBudgetMs(),
             userText: message,
             polishAnswers: process.env['MIZZOU_POLISH'] === '1',
+            silentNarration: true,
             seedExtractions: visionSeeds,
             timezone,
             userId: run.userId ?? userId,

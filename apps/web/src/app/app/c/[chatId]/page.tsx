@@ -193,6 +193,7 @@ function Working({ entry, grouped }: { entry: WorkEntry; grouped: boolean }): Re
     : `Worked through ${lines.length} ${lines.length === 1 ? 'step' : 'steps'}`;
   const expandable = lines.length > 1;
   return (
+    <>
     <div className={grouped ? `${styles.progress} ${styles.gapGroup}` : styles.progress}>
       <button
         type="button"
@@ -230,6 +231,14 @@ function Working({ entry, grouped }: { entry: WorkEntry; grouped: boolean }): Re
         </ul>
       ) : null}
     </div>
+    {entry.active ? (
+      <div className={styles.typing} role="status" aria-label="Mizzou is typing">
+        <span />
+        <span />
+        <span />
+      </div>
+    ) : null}
+    </>
   );
 }
 

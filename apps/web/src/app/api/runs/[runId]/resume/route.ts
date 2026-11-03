@@ -127,6 +127,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
                 deadlineAtMs: Date.now() + turnBudgetMs(),
                 userText: CONTINUE_TEXT,
                 polishAnswers: process.env['MIZZOU_POLISH'] === '1',
+            silentNarration: true,
                 userId: run.userId ?? userId,
                 budgetGuard,
                 send,
@@ -154,6 +155,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ runId: string 
                 userText: `The user answered ${String(gate)}: ${JSON.stringify(decision)}`,
                 userId: run.userId ?? userId,
                 polishAnswers: process.env['MIZZOU_POLISH'] === '1',
+            silentNarration: true,
                 budgetGuard,
                 send,
                 listReminders: async () =>

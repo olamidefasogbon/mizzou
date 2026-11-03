@@ -372,6 +372,8 @@ userText: string;
    * Narration from earlier rounds is shown as written, whole, at round end.
    */
   polishAnswers?: boolean;
+  /** Hold each round's text; narration before tools is dropped, only the closing answer is shown. */
+  silentNarration?: boolean;
   /** Observability hook (tests, probes). Routes leave it unset. Timezone defaults to Africa/Lagos; today defaults to server date. */
   onToolCall?: (name: string, args: Record<string, unknown>) => void;
   timezone?: string;
@@ -521,6 +523,10 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   const { run, save, send } = opts;
   const fetchTimeoutMs = opts.toolTimeouts?.fetchMs ?? FETCH_TOOL_TIMEOUT_MS;
   const readerTimeoutMs = opts.toolTimeouts?.readerMs ?? READER_TOOL_TIMEOUT_MS;
+  // A tool never runs past the platform's hard limit: when the turn's time
+  // budget is set, every wait is capped to what is left plus a small slack.
+  const capMs = (ms: number): number =>
+    opts.deadlineAtMs === undefined ? ms : Math.max(3_000, Math.min(ms, opts.deadlineAtMs + 18_000 - Date.now()));
   const mem = readMemory(run);
   {
     const g1 = run.decisions.find((d) => d.gate === 'G1' && typeof d.decision === 'object' && d.decision !== null && (d.decision as { confirmed?: unknown }).confirmed === true);
@@ -636,7 +642,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   };
   const messageBase = `conv-${run.id}-t${run.turnCount}`;
   let messageId = messageBase;
-  const holdText = opts.polishAnswers === true;
+  const holdText = opts.polishAnswers === true || opts.silentNarration === true;
   const emitText = (delta: string): void => {
     roundTexts[roundTexts.length - 1] = (roundTexts[roundTexts.length - 1] ?? '') + delta;
     // When polishing, a round's text is held until we know whether it is
@@ -981,7 +987,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       input: buildReaderPrompt(sliced, url, mem.programHint),
       userId,
       budgetGuard,
-      timeoutMs: readerTimeoutMs,
+      timeoutMs: capMs(readerTimeoutMs),
     });
     logUsage({ kind: 'model', tool: 'read_page', role: 'reader', model: res.model, inputTokens: res.inputTokens, outputTokens: res.outputTokens, costUsd: res.costUsd });
     const raw = messageText(res.items);
@@ -1075,7 +1081,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       const pageUrl = str(args['page_url'])?.trim() || null;
       if (!pageUrl) return { output: { error: 'page_url is required' } };
       try {
-        const page = await withTimeout(getPage(pageUrl), fetchTimeoutMs, 'fetch_page');
+        const page = await withTimeout(getPage(pageUrl), capMs(fetchTimeoutMs), 'fetch_page');
         const ranked = rankLinks(pageUrl, page.links.map((l) => ({ href: l.href, text: l.text })), { programHint: mem.programHint });
         return { output: { page_url: pageUrl, title: page.title, links: ranked.slice(0, 8) } };
       } catch (err) {
@@ -1089,7 +1095,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'active' });
       let settled = false;
       try {
-        const page = await withTimeout(getPage(url), fetchTimeoutMs, 'fetch_page');
+        const page = await withTimeout(getPage(url), capMs(fetchTimeoutMs), 'fetch_page');
         send({ t: 'status', id: statusId, label: formatFindingStatus(url), state: 'done' });
         settled = true;
         return { output: { url, title: page.title, size: page.text.length, snippet: page.text.slice(0, 2000) } };
@@ -1106,13 +1112,13 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       const url = str(args['url'])?.trim() || null;
       if (!url) return { output: { error: 'url is required' } };
       try {
-        const { bytes } = await withTimeout(fetchBytes(url), fetchTimeoutMs, 'fetch_page');
+        const { bytes } = await withTimeout(fetchBytes(url), capMs(fetchTimeoutMs), 'fetch_page');
         const pdf = await readPdfText(bytes);
         if (!pdf.readable) {
           if (!mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason: pdf.reason });
           return { output: { error: pdf.reason } };
         }
-        const read = await withTimeout(readPageText({ url, title: url, text: pdf.text }, { programHint: mem.programHint, userId }), readerTimeoutMs, 'read_page');
+        const read = await withTimeout(readPageText({ url, title: url, text: pdf.text }, { programHint: mem.programHint, userId }), capMs(readerTimeoutMs), 'read_page');
         return { output: (await mergeAndReconcile(url, url, read.extraction, { costUsd: read.costUsd, model: read.model, inputTokens: read.inputTokens, outputTokens: read.outputTokens }, tag)).summary };
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'pdf read failed';
@@ -1131,11 +1137,11 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       let settled = false;
       let stage = 'fetch';
       try {
-        const page = await withTimeout(getPage(url), fetchTimeoutMs, 'fetch_page');
+        const page = await withTimeout(getPage(url), capMs(fetchTimeoutMs), 'fetch_page');
         stage = 'read';
         statusLabel = formatReadingPage(url);
         send({ t: 'status', id: statusId, label: statusLabel, state: 'active' });
-        const read = await withTimeout(readPageText({ url, title: page.title, text: page.text }, { programHint: mem.programHint, userId }), readerTimeoutMs, 'read_page');
+        const read = await withTimeout(readPageText({ url, title: page.title, text: page.text }, { programHint: mem.programHint, userId }), capMs(readerTimeoutMs), 'read_page');
         statusLabel = formatReadingStatus(read.extraction.opportunity_type, read.extraction.program.institution.value || undefined);
         send({ t: 'status', id: statusId, label: statusLabel, state: 'done' });
         settled = true;
@@ -1165,7 +1171,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         previousResponseId: null,
         userId,
         budgetGuard,
-        timeoutMs: 20_000,
+        timeoutMs: capMs(20_000),
       });
       logUsage({ kind: 'model', tool: 'web_search', role: 'orchestrator', model: res.model, inputTokens: res.inputTokens, outputTokens: res.outputTokens, costUsd: res.costUsd });
       const searchOut = { answer: messageText(res.items), model: res.model };
@@ -1404,7 +1410,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     const heldNow = (roundTexts[roundTexts.length - 1] ?? '').trim();
     if (workCalls.length === 0 && !yieldedNow && nudges < 2 && round < maxRounds - 1 && heldNow.length > 0 && announcesNextStep(heldNow) && !outOfTime()) {
       nudges += 1;
-      if (holdText) send({ t: 'message', id: messageId, text: heldNow });
+      if (holdText && opts.silentNarration !== true) send({ t: 'message', id: messageId, text: heldNow });
       thread = buildInput(thread, [
         { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: heldNow }] },
         { type: 'message', role: 'user', content: [{ type: 'input_text', text: NUDGE_TEXT }] },
@@ -1416,9 +1422,10 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       if (workCalls.length > 0) {
         // Narration: shown whole now, before its tools run, so a card still
         // lands directly after the line that introduces it.
-        if (held) send({ t: 'message', id: messageId, text: held });
+        if (opts.silentNarration === true) roundTexts[roundTexts.length - 1] = '';
+        else if (held) send({ t: 'message', id: messageId, text: held });
       } else if (held) {
-        const answer = await polishFinal(held);
+        const answer = opts.polishAnswers === true ? await polishFinal(held) : plainDashes(held);
         roundTexts[roundTexts.length - 1] = answer;
         send({ t: 'message', id: messageId, text: answer });
       }

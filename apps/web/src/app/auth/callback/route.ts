@@ -34,9 +34,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       },
     },
   );
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code);
   if (error) {
     return NextResponse.redirect(new URL('/?error=oauth', request.url));
+  }
+  // Supabase hands over Google's access token only here, right after the
+  // exchange; later session reads on the server usually no longer carry it.
+  // Keep it in a short-lived httpOnly cookie (never in the database, never
+  // readable by page scripts) so Approve and sync can write the events.
+  const googleToken = data.session?.provider_token;
+  if (typeof googleToken === 'string' && googleToken.length > 0) {
+    response.cookies.set('mz_gtoken', googleToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 55 * 60,
+    });
   }
   return response;
 }

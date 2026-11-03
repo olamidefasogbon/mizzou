@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { AuthRequiredError, resolveUser } from '@/lib/auth';
 import { repo } from '@/lib/repo';
@@ -29,7 +30,10 @@ export async function POST(req: Request): Promise<NextResponse> {
   }
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getSession();
-  const token = data.session?.provider_token ?? null;
+  // The session rarely keeps Google's token after the first page load, so the
+  // callback also leaves it in a short-lived httpOnly cookie.
+  const jar = await cookies();
+  const token = data.session?.provider_token ?? jar.get('mz_gtoken')?.value ?? null;
   const db = await repo();
   const out = await runCalendarSync(
     {

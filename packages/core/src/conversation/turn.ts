@@ -962,6 +962,16 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   // A page that already failed twice this turn is not tried again; the model
   // is told to search for the facts or ask the person to paste the text.
   const failedReads = new Map<string, number>();
+  // One line in the server log per failed page step, so a failing site or
+  // reader is visible in the logs. MIZZOU_DEBUG=1 also shows the raw reason in
+  // the step label for testing.
+  const noteFailure = (tool: string, url: string, stage: string, err: unknown): string => {
+    const raw = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    console.error(`[mizzou:tool] ${tool} ${stage} failed for ${url}: ${raw.slice(0, 300)}`);
+    const timedOut = err instanceof ToolTimeoutError || err instanceof ModelTimeoutError;
+    const friendly = timedOut ? 'took too long' : stage === 'read' ? 'could not be read' : 'did not open';
+    return process.env['MIZZOU_DEBUG'] === '1' ? `${friendly} (${raw.slice(0, 80)})` : friendly;
+  };
   const FAILED_NOTE = 'That page would not open or read after two tries. Do not try it or its variants again. Use web_search for the dates and requirements, and if that finds nothing, ask the person in one message to paste the text of the page or give you the dates.';
   /** Tools that never halt the turn: safe to run side by side in one block. Status and card ids carry the slot so parallel rows never share an id. */
   const READONLY_TOOLS: ReadonlySet<string> = new Set(['find_links', 'fetch_page', 'read_pdf', 'read_page', 'web_search', 'list_reminders']);
@@ -1046,8 +1056,10 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       let statusLabel = formatFindingStatus(url);
       send({ t: 'status', id: statusId, label: statusLabel, state: 'active' });
       let settled = false;
+      let stage = 'fetch';
       try {
         const page = await withTimeout(getPage(url), fetchTimeoutMs, 'fetch_page');
+        stage = 'read';
         statusLabel = formatReadingPage(url);
         send({ t: 'status', id: statusId, label: statusLabel, state: 'active' });
         const read = await withTimeout(readPageText({ url, title: page.title, text: page.text }, { programHint: mem.programHint, userId }), readerTimeoutMs, 'read_page');
@@ -1060,6 +1072,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       } catch (err) {
         const reason = err instanceof Error ? err.message : 'read failed';
         const timedOut = err instanceof ToolTimeoutError || err instanceof ModelTimeoutError;
+        statusLabel = `${formatReadingPage(url)} ${noteFailure('read_page', url, stage, err)}`;
         failedReads.set(url, (failedReads.get(url) ?? 0) + 1);
         if (!timedOut && !mem.unreadable.some((u) => u.url === url)) mem.unreadable.push({ url, reason });
         return { output: { error: timedOut ? `${reason}. ${(failedReads.get(url) ?? 0) >= 2 ? FAILED_NOTE : 'Move on: try a different page or answer from what is already read.'}` : reason } };
@@ -1290,7 +1303,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     // The turn is about to end on "I'll read that now" or "just say the word".
     // Make it do the step instead of waiting for the person to prod it.
     const heldNow = (roundTexts[roundTexts.length - 1] ?? '').trim();
-    if (workCalls.length === 0 && !yieldedNow && nudges < 1 && round < maxRounds - 1 && heldNow.length > 0 && announcesNextStep(heldNow) && !outOfTime()) {
+    if (workCalls.length === 0 && !yieldedNow && nudges < 2 && round < maxRounds - 1 && heldNow.length > 0 && announcesNextStep(heldNow) && !outOfTime()) {
       nudges += 1;
       if (holdText) send({ t: 'message', id: messageId, text: heldNow });
       thread = buildInput(thread, [

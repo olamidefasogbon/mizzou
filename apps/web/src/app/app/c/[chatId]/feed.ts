@@ -94,50 +94,50 @@ export function isInternalUserLine(text: string | undefined): boolean {
 }
 
 /**
- * Fold activity into Work rows. A message is activity (not an answer) when
- * more activity follows it: the next item is a status or another message.
- * A message before a card or at the end stays a bubble. While `streaming`,
- * a lone row appears right after the person's message so work is visible at
- * once, and the last row stays animated.
+ * One Work row per request. Everything the agent did (steps, narration,
+ * source lists) folds into a single row right under the person's message.
+ * Only the answer and the cards stay in the feed: a message stays a bubble
+ * when no more activity follows it. While `streaming`, the row is shown at
+ * once and stays animated.
  */
 export function buildDisplay<T extends DisplaySource>(feed: T[], streaming: boolean): Array<T | WorkEntry> {
   const out: Array<T | WorkEntry> = [];
-  let open: WorkEntry | null = null;
-  const close = (): void => {
-    open = null;
-  };
-  const group = (id: string): WorkEntry => {
-    if (!open) {
-      open = { id: `work-${id}`, kind: 'work', lines: [], active: false };
-      out.push(open);
+  let seg: T[] = [];
+  const flush = (isLast: boolean): void => {
+    const lines: WorkEntry['lines'] = [];
+    const rest: T[] = [];
+    let firstId = 'pending';
+    seg.forEach((item, idx) => {
+      if (item.kind === 'coverage') return; // sources live in the row and the cards
+      if (item.kind === 'status') {
+        if (lines.length === 0) firstId = item.id;
+        const state = item.state === 'active' || item.state === 'failed' ? item.state : 'done';
+        lines.push({ id: item.id, text: friendlyStatusLabel(item.label ?? 'Working', item.state), state });
+        return;
+      }
+      if (item.kind === 'message' && seg.slice(idx + 1).some((later) => later.kind === 'status' || later.kind === 'message')) {
+        if (lines.length === 0) firstId = item.id;
+        lines.push({ id: item.id, text: (item.text ?? '').trim() });
+        return;
+      }
+      rest.push(item);
+    });
+    const live = streaming && isLast;
+    if (lines.length > 0 || live) {
+      out.push({ id: `work-${firstId}`, kind: 'work', lines, active: live });
     }
-    return open;
+    out.push(...rest);
+    seg = [];
   };
-  for (let i = 0; i < feed.length; i += 1) {
-    const item = feed[i] as T;
-    const next = feed[i + 1];
+  for (const item of feed) {
     if (item.kind === 'user') {
-      close();
-      if (!isInternalUserLine(item.text)) out.push(item);
+      if (isInternalUserLine(item.text)) continue; // plumbing never splits a request
+      flush(false);
+      out.push(item);
       continue;
     }
-    if (item.kind === 'status') {
-      const g = group(item.id);
-      const state = item.state === 'active' || item.state === 'failed' ? item.state : 'done';
-      g.lines.push({ id: item.id, text: friendlyStatusLabel(item.label ?? 'Working', item.state), state });
-      continue;
-    }
-    if (item.kind === 'message' && next && (next.kind === 'status' || next.kind === 'message')) {
-      group(item.id).lines.push({ id: item.id, text: (item.text ?? '').trim() });
-      continue;
-    }
-    close();
-    out.push(item);
+    seg.push(item);
   }
-  const last = out[out.length - 1];
-  if (streaming) {
-    if (last && last.kind === 'work') (last as WorkEntry).active = true;
-    else if (last && last.kind === 'user') out.push({ id: 'work-pending', kind: 'work', lines: [], active: true });
-  }
+  flush(true);
   return out;
 }

@@ -862,6 +862,9 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
    * judge object, and any numbers, never leave the server.
    */
   let fitRunning = false;
+  // Set when a card that waits for the person's answer has been shown (the
+  // fit question, the plan). The turn then writes one closing message and stops.
+  let waitingOnPerson = false;
   const emitFitCard = async (extraction: Extraction): Promise<void> => {
     if (mem.profile.length === 0 || mem.fitAsked || mem.fitDecision || fitRunning) return;
     fitRunning = true;
@@ -874,6 +877,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     });
     if (!assessment) return;
     mem.fitAsked = true;
+    waitingOnPerson = true;
     send({
       t: 'card',
       id: `conv-${run.id}-t${run.turnCount}-fit`,
@@ -1174,6 +1178,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       return { output: { reminders: rows } };
     }
     if (name === 'propose_plan') {
+      waitingOnPerson = true;
       const payload = {
         title: str(args['title']) ?? 'Application plan',
         deadlines: Array.isArray(args['deadlines']) ? (args['deadlines'] as unknown[]).filter((d): d is string => typeof d === 'string') : [],
@@ -1356,6 +1361,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   let timedOut = false;
   let nudges = 0;
   const outOfTime = (): boolean => opts.deadlineAtMs !== undefined && Date.now() > opts.deadlineAtMs;
+  let closingRound = false;
   for (let round = 0; round < maxRounds; round += 1) {
     if (round > 0 && outOfTime()) {
       timedOut = true;
@@ -1373,7 +1379,8 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         effort: 'low',
         systemPrompt: `${loadConversationPrompt()}\n\n${buildDateContext(opts.timezone, opts.todayIso)}`,
         input: thread,
-        tools,
+        // After a card that waits for the person, the closing round has no tools.
+        tools: closingRound ? undefined : tools,
         previousResponseId: null,
         userId,
         budgetGuard,
@@ -1456,6 +1463,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       outputs.push({ type: 'function_call_output', call_id: call.callId, output: JSON.stringify(one.output) });
     }
     await persist();
+    if (waitingOnPerson && !gateHit) closingRound = true;
     if (gateHit) {
       if (gateHit.gate === 'G1') {
         const card = (gateHit.evidence as { card?: Record<string, unknown> } | null)?.card;
@@ -1481,7 +1489,13 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     }
         // META_API_NOTES section 9: the API accepts function_call pairs without their reasoning item, so it is never replayed.
     const replayable = result.items.filter((item) => item.type !== 'reasoning');
-    thread = buildInput(thread, [...replayable, ...outputs]);
+    thread = buildInput(thread, [
+      ...replayable,
+      ...outputs,
+      ...(closingRound
+        ? [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'A card that needs the person\'s answer is now on their screen. Write one short message about it and stop. Do not take any further step and do not ask anything else.' }] }]
+        : []),
+    ]);
   }
   if (timedOut) {
     // Save our place. The route tells the client to continue in a fresh

@@ -970,7 +970,8 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     console.error(`[mizzou:tool] ${tool} ${stage} failed for ${url}: ${raw.slice(0, 300)}`);
     const timedOut = err instanceof ToolTimeoutError || err instanceof ModelTimeoutError;
     const friendly = timedOut ? 'took too long' : stage === 'read' ? 'could not be read' : 'did not open';
-    return process.env['MIZZOU_DEBUG'] === '1' ? `${friendly} (${raw.slice(0, 80)})` : friendly;
+    // TEMPORARY: always show the raw reason on screen until the reader failure is found. Set MIZZOU_DEBUG=0 to hide it.
+    return process.env['MIZZOU_DEBUG'] === '0' ? friendly : `${friendly} (${raw.slice(0, 120)})`;
   };
   const FAILED_NOTE = 'That page would not open or read after two tries. Do not try it or its variants again. Use web_search for the dates and requirements, and if that finds nothing, ask the person in one message to paste the text of the page or give you the dates.';
   /** Tools that never halt the turn: safe to run side by side in one block. Status and card ids carry the slot so parallel rows never share an id. */

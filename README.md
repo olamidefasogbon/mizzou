@@ -299,14 +299,14 @@ A labeled set of real opportunities (programs, fellowships, an internship board,
 
 ## After the hackathon
 
-Mizzou is built to keep going. The path, in order:
+Mizzou is meant to become a full personal agent for everyone who chases opportunities, not a feature that lives inside someone else's chat app. The plan, in priority order:
 
-1. **Open source the engine.** Release `packages/core` (the evidence-checked extraction and the case-file agent loop) as a library under a permissive license, with the labeled eval set and scorer in `packages/eval`. The eval harness gives contributors a way to prove a change makes the agent more correct, not just different.
-2. **Close the eval gap.** Finish scoring the full labeled set (deadlines correct, requirement recall, evidence validity, single page vs deep scan) and publish the numbers with the method.
-3. **Meet applicants where they are.** WhatsApp and email entry points for phone-first users, a lighter mobile data mode, and more languages. Many applicants live on messaging apps, not on websites.
-4. **Opportunity watching.** A background watcher that re-checks pages with unpublished dates and tells the user when a date appears, which turns the check-again reminder into a real feature.
-5. **Institutions and advisors.** A shared mode for university career offices, scholarship offices and student communities, so one advisor can support many applicants with the same verified requirement data.
-6. **A company path.** Mizzou has a clear wedge (high-stakes deadlines for applicants with no advisor), a measurable quality bar (evidence-verified fields) and low serving cost. The plan is to run it with real users, publish the eval numbers, and then decide between open-source community growth and a funded company. Applying to an accelerator such as Y Combinator is a goal to pursue once there is usage to show, not something already in motion.
+1. **Open source the engine.** Release `packages/core` (the evidence-checked extraction and the case-file agent loop) under a permissive license, so others can build on a reader whose every field can be verified.
+2. **Make quality measurable.** Finish scoring the full labeled set in `packages/eval` (deadlines correct, requirement recall, evidence validity, single page vs deep scan), publish the numbers and the method, and use the harness so every change has to prove it made the agent more correct.
+3. **Find scattered opportunities for the user.** Opportunities rarely arrive as a clean link. They sit in emails, forwarded messages, group chats and flyers. With the user's explicit permission, and read-only, Mizzou could scan places like Gmail and messaging apps for deadlines and offers, check each one against the official source, and bring them into one plan. This depends on stronger vision and agent abilities in upcoming Muse releases, and on a privacy model where the user chooses what is read, nothing leaves their account, and nothing is stored beyond what the task needs.
+4. **A full app.** Grow the web app into a complete personal agent: persistent profile and history, a proper inbox of opportunities, watching pages for newly published dates, and a shared mode for career offices and student communities.
+5. **The Meta ecosystem.** A partnership with Meta would let Mizzou go where applicants already are. Think of a flyer or poster seen through smart glasses becoming a verified deadline and a reminder before you reach the next corner, or Mizzou working across Meta's apps and devices. This is an ambition that depends on a partnership, not something that exists today.
+6. **The company path.** The aim is a real-life personal agent for everyone, from students to job seekers and founders. Whether that means raising money or staying independent is a decision to make once there are real users and published eval numbers to show.
 
 ## Repository
 

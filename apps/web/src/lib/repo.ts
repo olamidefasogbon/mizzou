@@ -45,6 +45,8 @@ export interface Repo {
     /** Stored messages and latest run of one chat, oldest first. Empty when none. */
     history(id: string, userId: string): Promise<ChatHistory>;
     clear(userId: string): Promise<ChatSummary[]>;
+    /** Remove one chat (soft delete). Returns the row, or null when it is not yours. */
+    remove(id: string, userId: string): Promise<ChatSummary | null>;
     restore(userId: string, snapshot: ChatSummary[]): Promise<void>;
   };
   usage: {
@@ -298,6 +300,13 @@ export function supabaseRepo(db: DbClient): Repo {
         await db.from('chats').update({ deleted_at: new Date().toISOString() }).eq('user_id', userId).is('deleted_at', null);
         return removed;
       },
+      remove: async (id, userId) => {
+        const found = await db.from('chats').select('*').eq('id', id).eq('user_id', userId).is('deleted_at', null).limit(1);
+        const row = found.data?.[0];
+        if (!row) return null;
+        await db.from('chats').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', userId);
+        return toChat(row, userId);
+      },
       restore: async (userId, snapshot) => {
         const ids = snapshot.map((r) => r.id);
         for (const id of ids) {
@@ -456,6 +465,12 @@ export function memoryRepo(): Repo {
         const removed = [...chatRows.values()].filter((c) => c.userId === userId);
         for (const r of removed) chatRows.delete(`${userId}:${r.id}`);
         return removed;
+      },
+      remove: async (id, userId) => {
+        const row = chatRows.get(`${userId}:${id}`);
+        if (!row) return null;
+        chatRows.delete(`${userId}:${id}`);
+        return row;
       },
       restore: async (userId, snapshot) => {
         for (const r of snapshot) chatRows.set(`${userId}:${r.id}`, { ...r, userId });

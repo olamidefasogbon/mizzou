@@ -11,6 +11,7 @@ import type { AttachState } from '@/components/attach-button';
 import { Composer } from '@/components/chrome';
 import { upcomingDeadlines } from '@/lib/plan-dates';
 import { downscaleImage, takeStashedVision, uploadImage, type VisionPayload } from '@/components/attach-image';
+import { quickTitle } from '@/lib/quick-title';
 import { ensureChatAction, loadChatHistoryAction } from '@/lib/actions';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { upgradeToGoogle } from '@/components/google-upgrade';
@@ -1022,7 +1023,7 @@ function ChatContent(): React.JSX.Element {
     if (!initialQ || sentInitial.current) return;
     sentInitial.current = true;
     router.replace(`/app/c/${chatId}`, { scroll: false });
-    void ensureChatAction(chatId, initialQ);
+    void ensureChatAction(chatId, quickTitle(initialQ));
     // Home attach handoff: a stashed upload ships once with the first
     // message, then the stash is gone so a refresh cannot resend it.
     void sendText(initialQ, takeStashedVision(chatId) ?? undefined);

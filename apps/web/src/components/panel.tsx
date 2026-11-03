@@ -40,7 +40,7 @@ export function Panel({
   const router = useRouter();
   const pathname = usePathname();
   const activeId = activeChatIdFromPath(pathname);
-  const { isGuest, name, email, reminders, chats, clearChats, undoClearChats, undoArmed, expireUndo, markReminderDone, removeReminder, clearReminders, undoRemoveReminder, undoClearReminders, expireRemindersUndo, reminderUndo, clearedReminders, remindersUndoArmed, refreshReminders } = useStore();
+  const { isGuest, name, email, reminders, chats, deleteChat, clearChats, undoClearChats, undoArmed, expireUndo, markReminderDone, removeReminder, clearReminders, undoRemoveReminder, undoClearReminders, expireRemindersUndo, reminderUndo, clearedReminders, remindersUndoArmed, refreshReminders } = useStore();
   const [upgradeBusy, setUpgradeBusy] = useState(false);
   const [upgradeError, setUpgradeError] = useState<string | null>(null);
 
@@ -144,6 +144,14 @@ export function Panel({
     router.push(newChatHref(reminderQuestion(r), crypto.randomUUID()));
   };
 
+  const removeChat = (id: string): void => {
+    void deleteChat(id);
+    if (activeId === id) {
+      onDismiss();
+      router.push('/app');
+    }
+  };
+
   const renderGroup = (label: string, list: typeof chats): React.JSX.Element | null => {
     if (list.length === 0) return null;
     return (
@@ -152,14 +160,23 @@ export function Panel({
           <span className={styles.sectionLabel}>{label}</span>
         </div>
         {list.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            className={activeId === c.id ? styles.chatActive : styles.chatRow}
-            onClick={() => openChat(c.id)}
-          >
-            <span className={styles.chatTitle}>{c.title}</span>
-          </button>
+          <div key={c.id} className={styles.chatItem}>
+            <button
+              type="button"
+              className={activeId === c.id ? styles.chatActive : styles.chatRow}
+              onClick={() => openChat(c.id)}
+            >
+              <span className={styles.chatTitle}>{c.title}</span>
+            </button>
+            <button
+              type="button"
+              className={styles.chatRemove}
+              aria-label={`Remove ${c.title} from history`}
+              onClick={() => removeChat(c.id)}
+            >
+              <X size={16} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+          </div>
         ))}
       </div>
     );

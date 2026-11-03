@@ -143,6 +143,22 @@ export async function POST(req: Request): Promise<Response> {
           }
         }
 
+        // Name the chat right away, in parallel with the turn, from the first
+        // message alone. It lands in the panel as soon as it is ready.
+        let titleDone: Promise<void> = Promise.resolve();
+        if (!existing && chatId) {
+          const titleChatId = chatId;
+          titleDone = (async () => {
+            try {
+              const taken = (await db.chats.list(userId)).filter((c) => c.id !== titleChatId).map((c) => c.title);
+              const title = await generateChatTitle(message, '', userId, taken);
+              await db.chats.rename(titleChatId, userId, title);
+            } catch (titleErr) {
+              logServerError('chat-title', titleErr);
+            }
+          })();
+        }
+
         const snapshot = await db.usage.snapshot(userId);
         const usageStore = new RequestUsageStore(snapshot.userSpend, snapshot.globalSpend);
         const budgetGuard = new BudgetGuard(usageStore, limitsFromEnv());
@@ -183,17 +199,7 @@ export async function POST(req: Request): Promise<Response> {
             logServerError('chat-usage', flushErr);
           }
         }
-        if (!existing && chatId) {
-          // First exchange: write a short model-generated title (falls
-          // back to the opening message) so the panel never shows one.
-          const assistantTexts = run.messages
-            .map((m) => m as { role?: unknown; text?: unknown })
-            .filter((m) => m.role === 'assistant' && typeof m.text === 'string' && m.text.length > 0)
-            .map((m) => m.text as string);
-          const taken = (await db.chats.list(userId)).filter((c) => c.id !== chatId).map((c) => c.title);
-          const title = await generateChatTitle(message, assistantTexts[assistantTexts.length - 1] ?? '', userId, taken);
-          await db.chats.rename(chatId, userId, title);
-        }
+        await titleDone;
         if (run.pendingGate) {
           const evidence = run.pendingGate.evidence as { card?: unknown } | Record<string, unknown> | null | undefined;
           const base =

@@ -6,6 +6,7 @@ import {
   clearChatsAction,
   deleteMyDataAction,
   ensureChatAction,
+  deleteChatAction,
   refreshChatsAction,
   refreshRemindersAction,
   restoreChatsAction,
@@ -25,6 +26,8 @@ interface StoreState {
   chats: ChatSummary[];
   ensureChat: (id: string, title: string) => Promise<void>;
   refreshChats: () => Promise<void>;
+  /** Remove one chat from history. */
+  deleteChat: (id: string) => Promise<void>;
   deleteMyData: () => Promise<{ chats: number; reminders: number }>;
   clearChats: () => Promise<void>;
   undoClearChats: () => Promise<void>;
@@ -60,6 +63,20 @@ export function StoreProvider({ initial, children }: { initial: AppData; childre
 
   const refreshChats = useCallback(async () => {
     setChats(await refreshChatsAction());
+  }, []);
+
+  const deleteChat = useCallback(async (id: string) => {
+    let removed: ChatSummary | undefined;
+    setChats((prev) => {
+      removed = prev.find((c) => c.id === id);
+      return prev.filter((c) => c.id !== id);
+    });
+    try {
+      await deleteChatAction(id);
+    } catch {
+      const back = removed;
+      if (back) setChats((prev) => (prev.some((c) => c.id === back.id) ? prev : [back, ...prev]));
+    }
   }, []);
 
   const deleteMyData = useCallback(async () => {
@@ -197,7 +214,7 @@ export function StoreProvider({ initial, children }: { initial: AppData; childre
   }, []);
 
   return (
-    <StoreContext.Provider value={{ isGuest, name, email, reminders, chats, ensureChat, refreshChats, deleteMyData, clearChats, undoClearChats, expireUndo, undoArmed, refreshReminders, markReminderDone, removeReminder, undoRemoveReminder, clearReminders, undoClearReminders, expireRemindersUndo, reminderUndo, clearedReminders, remindersUndoArmed }}>
+    <StoreContext.Provider value={{ isGuest, name, email, reminders, chats, ensureChat, refreshChats, deleteChat, deleteMyData, clearChats, undoClearChats, expireUndo, undoArmed, refreshReminders, markReminderDone, removeReminder, undoRemoveReminder, clearReminders, undoClearReminders, expireRemindersUndo, reminderUndo, clearedReminders, remindersUndoArmed }}>
       {children}
     </StoreContext.Provider>
   );

@@ -54,6 +54,11 @@ export async function deleteMyDataAction(): Promise<DeletedData> {
   return { chats: chats.length, reminders };
 }
 
+export async function deleteChatAction(id: string): Promise<boolean> {
+  const { userId } = await resolveUser();
+  return (await (await repo()).chats.remove(id, userId)) !== null;
+}
+
 export async function clearChatsAction(): Promise<ChatSummary[]> {
   const { userId } = await resolveUser();
   return (await repo()).chats.clear(userId);

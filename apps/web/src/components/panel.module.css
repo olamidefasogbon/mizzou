@@ -438,3 +438,48 @@
     min-height: 44px;
   }
 }
+
+.chatItem {
+  position: relative;
+}
+
+.chatItem .chatBase {
+  padding-right: 44px;
+}
+
+.chatRemove {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--mz-radius-control);
+  background: transparent;
+  color: var(--mz-ink-muted, var(--mz-ink));
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity var(--mz-dur-fast) var(--mz-ease), background-color var(--mz-dur-fast) var(--mz-ease);
+}
+
+.chatRemove:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .chatRemove {
+    opacity: 0;
+  }
+
+  .chatItem:hover .chatRemove,
+  .chatRemove:focus-visible {
+    opacity: 1;
+  }
+
+  .chatRemove:hover {
+    background: var(--mz-hover);
+  }
+}

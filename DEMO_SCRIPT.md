@@ -1,64 +1,71 @@
-# Mizzou demo script (about 3 minutes)
+# Mizzou demo video script (2:45)
 
-Record on the live site, desktop width, in a private window so you start as a new visitor. Keep your voice calm and plain. Every step below is something that ships today.
+Format: screen recording on the live site with a voiceover. Each scene has what to show, the exact voiceover, and an on-screen caption. Record the screen first, then read the voiceover over it. Speak slowly. Cut any waiting longer than 3 seconds with a quick jump cut or speed up that part 4x.
 
-## Before you press record
+## Before recording (10 minutes)
 
-- [ ] Private window, signed out, mizzou.vercel.app loads.
-- [ ] Pick two links and test both once beforehand:
-  - **Link A:** a program whose official page posts dates (for example a fellowship with an open cycle).
-  - **Link B:** a program whose pages post no dates (for the honest-gap moment).
-- [ ] Have one flyer image or screenshot ready on your device.
-- [ ] Mic allowed in the browser. Close other tabs and notifications.
-- [ ] Backup: the two Recorded runs on the landing page work with no model calls. Use them if the live run misbehaves.
-- [ ] Do not show keys, env files or the Vercel dashboard.
+- Private window, signed out, mizzou.vercel.app on desktop width (1440 or wider), browser zoom 100%. Close every other tab and notification.
+- Choose **Link A** (a program that posts dates) and **Link B** (one that posts no dates). Run each once in a private window beforehand. Only use links that finish with a requirements card. The reader result is cached, so a repeat run in the recording is faster.
+- Have one flyer or screenshot saved on the desktop for scene 6.
+- Allow the microphone for the voice note in scene 6.
+- If a live run misbehaves, use the two Recorded runs on the landing page as a backup for that scene.
 
 ## The script
 
-**0:00 Hook (landing page)**
-Say: "Applications are scattered across pages, FAQs and PDFs, with deadlines you can easily miss. Mizzou is an agent that goes from a link to an executed application."
-Show: the landing page. Point at "Powered by Muse Spark" later in the app.
+### Scene 1: Hook (0:00 to 0:15)
+**Show:** the landing page, slow scroll from the headline to the "Try it for free" button.
+**Voiceover:** "Every year, talented students lose opportunities. Not because they are not good enough, but because the rules are scattered across pages, FAQs and PDFs, and nobody told them the deadline. Meet Mizzou, your personal opportunity agent."
+**Caption:** From link to executed application
 
-**0:15 No signup**
-Click **Try it for free**. Say: "No account needed. I am in."
-Land on the app as Guest.
+### Scene 2: No signup (0:15 to 0:25)
+**Show:** click **Try it for free**. The app opens as a guest in a second.
+**Voiceover:** "No signup. No form. You are in."
+**Caption:** No account needed
 
-**0:25 Paste a link, then stay hands-off (Link A)**
-Paste the link with "I want to apply to this." Send.
-Say: "I only gave it a link. Watch, it does not ask me anything."
-Show the single Working row: finding the page, reading the apply and eligibility pages. Say: "It reads the official site and the FAQ itself."
+### Scene 3: Paste a link, hands off (0:25 to 1:05)
+**Show:** paste Link A with "I want to apply to this". Send. Let the single Working row run, then expand it for two seconds to show the steps inside. Then the final message and the requirements card appear.
+**Voiceover:** "I give it one thing, a link. Mizzou does not ask me a single question. It opens the official page, finds the apply, dates and eligibility pages, and reads them in parallel, all inside this one collapsed row. When it is done, it tells me what it found."
+**Caption:** One link in. No questions asked.
 
-**0:55 Evidence**
-When the requirements card appears, open **Where I found this** on one date. Say: "Every date and requirement carries the page and the exact quote. A code check confirms the quote really supports it. If it cannot verify something, it says so."
-Point out a passed deadline being flagged against the next one: "It knows which dates are already gone."
+### Scene 4: Proof, not guesses (1:05 to 1:30)
+**Show:** open **Where I found this** on one deadline so the quote and the source page are visible. Point at a passed deadline being separated from the next one.
+**Voiceover:** "Every date and requirement comes with the page it came from and the exact quote. Code checks that the quote really supports the value. If Mizzou cannot verify something, it says so. And it knows which deadlines already passed, so it never calls an old date the next one."
+**Caption:** Every field carries its source and exact quote
 
-**1:20 Honest fit**
-Answer the one profile question it asks (keep it short, for example your year and field). Show the fit card in plain words. Say: "Advice, never a score, and the decision is mine." Click **Yes, let's apply**.
+### Scene 5: Honest fit, then a plan (1:30 to 1:55)
+**Show:** answer the one profile question, show the fit card in plain words, click **Yes, let's apply**, then the plan card with reminders. Click **Download .ics**.
+**Voiceover:** "Then an honest fit read, in plain words, advice only. I decide. Mizzou builds my plan, my reminders and a calendar file, and with my approval it can write to Google Calendar."
+**Caption:** Advice you can trust. Decisions stay with you.
 
-**1:40 Plan and calendar**
-Show the plan card with reminders. Click **Download .ics**, then say: "Or sync to Google Calendar. That is the only step that asks my approval, because it writes to my calendar." Show Approve and sync only if signed in to Google, otherwise stop at the .ics.
+### Scene 6: When there are no dates, flyers and voice (1:55 to 2:25)
+**Show:** new chat, paste Link B. Show it ending with the question about whether you still want to apply, are only interested, or have the dates from somewhere. Reply "I have them from an email, 15 March." Then attach the flyer, then tap the mic, say one sentence and show the transcript landing in the box.
+**Voiceover:** "When a page posts no dates, Mizzou does not guess. It asks, and uses my dates, marked as mine. It also reads flyers and screenshots through the same checks, and voice notes land in the box for me to edit, never sent without me."
+**Caption:** Never guesses. Reads flyers. Hears voice notes.
 
-**2:00 The honest gap (Link B)**
-New chat, paste Link B. Say: "Now one with no dates published."
-Show it reading the apply, dates and FAQ pages, then telling you plainly there are no dates and asking: still want to apply, just interested, or have the dates from somewhere. Answer "I have the dates from an email, 15 March." Say: "It uses mine and marks them as mine, not verified."
+### Scene 7: Drafts (2:25 to 2:35)
+**Show:** type "Draft my statement", show the draft, type "make it more academic", show version 2, click **Keep**. Flash the Application Pack for two seconds.
+**Voiceover:** "Drafts stop for my approval every time. Mizzou never sends an email and never submits anything for me."
+**Caption:** You approve. Mizzou prepares.
 
-**2:25 Flyer and voice**
-Attach the flyer. Say: "A flyer is a lead. It checks it against the official page and tells me what matched." Then tap the mic, say one sentence, show the transcript landing in the box for editing. Say: "It never sends a voice note without me."
+### Scene 8: Under the hood and close (2:35 to 2:45)
+**Show:** cut to the README architecture diagram, hold 4 seconds, then the Mizzou wordmark.
+**Voiceover:** "Under the hood, Muse Spark orchestrates the agent with tool calling, reads pages into a strict schema, searches the web and understands images, and Muse voice transcribes notes, all on one key and one budget. Mizzou. From link to executed application."
+**Caption:** Built on Meta's Muse models
 
-**2:45 Drafts**
-Type "Draft my statement." Show the draft, then type "make it more academic" and show the new version. Click **Keep**. Say: "Drafts always stop for my approval. Mizzou never sends an email or submits anything for me."
-Open **View Application Pack** for two seconds.
+## Recording tips
 
-**2:55 Close**
-Say: "Mizzou is built on Meta's Muse models: Muse Spark orchestrates the agent and reads the pages, and Muse voice transcribes notes. Evidence-backed, autonomous, and honest about what it could not find. From link to executed application."
+- Record in one take per scene, then trim. Keep the cursor slow and deliberate.
+- If a step takes longer than 3 seconds, speed that part up 4x and add a small "sped up" tag in the corner.
+- Keep the voiceover calm and slightly slower than normal conversation. Do not read the captions aloud.
+- Export at 1080p, under the hackathon's length limit. Check the submission page for it.
 
 ## If something goes wrong on camera
 
-- **Run seems slow:** it continues itself across short requests. Wait up to a minute, or cut and re-record that segment.
-- **A page will not open:** that is a feature. It names the page and asks for pasted text. Paste it and carry on.
-- **New-visitor check hangs:** wait for the visible check, or refresh once.
-- **Anything else:** switch to the recorded runs on the landing page.
+- **Slow run:** speed it up in the edit, or re-record that scene with a link you tested.
+- **Page will not read:** switch to another tested link. Do not show a failure.
+- **Check box or sign-in problem:** refresh once in a fresh private window.
+- **Anything else:** use the Recorded runs on the landing page for that scene.
 
-## Lines to avoid
+## Do not claim
 
-Do not claim eval numbers, email sending, portal logins or submitting applications. None of those ship.
+Eval scores, email sending, portal logins, submitting applications, or smart glasses. None of those ship today. Glasses and inbox scanning are in the roadmap only.

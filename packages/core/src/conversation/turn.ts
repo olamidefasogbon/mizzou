@@ -6,6 +6,7 @@
 // Server state (stored response id, program, pages, extraction) chains
 // turns; usage is logged per model call so no turn ever costs $0 silently.
 
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { buildCaseFile } from './casefile.js';
 import { callModel } from '../meta/callModel.js';
@@ -476,6 +477,22 @@ function fitChoiceFromText(text: string): 'apply' | 'not_now' | null {
   return null;
 }
 
+const readerCache = new Map<string, { at: number; value: Extraction; model: string }>();
+
+function sha1(text: string): string {
+  return createHash('sha1').update(text).digest('hex');
+}
+
+function pageKey(url: string): string {
+  try {
+    const u = new URL(url);
+    u.hash = '';
+    return `${u.hostname.toLowerCase().replace(/^www\./, '')}${u.pathname.replace(/\/$/, '')}${u.search}`;
+  } catch {
+    return url.trim();
+  }
+}
+
 function pageStamp(url: string): string {
   let h = 0;
   for (let i = 0; i < url.length; i += 1) h = (h * 31 + url.charCodeAt(i)) >>> 0;
@@ -844,8 +861,11 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
    * question is still open. The payload carries words only — the internal
    * judge object, and any numbers, never leave the server.
    */
+  let fitRunning = false;
   const emitFitCard = async (extraction: Extraction): Promise<void> => {
-    if (mem.profile.length === 0 || mem.fitAsked || mem.fitDecision) return;
+    if (mem.profile.length === 0 || mem.fitAsked || mem.fitDecision || fitRunning) return;
+    fitRunning = true;
+    try {
     const assessment = await runAssessFit({
       program: extraction.program.name.value,
       rules: extraction.eligibility.map((r) => ({ rule: r.value.rule, hard: r.value.hard })),
@@ -869,6 +889,9 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
         options: [FIT_APPLY_LABEL, FIT_PARK_LABEL],
       },
     });
+    } finally {
+      fitRunning = false;
+    }
   };
   /** Merge one extraction, reconcile, and G2-gate when conflicts stand. */
   const mergeAndReconcile = async (
@@ -878,6 +901,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     readerCost: { costUsd: number; model: string | null; inputTokens: number | null; outputTokens: number | null },
     tag = '',
   ): Promise<{ gate: { gate: Gate; what: string; evidence: unknown; options: unknown } | null; summary: string }> => {
+    mem.extractions = mem.extractions.filter((e) => pageKey(e.url) !== pageKey(url));
     mem.extractions.push({ url, title, extraction });
     if (!mem.pages.some((p) => p.url === url)) mem.pages.push({ url, title, summary: '' });
     if (!mem.programUrl) {
@@ -936,6 +960,13 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     text: string,
   ): Promise<{ extraction: Extraction; costUsd: number; model: string; inputTokens: number; outputTokens: number }> => {
     const sliced = text.slice(0, READER_MAX_CHARS);
+    // The same page text read again (a repeated demo, another person, a
+    // resumed run) reuses the earlier result instead of paying for a new read.
+    const cacheKey = `${pageKey(url)}|${sliced.length}|${sha1(sliced)}|${mem.programHint ?? ''}`;
+    const cached = readerCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < 6 * 3600_000) {
+      return { extraction: cached.value, costUsd: 0, model: cached.model, inputTokens: 0, outputTokens: 0 };
+    }
     // The reader runs on the Responses API at low reasoning effort. At the
     // default effort a full page took about 44 seconds, which blew the time
     // limit on every site. Low effort keeps the same schema and checks.
@@ -980,8 +1011,11 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       }
     }
     if (extraction === null) throw new Error('The page reader reply did not match the format.');
+    const verified = verifyExtractionEvidence(sliced, extraction);
+    if (readerCache.size > 200) readerCache.clear();
+    readerCache.set(cacheKey, { at: Date.now(), value: verified, model: res.model });
     return {
-      extraction: verifyExtractionEvidence(sliced, extraction),
+      extraction: verified,
       costUsd: res.costUsd,
       model: res.model,
       inputTokens: res.inputTokens,
@@ -1011,7 +1045,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
   /** Tools that never halt the turn: safe to run side by side in one block. Status and card ids carry the slot so parallel rows never share an id. */
   const READONLY_TOOLS: ReadonlySet<string> = new Set(['find_links', 'fetch_page', 'read_pdf', 'read_page', 'web_search', 'list_reminders']);
 
-  const executeTool = async (name: string, args: Record<string, unknown>, slot = 0): Promise<ExecOutcome> => {
+  const executeToolInner = async (name: string, args: Record<string, unknown>, slot = 0): Promise<ExecOutcome> => {
     // Parallel blocks share the turn: slot keeps each call's status and card ids unique.
     const tag = slot > 0 ? `-p${slot}` : '';
     // Never do the same work twice. A page already read this run is not read
@@ -1019,7 +1053,7 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
     // first answer.
     if (name === 'read_page' || name === 'read_pdf') {
       const again = str(args['url'])?.trim();
-      const done = again ? mem.pages.find((p) => p.url === again) : undefined;
+      const done = again ? mem.pages.find((p) => pageKey(p.url) === pageKey(again)) : undefined;
       if (done) {
         return { output: { alreadyRead: true, summary: done.summary, note: 'You already read this page. Its facts are in the run state. Use them and move to the next page or the next step. Do not read it again.' } };
       }
@@ -1220,6 +1254,29 @@ export async function runConversationTurn(opts: ConversationTurnOptions): Promis
       return { output: { finished: true, summary: str(args['summary']) ?? '' } };
     }
     return { output: { error: `unknown tool: ${name}` } };
+  };
+
+  // Identical page work that is already running is never started twice, so
+  // two parallel calls for one page cost one fetch and one reader call.
+  const inflight = new Map<string, Promise<ExecOutcome>>();
+  const executeTool = async (name: string, args: Record<string, unknown>, slot = 0): Promise<ExecOutcome> => {
+    const rawUrl = str(args['url'])?.trim() ?? '';
+    if (rawUrl && (name === 'read_page' || name === 'read_pdf' || name === 'fetch_page')) {
+      const key = `${name === 'fetch_page' ? 'fetch' : 'read'}:${pageKey(rawUrl)}`;
+      const running = inflight.get(key);
+      if (running) {
+        await running.catch(() => undefined);
+        return { output: { duplicate: true, note: 'That page was already being handled. Use its result and move on.' } };
+      }
+      const work = executeToolInner(name, args, slot);
+      inflight.set(key, work);
+      try {
+        return await work;
+      } finally {
+        inflight.delete(key);
+      }
+    }
+    return executeToolInner(name, args, slot);
   };
 
   // Section 1 input flow: chain the stored response id while the turns

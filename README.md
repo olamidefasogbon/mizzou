@@ -16,7 +16,7 @@ Built on Meta's Muse models for the Meta Global AI Developer Hackathon (Indie tr
 | **Muse surface used** | Tool calling, structured output, built-in `web_search`, vision, `muse-voice-transcribe`, a low-effort rewrite call |
 | **Reliability engineering** | Per-request time budget with automatic continue across short serverless requests, duplicate-work guards, idempotent calendar writes, guarded rewrite of final answers |
 | **Safety and cost** | Never sends email, submits or logs in as the user. Per-user and global budgets, per-IP caps, anonymous session retention limits |
-| **Try it** | mizzou.vercel.app, no signup. Walkthrough in `DEMO_SCRIPT.md` |
+| **Try it** | mizzou.vercel.app, no signup. |
 
 ## Full system architecture
 
@@ -318,7 +318,7 @@ supabase         Tables and row-level security
 docs             Architecture, API notes, eval report, retention policy
 ```
 
-More detail in `docs/ARCHITECTURE.md`. The demo walkthrough is in `DEMO_SCRIPT.md`.
+More detail in `docs/ARCHITECTURE.md`.
 
 ## Run it
 

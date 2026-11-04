@@ -22,84 +22,68 @@ Built on Meta's Muse models for the Meta Global AI Developer Hackathon (Indie tr
 
 One picture of the whole workflow, from the browser to the models and back.
 
+![Mizzou full system architecture](docs/diagrams/architecture.png)
+
+<details>
+<summary>Diagram source (mermaid)</summary>
+
 ```mermaid
-flowchart TB
+flowchart LR
   subgraph Client ["Browser (Next.js, Vercel)"]
-    UI["Chat, Working row, cards,<br/>Application Pack, reminders"]
-    IN["Inputs: text, link, pasted posting,<br/>flyer image, voice note"]
-    TS["Cloudflare Turnstile<br/>(new visitors only)"]
+    UI["Chat, Working row, cards,<br/>Application Pack, reminders<br/><i>text, link, pasted posting,<br/>flyer image, voice note</i>"]
   end
 
   subgraph API ["API routes (server only)"]
-    CH["/api/chat<br/>stream + time budget"]
-    RS["/api/runs/:id/resume<br/>approvals + continue"]
-    UP["/api/upload<br/>sniff + downscale check"]
-    TR["/api/transcribe<br/>WAV check, 60s cap"]
-    CAL["/api/calendar<br/>.ics + Google sync"]
-    REM["/api/reminders<br/>due, done, snooze"]
-    CAP["Abuse caps and budget guard<br/>per IP, per user, global"]
+    GUARD["Abuse caps and budget guard<br/>per IP, per user, global"]
+    CHAT["/api/chat and /api/runs/:id/resume<br/>stream, approvals, continue"]
+    SIDE["/api/upload, /api/transcribe,<br/>/api/calendar, /api/reminders"]
   end
 
   subgraph Agent ["Agent (packages/core)"]
     ORCH["Orchestrator loop<br/>chooses tools each round"]
     CASE["Case file<br/>known vs missing"]
-    TOOLS["Tools: find_links, fetch_page,<br/>read_page, read_pdf, web_search,<br/>propose_plan, ask_profile_question,<br/>draft_document, edit_draft,<br/>request_approval, resolve_gate,<br/>yield_to_user"]
+    TOOLS["Tools: find_links, fetch_page,<br/>read_page, read_pdf, web_search,<br/>propose_plan, draft_document,<br/>request_approval, yield_to_user"]
     READ["Page reader<br/>schema-bound extraction"]
     EVID["Evidence check (code)<br/>quote must support value"]
     REC["Reconcile conflicts,<br/>dates vs today, timezones"]
-    FIT["Fit judge<br/>plain words"]
-    WRITE["Draft writer"]
-    POL["Final-answer polish<br/>with link and number guard"]
+    OUT["Fit judge, draft writer,<br/>final-answer polish"]
   end
 
-  subgraph Muse ["Meta Model API"]
-    SPARK["muse-spark<br/>Responses API, tool calling"]
-    SEARCH["web_search tool"]
+  subgraph Muse ["Meta Model API (one key, one budget)"]
+    SPARK["muse-spark<br/>Responses API, tool calling,<br/>web_search tool"]
     VOICE["muse-voice-transcribe"]
   end
 
-  subgraph Data ["Supabase"]
-    SESS["Anonymous sessions + optional Google"]
-    RUNS[("Runs, decisions,<br/>messages, usage")]
-    PLANS[("Plans, reminders,<br/>drafts")]
-  end
-
   WEB["Official sites, FAQs, PDFs<br/>(robots.txt respected)"]
+  DB[("Supabase<br/>anonymous sessions, runs,<br/>plans, reminders, drafts")]
   GCAL["Google Calendar"]
 
-  TS --> SESS
-  IN --> UI
-  UI --> CH
-  UI --> RS
-  UI --> UP
-  UI --> TR
-  CH --> CAP --> ORCH
-  RS --> CAP
-  RS --> ORCH
-  UP --> READ
-  TR --> VOICE
+  UI --> GUARD --> CHAT --> ORCH
+  ORCH -. "SSE: message, status, card,<br/>needs_approval, continue, done" .-> UI
   ORCH <--> CASE
   ORCH --> TOOLS
   TOOLS --> WEB
-  TOOLS --> SEARCH
-  TOOLS --> READ
-  READ --> EVID --> REC --> ORCH
-  ORCH --> FIT
-  ORCH --> WRITE
-  ORCH --> POL
+  TOOLS --> READ --> EVID --> REC --> ORCH
+  ORCH --> OUT
   ORCH <--> SPARK
   READ <--> SPARK
-  FIT <--> SPARK
-  WRITE <--> SPARK
-  POL <--> SPARK
-  ORCH <--> RUNS
-  TOOLS --> PLANS
-  UI --> CAL --> GCAL
-  UI --> REM --> PLANS
-  ORCH -- "SSE: message, status, card,<br/>needs_approval, continue, done" --> UI
+  OUT <--> SPARK
+  ORCH <--> DB
+  UI --> SIDE
+  SIDE --> READ
+  SIDE --> VOICE
+  SIDE --> GCAL
+  SIDE --> DB
 ```
 
+</details>
+
 ### One request, step by step
+
+![One request, step by step](docs/diagrams/request-flow.png)
+
+<details>
+<summary>Diagram source (mermaid)</summary>
 
 ```mermaid
 sequenceDiagram
@@ -133,6 +117,8 @@ sequenceDiagram
   Note over Agent,Web: Out of time on this request?<br/>It saves its place and continues on its own.
 ```
 
+</details>
+
 ## Technical depth
 
 **1. A real agent loop, not a script.** `runConversationTurn` calls the model with a tool set (`find_links`, `fetch_page`, `read_page`, `read_pdf`, `web_search`, `propose_plan`, `ask_profile_question`, `draft_document`, `edit_draft`, `request_approval`, `resolve_gate`, `yield_to_user`). The model picks the next tool each round. Rounds replay the stored thread, de-duplicated by item id, so a run can resume on any later request.
@@ -154,6 +140,11 @@ sequenceDiagram
 ## Why Mizzou would fail without the Muse models
 
 Mizzou is not a chatbot with a nice skin. Its workflow needs four things in one stack, and the Meta Model API supplies all four behind a single key and a single cost ledger. Take any one away and a core promise breaks.
+
+![Why Mizzou needs the Meta Model API](docs/diagrams/why-meta-models.png)
+
+<details>
+<summary>Diagram source (mermaid)</summary>
 
 ```mermaid
 flowchart LR
@@ -178,6 +169,8 @@ flowchart LR
   N5 --> M5
 ```
 
+</details>
+
 | Without this | What breaks in Mizzou |
 |---|---|
 | **Tool-calling orchestration** (`muse-spark` on the Responses API) | There is no agent. The "paste a link and watch it finish" flow is a loop where the model picks `find_links`, `read_page`, `read_pdf`, `web_search` and the approval tools round after round. Without reliable tool calls it collapses into a fixed script that cannot adapt to a site laid out differently. |
@@ -200,6 +193,11 @@ Put plainly: the product promise is "it reads the real source, proves it, and ac
 
 ## How it runs
 
+![The agent loop](docs/diagrams/agent-loop.png)
+
+<details>
+<summary>Diagram source (mermaid)</summary>
+
 ```mermaid
 flowchart TB
   U["You"] --> W["Web app (Next.js)"]
@@ -219,11 +217,18 @@ flowchart TB
   U -. "image" .-> VIS["Vision read, same schema"]
 ```
 
+</details>
+
 - **A model-driven loop, not a script.** The orchestrator chooses its own tools each round. A case file in the run state lists what is known and what is still missing, so the agent closes the gaps itself.
 - **Resumable.** Runs are stored. A long task carries on across requests, and an approval can stay open for days without losing work.
 - **Never repeats itself.** Pages already read and searches already made are not repeated in a run. An announced next step that is not taken gets a single nudge to do it.
 
 ## Autonomous, with approvals only where it counts
+
+![Autonomous steps and approval gates](docs/diagrams/autonomy-gates.png)
+
+<details>
+<summary>Diagram source (mermaid)</summary>
 
 ```mermaid
 flowchart LR
@@ -236,9 +241,16 @@ flowchart LR
   Free --> Ask
 ```
 
+</details>
+
 Mizzou never sends email, never submits an application and never logs in as you. When a page blocks automated readers, needs JavaScript or sits behind a login, it names the page and asks you to paste the text. It respects robots.txt.
 
 ## What Mizzou does
+
+![What Mizzou does](docs/diagrams/capabilities.png)
+
+<details>
+<summary>Diagram source (mermaid)</summary>
 
 ```mermaid
 flowchart LR
@@ -251,6 +263,8 @@ flowchart LR
   D -. "no dates posted" .-> H["Ask: still apply?<br/>just interested?<br/>have the dates?"]
   H --> F
 ```
+
+</details>
 
 1. **Understands the goal** from text, a link, a pasted posting, a screenshot or a voice note.
 2. **Finds the official source.** A pasted link is taken as the program and read straight away. When it has to search, it asks you to confirm the match first.

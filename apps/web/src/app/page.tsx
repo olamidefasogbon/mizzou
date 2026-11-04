@@ -18,7 +18,7 @@ const POINTS: Array<[string, string]> = [
 const RECORDED = [
   {
     href: "/app/c/recorded?recorded=boren-link",
-    title: "Boren fellowship, link to plan",
+    title: "Fellowship link to plan",
     desc: "From the official link to dates, requirements and a plan.",
   },
   {

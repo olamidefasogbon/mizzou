@@ -12,6 +12,7 @@ import { Composer } from '@/components/chrome';
 import { upcomingDeadlines } from '@/lib/plan-dates';
 import { downscaleImage, takeStashedVision, uploadImage, type VisionPayload } from '@/components/attach-image';
 import { quickTitle } from '@/lib/quick-title';
+import { RECORDED_RUNS } from '@/lib/recorded-runs';
 import { ensureChatAction, loadChatHistoryAction } from '@/lib/actions';
 import { supabaseBrowser } from '@/lib/supabase/client';
 import { upgradeToGoogle } from '@/components/google-upgrade';
@@ -356,6 +357,10 @@ function ChatContent(): React.JSX.Element {
   const chatId = params.chatId;
   // Handoff from the home composer (?q=). Consumed once, then stripped.
   const initialQ = searchParams.get('q');
+  const recordedKey = searchParams.get('recorded');
+  const recordedRun = recordedKey && Object.prototype.hasOwnProperty.call(RECORDED_RUNS, recordedKey) ? (RECORDED_RUNS[recordedKey] ?? null) : null;
+  const recordedStage = useRef(0);
+  const recordedStarted = useRef(false);
   const sentInitial = useRef(false);
   // No canned opener: every assistant line comes from the model (AGENT_BRAIN).
   const [feed, setFeed] = useState<FeedItem[]>([]);
@@ -512,6 +517,7 @@ function ChatContent(): React.JSX.Element {
     if (streamsRef.current === 0) setBusy(false);
   }, []);
   const handleEventRef = useRef<(event: ClientEvent) => void>(() => {});
+  const playRecordedRef = useRef<() => Promise<void>>(async () => {});
   const resumeRef = useRef<(body: Record<string, unknown>) => Promise<boolean>>(async () => false);
 
   const pump = useCallback(async (res: Response): Promise<void> => {
@@ -766,7 +772,32 @@ function ChatContent(): React.JSX.Element {
     }
   };
 
+  // Replays the next stage of a recorded run through the same handlers a live
+  // stream uses, so the cards look and behave the same. No network, no model.
+  const playRecorded = async (): Promise<void> => {
+    if (!recordedRun) return;
+    const stage = recordedRun.stages[recordedStage.current];
+    recordedStage.current += 1;
+    if (!stage) return;
+    enterStream();
+    try {
+      for (const step of stage) {
+        await new Promise((resolve) => setTimeout(resolve, step.wait ?? 120));
+        handleEventRef.current(step.event as unknown as ClientEvent);
+      }
+    } finally {
+      leaveStream();
+      requestAnimationFrame(() => feedRef.current?.scrollTo({ top: feedRef.current.scrollHeight }));
+    }
+  };
+
+  playRecordedRef.current = playRecorded;
+
   resumeRef.current = async (body: Record<string, unknown>): Promise<boolean> => {
+    if (recordedRun) {
+      await playRecorded();
+      return true;
+    }
     const id = runIdRef.current;
     if (!id) return false;
     enterStream();
@@ -806,6 +837,12 @@ function ChatContent(): React.JSX.Element {
       const text = raw.trim();
       if (!text || busy) return;
       setInput('');
+      if (recordedRun) {
+        setFeed((prev) => [...prev, { id: `user-${Date.now()}`, kind: 'user', text }]);
+        setPendingCards(null);
+        await playRecordedRef.current();
+        return;
+      }
     continuesRef.current = 0;
     enterStream();
     const userId = `user-${Date.now()}`;
@@ -1022,7 +1059,7 @@ function ChatContent(): React.JSX.Element {
   // Reopening a stored chat: bring back its conversation and continue its
   // latest run. Skipped for a brand-new chat that arrives with ?q=.
   useEffect(() => {
-    if (initialQ) return;
+    if (initialQ || recordedRun) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -1061,6 +1098,14 @@ function ChatContent(): React.JSX.Element {
     void sendText(initialQ, takeStashedVision(chatId) ?? undefined);
   }, [initialQ, chatId, router, sendText]);
 
+  // Recorded run: show the opening message and replay stage 0, once.
+  useEffect(() => {
+    if (!recordedRun || recordedStarted.current) return;
+    recordedStarted.current = true;
+    setFeed([{ id: 'user-recorded', kind: 'user', text: recordedRun.opening }]);
+    void playRecordedRef.current();
+  }, [recordedRun]);
+
   const { select, clear } = useEvidence();
 
   // The overlay belongs to one chat: changing chats closes it.
@@ -1076,6 +1121,7 @@ function ChatContent(): React.JSX.Element {
   return (
     <div className={styles.screen}>
         <div ref={feedRef} className={styles.feed}>
+          {recordedRun ? <p className={styles.assistantText} style={{ opacity: 0.6, fontSize: 12 }}>Recorded run, replayed without the model</p> : null}
           {display.map((item, i) => {
             if (item.kind === 'work') {
               return <Working key={item.id} entry={item} grouped={i > 0} />;

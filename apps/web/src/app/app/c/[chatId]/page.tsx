@@ -1121,7 +1121,9 @@ function ChatContent(): React.JSX.Element {
   return (
     <div className={styles.screen}>
         <div ref={feedRef} className={styles.feed}>
-          {recordedRun ? <p className={styles.assistantText} style={{ opacity: 0.6, fontSize: 12 }}>Recorded run, replayed without the model</p> : null}
+          {recordedRun ? (
+            <span style={{ position: 'sticky', top: 0, alignSelf: 'flex-end', marginLeft: 'auto', display: 'block', width: 'fit-content', fontSize: 11, opacity: 0.5, padding: '2px 8px', border: '1px solid currentColor', borderRadius: 999, zIndex: 1 }}>Recorded</span>
+          ) : null}
           {display.map((item, i) => {
             if (item.kind === 'work') {
               return <Working key={item.id} entry={item} grouped={i > 0} />;
